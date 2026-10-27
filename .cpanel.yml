@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    #- export DEPLOYPATH=/home/u6514444/web/spicy
+    - export DEPLOYPATH=/home/u6613652/web/ahdeco
+    - /bin/cp -Rf * $DEPLOYPATH

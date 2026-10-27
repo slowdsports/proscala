@@ -1,0 +1,15 @@
+# Texto con fin de línea LF (el servidor es Linux); Git detecta los binarios solo
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.phar binary
+*.xlsx binary

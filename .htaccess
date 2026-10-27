@@ -1,0 +1,46 @@
+# ── Proscala: protección del sitio ─────────────────────────────────────
+# Las carpetas config, database, includes, storage, vendor y cron tienen además su propio
+# .htaccess "Require all denied", por si el servidor no tiene mod_rewrite.
+
+Options -Indexes
+DirectoryIndex index.php
+ServerSignature Off
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # HTTPS obligatorio (salvo en desarrollo local)
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Carpetas internas: nunca se sirven por la web
+    RewriteRule ^(config|database|includes|storage|vendor|cron|\.claude|\.git)(/|$) - [F,L]
+
+    # Archivos ocultos (.htaccess, .cpanel.yml, .gitattributes…), salvo la validación del certificado SSL
+    RewriteCond %{REQUEST_URI} !/\.well-known/
+    RewriteRule (^|/)\. - [F,L]
+</IfModule>
+
+# Respaldos, scripts SQL, configuración de Composer/despliegue, hojas de cálculo y bitácoras sueltas
+<FilesMatch "\.(sql|gz|zip|tar|bak|old|yml|yaml|json|lock|phar|md|log|csv|xlsx?|ini|sh|dist)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # La cámara la usan los adjuntos ("Tomar foto"); nada más
+    Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=()"
+    Header always set Strict-Transport-Security "max-age=31536000" "expr=%{HTTPS} == 'on'"
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+</IfModule>

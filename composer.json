@@ -1,0 +1,4 @@
+{"name":"proscala/admin","require":{
+        "mpdf/mpdf": "^8.3",
+                "phpmailer/phpmailer": "^6.9"
+    },"config":{"vendor-dir":"vendor"}}

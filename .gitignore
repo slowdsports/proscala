@@ -1,0 +1,22 @@
+# Datos de ejecución: sesiones y correos guardados en desarrollo (solo se versionan sus .htaccess)
+/storage/sesiones/*
+!/storage/sesiones/.htaccess
+/storage/correos/
+
+# Archivos subidos por las empresas (logos, fotos, adjuntos): son datos, viajan con la base
+# de datos y los respaldos (cron/backup.php), no con el código
+/assets/uploads/*
+!/assets/uploads/adjuntos/
+/assets/uploads/adjuntos/*
+!/assets/uploads/adjuntos/.htaccess
+
+# Credenciales reales: viven FUERA del proyecto (proscala_config.php), nunca en el repositorio
+proscala_config.php
+
+# Archivos sueltos que no son del sistema
+/Logfile.CSV
+/*.xlsx
+/assets/excel/
+
+# Configuración local de Claude Code
+/.claude/
