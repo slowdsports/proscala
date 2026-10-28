@@ -35,6 +35,14 @@ return [
         'nombre'    => 'Proscala',
     ],
 
+    // Página principal (index.php): a dónde llegan las solicitudes de información y contratación,
+    // y datos de contacto que se muestran (vacíos = no se muestran)
+    'ventas' => [
+        'correo'   => 'ventas@sudominio.com',    // recibe el formulario "Solicitar información"
+        'telefono' => '',                        // p. ej. '+504 2222-3333'
+        'whatsapp' => '',                        // solo números con código de país, p. ej. '50499998888'
+    ],
+
     // Respaldos (cron/backup.php): carpeta fuera de la web y días que se conservan
     'respaldos' => [
         'dir'           => '/home/u6613652/proscala_respaldos',

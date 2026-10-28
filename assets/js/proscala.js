@@ -69,7 +69,7 @@ const Sesion = {
     if (this.terminada) return;
     this.terminada = true;
     Toast.show(mensaje || 'Su sesión terminó. Ingrese de nuevo.', 'warning', 6000);
-    setTimeout(() => { location.href = 'index.php'; }, 2500);
+    setTimeout(() => { location.href = 'login.php'; }, 2500);
   },
   revisar() {
     if (!document.getElementById('main-content') || this.terminada) return;
@@ -358,7 +358,7 @@ initSelect2.observar = function () {
 // sus setInterval se deshacen al salir de ella.
 const Nav = {
   // Páginas que se abren de forma normal (documentos, PDF, sesión)
-  excluir: /\/(print|pdf_download|logout|index|recuperar)\.php$/i,
+  excluir: /\/(print|pdf_download|logout|index|login|recuperar)\.php$/i,
   limpiezas: [],
   enCurso: null,
   captura: null,

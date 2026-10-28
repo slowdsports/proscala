@@ -11,6 +11,19 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.6.0 — 2026-10-27
+**Página principal y manual de uso**
+- **Página principal** (`index.php`, la portada del dominio). Presenta el sistema a quien quiera contratarlo, con el mismo diseño del panel, en modo claro y oscuro y adaptada al celular. Incluye:
+  - módulos, flujo de aprobación, ventajas y seguridad;
+  - formulario **"Solicitar información"**, que llega por correo y al responderlo la respuesta va directo al interesado;
+  - acceso visible para los clientes: **"Iniciar sesión"** en la barra superior, en la portada, en una sección propia y, en celulares, un botón fijo.
+  - No depende de la base de datos: sigue en pie aunque la base no responda.
+- El **inicio de sesión** pasa a `login.php`. Los enlaces de los correos enviados antes de este cambio (`index.php?ir=…`) siguen funcionando.
+- El login tiene un enlace **"Conocer Proscala"** que lleva a la página principal.
+- **Manual de uso** (`README.md`) para los usuarios de las organizaciones: ingreso, pantalla, aprobaciones, notificaciones, adjuntos, documentos, guía de cada módulo, administración de la cuenta y preguntas frecuentes.
+- Configuración (`proscala_config.php`): nueva sección `ventas` con el correo que recibe el formulario y el teléfono y WhatsApp que se muestran en la página (ver `config/credenciales.ejemplo.php`). Sin ella, el formulario se envía al remitente del correo del sistema.
+- `config/base.php`: la parte de la configuración que no usa la base de datos (credenciales, errores) se separó de `config/db.php`.
+
 ## 1.5.1 — 2026-10-27
 **Correcciones de diseño**
 - **Pie de página en celulares**: ya no queda corrido fuera de la pantalla. Ocupa todo el ancho, centrado.

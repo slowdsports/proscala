@@ -127,7 +127,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
             $_SESSION['aviso_login'] = $sigueBloqueado
                 ? 'Su contraseña se cambió, pero su usuario sigue bloqueado por intentos fallidos: pida a un administrador de su empresa que lo desbloquee.'
                 : 'Su contraseña se cambió. Ingrese con la nueva contraseña.';
-            header('Location: ' . BASE_URL . 'index.php');
+            header('Location: ' . BASE_URL . 'login.php');
             exit;
         }
     }
@@ -156,7 +156,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
 
     <?php if ($exito): ?>
       <div class="alert alert-success py-2 text-start" style="font-size:.85rem;"><i class="fas fa-envelope-circle-check"></i> <?= htmlspecialchars($exito) ?></div>
-      <a href="<?= BASE_URL ?>index.php" class="btn-login d-block text-decoration-none"><i class="fas fa-arrow-left"></i> Volver al inicio de sesión</a>
+      <a href="<?= BASE_URL ?>login.php" class="btn-login d-block text-decoration-none"><i class="fas fa-arrow-left"></i> Volver al inicio de sesión</a>
 
     <?php elseif ($enlace): ?>
       <p class="text-muted" style="font-size:.82rem;">
@@ -196,7 +196,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
         </div>
         <button type="submit" class="btn-login"><i class="fas fa-paper-plane"></i> Enviar enlace</button>
       </form>
-      <p class="mt-3 mb-0" style="font-size:.82rem;"><a href="<?= BASE_URL ?>index.php"><i class="fas fa-arrow-left"></i> Volver al inicio de sesión</a></p>
+      <p class="mt-3 mb-0" style="font-size:.82rem;"><a href="<?= BASE_URL ?>login.php"><i class="fas fa-arrow-left"></i> Volver al inicio de sesión</a></p>
     <?php endif; ?>
   </div>
 </div>

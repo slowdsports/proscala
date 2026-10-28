@@ -93,7 +93,7 @@ function notificar(PDO $pdo, array $usuarios, string $tipo, string $titulo, stri
     $h = fn($s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     $empresa = $_SESSION['empresa_nombre'] ?? '';
     // El enlace pasa por el inicio de sesión: si no hay sesión abierta, al entrar abre el proceso
-    $enlace = urlAbsoluta('index.php?' . http_build_query(['ir' => $url, 'e' => (int)($_SESSION['empresa_id'] ?? 0)]));
+    $enlace = urlAbsoluta('login.php?' . http_build_query(['ir' => $url, 'e' => (int)($_SESSION['empresa_id'] ?? 0)]));
     $html = plantillaCorreo($titulo, '<p style="margin:0 0 12px">' . nl2br($h($mensaje)) . '</p>'
         . ($empresa ? '<p style="margin:0;font-size:12px;color:#8ea3b4">Empresa: ' . $h($empresa) . '</p>' : ''), 'Abrir el proceso', $enlace);
     $asunto = 'Proscala: ' . $titulo . ' — ' . nombreProceso($pdo, $modulo, $id);

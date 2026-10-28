@@ -8,8 +8,11 @@ require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
-/** Envía un correo HTML. Devuelve true o el motivo del fallo (el detalle técnico va al log). */
-function enviarCorreo(string $para, string $asunto, string $html, string $texto = '') {
+/**
+ * Envía un correo HTML. Devuelve true o el motivo del fallo (el detalle técnico va al log).
+ * $responderA: a quién va la respuesta (p. ej. quien llenó el formulario de la página principal).
+ */
+function enviarCorreo(string $para, string $asunto, string $html, string $texto = '', string $responderA = '') {
     $cfg = credenciales()['correo'] ?? null;
     if (!$cfg || empty($cfg['metodo'])) return 'El correo saliente no está configurado en el servidor.';
     $texto = $texto ?: trim(html_entity_decode(strip_tags(preg_replace('/<br\s*\/?>|<\/p>|<\/h\d>/i', "\n", $html)), ENT_QUOTES, 'UTF-8'));
@@ -18,7 +21,7 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
         $dir = dirname(__DIR__) . '/storage/correos';
         if (!is_dir($dir)) mkdir($dir, 0700, true);
         $f = $dir . '/' . date('Ymd_His') . '_' . preg_replace('/[^a-z0-9]+/i', '_', $para) . '.html';
-        file_put_contents($f, "<!-- Para: $para | Asunto: $asunto -->\n" . $html);
+        file_put_contents($f, "<!-- Para: $para | Asunto: $asunto" . ($responderA ? " | Responder a: $responderA" : '') . " -->\n" . $html);
         return true;
     }
 
@@ -39,6 +42,7 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
         }
         $m->setFrom($cfg['remitente'], $cfg['nombre'] ?? 'Proscala');
         $m->addAddress($para);
+        if ($responderA !== '') $m->addReplyTo($responderA);
         $m->isHTML(true);
         $m->Subject = $asunto;
         $m->Body    = $html;
@@ -51,8 +55,9 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
     }
 }
 
-/** Correo con el formato de Proscala: título, contenido (HTML ya escapado) y botón opcional. */
-function plantillaCorreo(string $titulo, string $contenido, string $boton = '', string $url = ''): string {
+/** Correo con el formato de Proscala: título, contenido (HTML ya escapado), botón y pie opcionales. */
+function plantillaCorreo(string $titulo, string $contenido, string $boton = '', string $url = '',
+                         string $pie = 'Mensaje automático de Proscala. No responda a este correo.'): string {
     $h = fn($s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     $btn = $boton && $url
         ? '<p style="text-align:center;margin:28px 0"><a href="' . $h($url) . '" style="background:#1B6BA8;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 26px;border-radius:8px;display:inline-block">' . $h($boton) . '</a></p>'
@@ -64,7 +69,7 @@ function plantillaCorreo(string $titulo, string $contenido, string $boton = '', 
         . '<div style="font-size:20px;font-weight:700;color:#1B6BA8;margin-bottom:18px">Proscala</div>'
         . '<h2 style="font-size:18px;margin:0 0 14px">' . $h($titulo) . '</h2>'
         . '<div style="font-size:14px;line-height:1.6;color:#526070">' . $contenido . '</div>' . $btn
-        . '</div><p style="text-align:center;font-size:11px;color:#8ea3b4;margin-top:14px">Mensaje automático de Proscala. No responda a este correo.</p>'
+        . '</div><p style="text-align:center;font-size:11px;color:#8ea3b4;margin-top:14px">' . $h($pie) . '</p>'
         . '</body></html>';
 }
 

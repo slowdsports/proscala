@@ -95,7 +95,7 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
-const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php'];
+const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -115,7 +115,8 @@ const DOCUMENTOS_MODULO = [
 function moduloLabel(?string $archivo): string {
     static $mapa = null;
     if ($mapa === null) {
-        $mapa = ['index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
+        // index.php: inicio de sesión hasta la versión 1.5 (eventos anteriores de la bitácora)
+        $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
                  'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
@@ -293,7 +294,7 @@ function destinoTrasLogin(int $empresaId): string {
     $ir = (string)($_GET['ir'] ?? '');
     $e  = (int)($_GET['e'] ?? $empresaId);
     if ($e === $empresaId && preg_match('/^([a-z_]+\.php)(\?[\w=&%.\-]*)?$/', $ir, $m)
-        && !in_array($m[1], ['index.php', 'logout.php', 'sesion.php', 'notificaciones.php'], true) && puedeAcceder($m[1])) return $ir;
+        && !in_array($m[1], ['index.php', 'login.php', 'logout.php', 'sesion.php', 'notificaciones.php'], true) && puedeAcceder($m[1])) return $ir;
     return paginaInicio();
 }
 
@@ -310,9 +311,9 @@ function cerrarSesionYSalir() {
     }
     // Al entrar de nuevo se vuelve a la página que se intentaba abrir
     $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
-    $ir = $_SERVER['REQUEST_METHOD'] === 'GET' && !in_array($script, ['index.php', 'logout.php'], true)
+    $ir = $_SERVER['REQUEST_METHOD'] === 'GET' && !in_array($script, ['index.php', 'login.php', 'logout.php'], true)
         ? '?' . http_build_query(['ir' => $script . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '')]) : '';
-    header('Location: ' . BASE_URL . 'index.php' . $ir);
+    header('Location: ' . BASE_URL . 'login.php' . $ir);
     exit;
 }
 

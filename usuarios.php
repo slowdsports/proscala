@@ -55,7 +55,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch(PDOException $e){ jsonErr($e->getCode()==23000?'Ese correo ya está registrado en esta empresa.':$e->getMessage()); }
     }
-    // Desbloquear a un usuario bloqueado por intentos fallidos (index.php)
+    // Desbloquear a un usuario bloqueado por intentos fallidos (login.php)
     if ($_act === 'desbloquear') {
         $s = $pdo->prepare("SELECT id, nombre, email, bloqueado_en FROM usuarios WHERE id = ?");
         $s->execute([(int)($_POST['id'] ?? 0)]);
