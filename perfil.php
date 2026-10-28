@@ -62,41 +62,37 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($mime, $allowed)) jsonErr('Solo se permiten imágenes (JPG, PNG, GIF, WEBP).');
         if ($file['size'] > 5 * 1024 * 1024) jsonErr('La imagen no debe superar 5 MB.');
 
+        // La carpeta de fotos no viaja con el código (assets/uploads es de datos): se crea si falta
         $dir = __DIR__ . '/assets/uploads/avatars/';
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true)) jsonErr('No se pudo preparar la carpeta de fotos en el servidor. Avise al administrador.');
 
-        // Delete old photo
+        $base = 'u' . $userId . '_' . bin2hex(random_bytes(6));
+        $creadora = ['image/jpeg' => 'imagecreatefromjpeg', 'image/png' => 'imagecreatefrompng',
+                     'image/gif' => 'imagecreatefromgif', 'image/webp' => 'imagecreatefromwebp'][$mime];
+        if (function_exists($creadora) && ($src = @$creadora($file['tmp_name']))) {
+            // Recorte cuadrado al centro, 300×300 en JPEG
+            $w = imagesx($src);
+            $h = imagesy($src);
+            $side = min($w, $h);
+            $size = 300;
+            $dest = imagecreatetruecolor($size, $size);
+            imagecopyresampled($dest, $src, 0, 0, (int)(($w - $side) / 2), (int)(($h - $side) / 2), $size, $size, $side, $side);
+            imagedestroy($src);
+            $fname = $base . '.jpg';
+            $ok = imagejpeg($dest, $dir . $fname, 88);
+            imagedestroy($dest);
+        } else {
+            // Servidor sin la extensión GD: se guarda la imagen original (la vista la recorta en círculo)
+            $fname = $base . '.' . ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'][$mime];
+            $ok = move_uploaded_file($file['tmp_name'], $dir . $fname);
+        }
+        if (!$ok) jsonErr('No se pudo guardar la foto en el servidor. Intente de nuevo o avise al administrador.');
+
+        // La foto anterior se borra solo cuando la nueva ya quedó guardada
         $stmt = $pdo->prepare("SELECT foto FROM usuarios WHERE id=?");
         $stmt->execute([$userId]);
         $oldFoto = $stmt->fetchColumn();
-        if ($oldFoto && file_exists(__DIR__ . '/' . $oldFoto)) unlink(__DIR__ . '/' . $oldFoto);
-
-        // Load source image
-        $src = match($mime) {
-            'image/jpeg' => imagecreatefromjpeg($file['tmp_name']),
-            'image/png'  => imagecreatefrompng($file['tmp_name']),
-            'image/gif'  => imagecreatefromgif($file['tmp_name']),
-            'image/webp' => imagecreatefromwebp($file['tmp_name']),
-            default      => false,
-        };
-        if (!$src) jsonErr('No se pudo procesar la imagen.');
-
-        $w = imagesx($src);
-        $h = imagesy($src);
-
-        // Center-crop to square
-        $side = min($w, $h);
-        $srcX = (int)(($w - $side) / 2);
-        $srcY = (int)(($h - $side) / 2);
-
-        // Resample to 300×300 JPEG
-        $size = 300;
-        $dest = imagecreatetruecolor($size, $size);
-        imagecopyresampled($dest, $src, 0, 0, $srcX, $srcY, $size, $size, $side, $side);
-        imagedestroy($src);
-
-        $fname = 'u' . $userId . '_' . bin2hex(random_bytes(6)) . '.jpg';
-        imagejpeg($dest, $dir . $fname, 88);
-        imagedestroy($dest);
+        if ($oldFoto && str_starts_with($oldFoto, 'assets/uploads/avatars/') && is_file(__DIR__ . '/' . $oldFoto)) unlink(__DIR__ . '/' . $oldFoto);
 
         $path = 'assets/uploads/avatars/' . $fname;
         $pdo->prepare("UPDATE usuarios SET foto=? WHERE id=?")->execute([$path, $userId]);
@@ -108,7 +104,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("SELECT foto FROM usuarios WHERE id=?");
         $stmt->execute([$userId]);
         $oldFoto = $stmt->fetchColumn();
-        if ($oldFoto && file_exists(__DIR__ . '/' . $oldFoto)) unlink(__DIR__ . '/' . $oldFoto);
+        if ($oldFoto && str_starts_with($oldFoto, 'assets/uploads/avatars/') && is_file(__DIR__ . '/' . $oldFoto)) unlink(__DIR__ . '/' . $oldFoto);
         $pdo->prepare("UPDATE usuarios SET foto=NULL WHERE id=?")->execute([$userId]);
         $_SESSION['usuario_foto'] = '';
         jsonOk(['logo' => BASE_URL . 'assets/images/proscala.png'], 'Foto eliminada.');
@@ -289,28 +285,40 @@ $csrfJs = json_encode($csrf);
 $extraJs = "
 const _csrfPerfil = {$csrfJs};
 
+// La foto de la barra superior también cambia
+function fotoTopbar(src) {
+  const img = document.querySelector('#topbar .avatar img');
+  if (img) img.src = src;
+}
+
 // ── Subir foto automáticamente al seleccionar ──
-document.getElementById('inp-foto').addEventListener('change', function(){
+document.getElementById('inp-foto').addEventListener('change', async function(){
   const file = this.files[0];
+  this.value = '';
   if (!file) return;
-  if (file.size > 2*1024*1024) { Toast.show('La imagen no debe superar 2 MB','danger'); this.value=''; return; }
+  if (!/^image\\/(jpeg|png|gif|webp)$/.test(file.type)) { Toast.show('Solo se permiten imágenes (JPG, PNG, GIF, WEBP).', 'error'); return; }
+  if (file.size > 5*1024*1024) { Toast.show('La imagen no debe superar 5 MB.', 'error'); return; }
 
-  // Preview inmediato
-  const reader = new FileReader();
-  reader.onload = e => document.getElementById('perfil-img').src = e.target.result;
-  reader.readAsDataURL(file);
+  // Vista previa inmediata; si el servidor la rechaza se vuelve a la anterior
+  const img = document.getElementById('perfil-img');
+  const anterior = img.src;
+  img.src = URL.createObjectURL(file);
 
-  // Upload
   const fd = new FormData();
   fd.append('csrf_token', _csrfPerfil);
   fd.append('_action', 'foto');
   fd.append('foto', file);
-  fetch('perfil.php', { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd })
-    .then(r => r.json())
-    .then(r => {
-      if (r.success) Toast.show(r.message,'success');
-      else { Toast.show(r.message,'danger'); document.getElementById('perfil-img').src = document.getElementById('perfil-img').dataset.original || ''; }
-    });
+  try {
+    const r = await post('perfil.php', fd);
+    if (!r.success) throw new Error(r.message);
+    img.src = r.foto;
+    fotoTopbar(r.foto);
+    Toast.show(r.message, 'success');
+    setTimeout(() => Nav.recargar(), 900);   // muestra el botón Quitar foto
+  } catch (e) {
+    img.src = anterior;
+    Toast.show(e.message || 'No se pudo cambiar la foto.', 'error');
+  }
 });
 
 function togglePass(btn) {
@@ -324,15 +332,17 @@ async function quitarFoto() {
   if (!await confirmar('¿Quitar la foto de perfil y volver al logo de Proscala?', { titulo: 'Quitar foto', aceptar: 'Quitar', peligro: true })) return;
   const fd = new FormData();
   fd.append('csrf_token', _csrfPerfil);
-  fd.append('_action', 'foto');
-  // Upload a dummy flag to remove — we handle via empty file by resetting to logo
-  // Actually just re-use the datos action with a clear-foto flag
-  fetch('perfil.php?quitar_foto=1', { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest',
-    'X-Csrf-Token': _csrfPerfil }, body: new URLSearchParams({csrf_token:_csrfPerfil, _action:'quitar_foto'}) })
-    .then(r => r.json()).then(r => {
-      if (r.success) { document.getElementById('perfil-img').src = r.logo; Toast.show(r.message,'success'); setTimeout(()=>Nav.recargar(),900); }
-      else Toast.show(r.message,'danger');
-    });
+  fd.append('_action', 'quitar_foto');
+  try {
+    const r = await post('perfil.php', fd);
+    if (!r.success) throw new Error(r.message);
+    document.getElementById('perfil-img').src = r.logo;
+    fotoTopbar(r.logo);
+    Toast.show(r.message, 'success');
+    setTimeout(() => Nav.recargar(), 900);
+  } catch (e) {
+    Toast.show(e.message || 'No se pudo quitar la foto.', 'error');
+  }
 }
 
 document.getElementById('chk-notificar-correo').addEventListener('change', async function(){

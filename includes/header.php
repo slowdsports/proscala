@@ -26,10 +26,13 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <meta name="csrf" content="<?= $csrf ?>">
   <title><?= htmlspecialchars($pagina) ?> | Proscala Admin</title>
   <script>
-    // Aplica el tema antes de que el navegador pinte para evitar el flash
+    // Aplica el tema antes de que el navegador pinte para evitar el flash. data-bs-theme hace que
+    // los componentes de Bootstrap (alertas, pestañas, tablas de color…) usen también su paleta
     (function(){
-      var t = localStorage.getItem('proscala-theme') || 'light';
+      var t = 'light';
+      try { t = localStorage.getItem('proscala-theme') || 'light'; } catch (e) {}
       document.documentElement.setAttribute('data-theme', t);
+      document.documentElement.setAttribute('data-bs-theme', t);
     })();
   </script>
   <?php if (!empty($_SESSION['rtn_recordar'])): ?>

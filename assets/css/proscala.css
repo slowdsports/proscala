@@ -623,7 +623,7 @@ body.nav-cargando::before {
 .toast-msg.success { background: var(--success); }
 .toast-msg.error   { background: var(--danger); }
 .toast-msg.info    { background: var(--primary); }
-.toast-msg.warning { background: var(--warning); color: var(--text); }
+.toast-msg.warning { background: var(--warning); color: #1a1a2e; }
 
 @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
@@ -865,8 +865,29 @@ body.nav-cargando::before {
 [data-theme="dark"] .bg-blue-light { background: rgba(139,92,246,.12) !important; }
 [data-theme="dark"] .border-left-blue { background: var(--surface); border-left-color: #8b5cf6 !important; }
 
-/* Dark — alerts */
-[data-theme="dark"] .alert { background: var(--surface); border-color: rgba(255,255,255,.07); color: var(--text); }
+/* Dark — alerts: cada tipo conserva su color (paleta oscura de Bootstrap por data-bs-theme) */
+[data-theme="dark"] .alert strong { color: inherit; }
+[data-theme="dark"] .alert-primary,
+[data-theme="dark"] .alert-info {
+  --bs-alert-bg: rgba(139,92,246,.12); --bs-alert-border-color: rgba(139,92,246,.3); --bs-alert-color: #ddd6fe; --bs-alert-link-color: #c4b5fd;
+}
+
+/* Dark — filas de color en tablas (Bootstrap 5.3 las deja con su color claro) */
+[data-theme="dark"] .table-warning { --bs-table-bg: rgba(255,167,38,.12); --bs-table-striped-bg: rgba(255,167,38,.16); --bs-table-hover-bg: rgba(255,167,38,.18); --bs-table-color: var(--text); --bs-table-border-color: rgba(255,167,38,.2); }
+[data-theme="dark"] .table-success { --bs-table-bg: rgba(67,160,71,.14);  --bs-table-striped-bg: rgba(67,160,71,.18);  --bs-table-hover-bg: rgba(67,160,71,.2);   --bs-table-color: var(--text); --bs-table-border-color: rgba(67,160,71,.22); }
+[data-theme="dark"] .table-danger  { --bs-table-bg: rgba(229,57,53,.13);  --bs-table-striped-bg: rgba(229,57,53,.17);  --bs-table-hover-bg: rgba(229,57,53,.19);  --bs-table-color: var(--text); --bs-table-border-color: rgba(229,57,53,.22); }
+[data-theme="dark"] .table-info    { --bs-table-bg: rgba(139,92,246,.12); --bs-table-striped-bg: rgba(139,92,246,.16); --bs-table-hover-bg: rgba(139,92,246,.18); --bs-table-color: var(--text); --bs-table-border-color: rgba(139,92,246,.22); }
+
+/* Dark — pestañas */
+[data-theme="dark"] .nav-tabs { border-bottom-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .nav-tabs .nav-link { color: var(--text-2); }
+[data-theme="dark"] .nav-tabs .nav-link:hover { color: #c4b5fd; border-color: transparent; }
+[data-theme="dark"] .nav-tabs .nav-link.active,
+[data-theme="dark"] .nav-tabs .nav-item.show .nav-link {
+  background: var(--surface); color: #c4b5fd;
+  border-color: rgba(255,255,255,.08) rgba(255,255,255,.08) var(--surface);
+}
+[data-theme="dark"] .nav-pills .nav-link.active { background: var(--primary); color: #fff; }
 
 /* Dark — forms */
 [data-theme="dark"] .form-label { color: var(--text-2); }
@@ -1007,6 +1028,20 @@ body.nav-cargando::before {
   #sidebar.open { transform: translateX(0); }
   #main-content { margin-left: 0; }
   .wf-step span { display: none; }
+  /* El pie ocupa todo el ancho (el menú lateral está oculto): gana al margen que pone footer.php */
+  .app-footer { margin-left: 0 !important; flex-direction: column; align-items: center; gap: .15rem; text-align: center; padding: .7rem 1rem; }
+  /* Barra superior: logo a la izquierda, empresa al centro, acciones a la derecha */
+  #topbar { gap: .5rem; padding: 0 .6rem; }
+  #topbar .brand { min-width: 0; }
+  .topbar-empresa {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    max-width: calc(100vw - 250px);
+  }
+  #topbar .topbar-right { gap: .3rem; }
+}
+@media (max-width: 360px) {
+  .topbar-empresa i { display: none; }
+  .topbar-empresa { max-width: calc(100vw - 230px); padding: .2em .55em; }
 }
 
 /* ── DataTables base style ────────────────────────────────────── */

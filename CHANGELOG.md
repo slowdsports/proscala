@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.5.1 — 2026-10-27
+**Correcciones de diseño**
+- **Pie de página en celulares**: ya no queda corrido fuera de la pantalla. Ocupa todo el ancho, centrado.
+- **Barra superior en celulares**: el nombre de la empresa queda centrado entre el logo y los botones.
+- **Foto de perfil**: corregido el error al cambiarla. La carpeta de fotos se crea si no existe. Si el servidor no tiene la extensión GD, la foto se guarda sin recortar (antes fallaba sin mensaje). Se acepta hasta 5 MB, como indica el servidor, y la foto de la barra superior se actualiza al momento.
+- **Colores de las alertas según el tema**: en modo oscuro las alertas conservan su color (aviso, información, histórico…) en tonos oscuros; antes todas quedaban grises. Bootstrap ahora sigue el tema del sistema (`data-bs-theme`), así que también se adaptan las filas de color de las tablas (por ejemplo "Solo sus propias solicitudes" en Roles). Los avisos emergentes de error de Mi Perfil ahora sí se muestran en rojo.
+- **Pestañas en modo oscuro** (Catálogos y demás): la pestaña activa se ve con los colores del tema.
+- **Tablas vacías**: ya no aparece el aviso de error de DataTables cuando una lista no tiene registros. Se muestra el mensaje "No hay…" de la propia lista.
+
 ## 1.5.0 — 2026-10-27
 **Impresión: una plantilla por documento**
 - `print.php` ya no es un archivo de más de 3,500 líneas: ahora solo valida el pedido y entrega el documento con su plantilla en `templates/print/`, una por documento (solicitud de compra, orden de compra, orden de pago, planillas, recibos, anticipos, liquidaciones, vacaciones, permisos, constancias, caja chica, memorandos, actas…).

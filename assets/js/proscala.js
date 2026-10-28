@@ -7,6 +7,7 @@ const Toast = {
     let c = document.getElementById('toast-container');
     if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
     const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
+    if (type === 'danger') type = 'error';   // nombre de Bootstrap
     const el = document.createElement('div');
     el.className = `toast-msg ${type}`;
     el.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> ${msg}`;
@@ -226,7 +227,8 @@ function toggleTheme() {
   const isDark  = html.getAttribute('data-theme') === 'dark';
   const next    = isDark ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
-  localStorage.setItem('proscala-theme', next);
+  html.setAttribute('data-bs-theme', next);   // componentes de Bootstrap (alertas, pestañas…)
+  try { localStorage.setItem('proscala-theme', next); } catch (_) {}
   _syncThemeIcon(next);
   document.dispatchEvent(new CustomEvent('proscala:themechange', { detail: { theme: next } }));
 }
@@ -931,10 +933,19 @@ function lps(n) {
 }
 
 // ── DataTable default init ────────────────────────────────────────
+// Las listas vacías traen una fila "No hay…" con colspan: DataTables no la acepta (otro número de
+// columnas) y avisaba con un alert() del navegador. Se quita esa fila y su texto pasa a ser el
+// mensaje de tabla vacía. Cualquier otro aviso de DataTables va a la consola, nunca a un alert().
 function initDataTable(selector, opts = {}) {
   if (typeof $ === 'undefined' || !$.fn.DataTable) return;
-  $(selector).DataTable(Object.assign({
-    language: window.DATATABLES_ES || {},   // assets/vendor/datatables/es-MX.js
+  $.fn.dataTable.ext.errMode = (s, tn, msg) => console.warn('DataTables:', msg);
+  const $tabla = $(selector);
+  const $vacia = $tabla.find('tbody > tr').filter((_, tr) => tr.cells.length === 1 && tr.cells[0].colSpan > 1);
+  const textoVacio = $vacia.first().text().trim();
+  $vacia.remove();
+  const idioma = Object.assign({}, window.DATATABLES_ES || {}, textoVacio ? { emptyTable: textoVacio } : {});   // assets/vendor/datatables/es-MX.js
+  $tabla.DataTable(Object.assign({
+    language: idioma,
     pageLength: 20,
     responsive: true,
     dom: '<"d-flex justify-content-between align-items-center mb-2"lf>rt<"d-flex justify-content-between align-items-center mt-2"ip>',
