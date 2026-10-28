@@ -235,11 +235,11 @@ function revertirSinOrdenPago(PDO $pdo, string $modulo, int $id, Throwable $e): 
         'detalle' => ($esAutorizacion ? 'Autorización revertida: ' : 'Guardado sin orden de pago: ') . 'no se pudo generar la orden de pago automática: ' . $e->getMessage()]);
 
     // La respuesta del módulo sigue retenida (prepararOrdenPago): se reemplaza
-    if (ob_get_level() && !headers_sent()) {
+    if (ob_get_level()) {
         $original = json_decode((string)ob_get_clean(), true);
-        header('Content-Type: application/json');
+        if (!headers_sent()) header('Content-Type: application/json');
         if ($esAutorizacion) {
-            http_response_code(409);
+            if (!headers_sent()) http_response_code(409);
             echo json_encode(['success' => false, 'message' => $mensaje], JSON_UNESCAPED_UNICODE);
         } else {
             echo json_encode(['success' => true, 'message' => trim(($original['message'] ?? '') . ' ' . $mensaje)] + (array)$original, JSON_UNESCAPED_UNICODE);

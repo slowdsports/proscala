@@ -232,6 +232,21 @@ CREATE TABLE `cuentas_contables` (
   KEY `cuenta_padre_id` (`cuenta_padre_id`),
   CONSTRAINT `cuentas_contables_ibfk_1` FOREIGN KEY (`cuenta_padre_id`) REFERENCES `cuentas_contables` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `delegaciones` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario_id` int(11) NOT NULL,
+  `delegado_id` int(11) NOT NULL,
+  `desde` date NOT NULL,
+  `hasta` date NOT NULL,
+  `motivo` varchar(200) DEFAULT NULL,
+  `cancelada` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_delegado` (`delegado_id`,`desde`,`hasta`),
+  KEY `idx_usuario` (`usuario_id`,`hasta`),
+  CONSTRAINT `fk_deleg_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_deleg_delegado` FOREIGN KEY (`delegado_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `empleado_proyectos` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `empleado_id` int(11) NOT NULL,
@@ -812,6 +827,15 @@ CREATE TABLE `rechazos` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_rechazos_registro` (`tabla`,`registro_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `recordatorios` (
+  `tabla` varchar(40) NOT NULL,
+  `registro_id` int(11) NOT NULL,
+  `paso` enum('revisar','autorizar') NOT NULL,
+  `inicio` datetime NOT NULL,
+  `nivel` tinyint(3) unsigned NOT NULL,
+  `enviado_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`tabla`,`registro_id`,`paso`,`inicio`,`nivel`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `registro_usuarios` (
   `tabla` varchar(40) NOT NULL,

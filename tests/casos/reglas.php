@@ -1,0 +1,180 @@
+<?php
+// Reglas del sistema con datos de prueba dentro de transacciones que se revierten:
+// jerarquía, delegación, notificaciones, recordatorios, orden de pago atómica, bloqueo por IP,
+// respaldo semanal y Excel.
+
+/**
+ * Escenario: puestos zz_jefe (aprueba, depende del Administrador), zz_asistente (depende de
+ * zz_jefe) y zz_par (aprueba, sin relación con el asistente); un usuario por puesto y un permiso
+ * creado por el asistente. Corre $fn dentro de una transacción que siempre se revierte.
+ */
+function conEscenario(PDO $pdo, callable $fn): void {
+    $pdo->beginTransaction();
+    try {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES
+            ('zz_jefe', 'ZZ Jefe', 'admin', 1, 0, 90), ('zz_asistente', 'ZZ Asistente', 'zz_jefe', 0, 0, 91), ('zz_par', 'ZZ Par', 'admin', 1, 0, 92)");
+        $pdo->exec("INSERT INTO rol_modulos (rol, modulo) VALUES ('zz_jefe', 'permisos.php'), ('zz_asistente', 'permisos.php')");
+        $u = [];
+        foreach (['jefe', 'asistente', 'par'] as $p) {
+            $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES (?,?,?,?,1)")
+                ->execute(["ZZ " . ucfirst($p), "zz.$p." . bin2hex(random_bytes(3)) . '@prueba.local', 'x', "zz_$p"]);
+            $u[$p] = (int)$pdo->lastInsertId();
+        }
+        $pdo->prepare("INSERT INTO permisos (numero, empleado_id, fecha_solicitud, fecha_inicio, fecha_fin, dias, tipo, motivo, estado)
+                       VALUES ('ZZPRUEBA-PER', ?, CURDATE(), CURDATE(), CURDATE(), 1, 'personal', 'Prueba automática', 'pendiente')")->execute([$emp]);
+        $per = (int)$pdo->lastInsertId();
+        $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('permisos', ?, ?, 'creador')")->execute([$per, $u['asistente']]);
+        roles(true);
+        $fn($u, $per);
+    } finally {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        roles(true);
+    }
+}
+$accion = fn(PDO $pdo, int $per, string $paso) => accionesFlujo(estadoFlujo($pdo, 'permisos.php', $per), 'permisos.php')[$paso];
+
+prueba('Jerarquía: solo un superior de quien creó el proceso puede revisarlo', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        comoUsuario($pdo, $u['jefe']);      iguales(true, $accion($pdo, $per, 'revisar'), 'el jefe (superior) revisa');
+        comoUsuario($pdo, $u['asistente']); afirmar($accion($pdo, $per, 'revisar') !== true, 'quien lo creó no puede revisarlo');
+        comoUsuario($pdo, $u['par']);       afirmar(str_contains((string)$accion($pdo, $per, 'revisar'), 'organigrama'), 'un puesto que no es superior no puede revisarlo');
+    });
+});
+
+prueba('Quien revisó no puede autorizar el mismo proceso', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        comoUsuario($pdo, $u['jefe']);
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        afirmar(str_contains((string)$accion($pdo, $per, 'autorizar'), 'Quien revisó'), 'el revisor no debe poder autorizar');
+    });
+});
+
+prueba('Delegación: el delegado aprueba "en nombre de" quien delegó, con sus límites', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        $pdo->prepare("INSERT INTO delegaciones (usuario_id, delegado_id, desde, hasta) VALUES (?,?,CURDATE(),CURDATE())")->execute([$u['jefe'], $u['par']]);
+        comoUsuario($pdo, $u['par']);
+        afirmar(puedeAcceder('permisos.php'), 'la delegación da acceso al módulo de quien delegó');
+        iguales(true, $accion($pdo, $per, 'revisar'), 'el delegado revisa como el jefe');
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        $c = $pdo->query("SELECT comentario FROM aprobaciones WHERE tabla = 'permisos' AND registro_id = $per AND paso = 'revisado'")->fetchColumn();
+        iguales('En nombre de ZZ Jefe', $c, 'anotación del paso');
+        // Quien delegó revisó → el delegado no puede autorizar (sería la misma persona)
+        $pdo->exec("UPDATE aprobaciones SET usuario_id = {$u['jefe']}, comentario = NULL WHERE tabla = 'permisos' AND registro_id = $per");
+        afirmar(str_contains((string)$accion($pdo, $per, 'autorizar'), 'Lo revisó quien le delegó'), 'no debe autorizar lo que revisó quien delegó');
+        // Las notificaciones de lo que le toca al jefe también llegan al delegado
+        $dest = aprobadoresProceso($pdo, 'permisos.php', $per, [$u['asistente']]);
+        afirmar(in_array($u['jefe'], $dest, true) && in_array($u['par'], $dest, true), 'avisos al jefe y a su delegado: ' . json_encode($dest));
+    });
+});
+
+prueba('Delegación vencida o cancelada no da permisos', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        $pdo->prepare("INSERT INTO delegaciones (usuario_id, delegado_id, desde, hasta) VALUES (?,?,CURDATE() - INTERVAL 5 DAY, CURDATE() - INTERVAL 1 DAY)")->execute([$u['jefe'], $u['par']]);
+        $pdo->prepare("INSERT INTO delegaciones (usuario_id, delegado_id, desde, hasta, cancelada) VALUES (?,?,CURDATE(),CURDATE(),1)")->execute([$u['jefe'], $u['par']]);
+        comoUsuario($pdo, $u['par']);
+        afirmar($accion($pdo, $per, 'revisar') !== true, 'una delegación vencida o cancelada no debe permitir revisar');
+    });
+});
+
+prueba('Notificaciones: niveles de aprobadores según el organigrama', function () use ($pdo) {
+    conEscenario($pdo, function ($u, $per) use ($pdo) {
+        $niveles = nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']]);
+        iguales([$u['jefe']], $niveles[0] ?? null, 'nivel 1 (superior inmediato)');
+        afirmar(isset($niveles[1]) && !in_array($u['jefe'], $niveles[1], true), 'el último nivel son los Administradores');
+    });
+});
+
+prueba('Recordatorio a los 2 días y escalamiento al siguiente nivel a los 5', function () use ($pdo) {
+    conEscenario($pdo, function ($u, $per) use ($pdo) {
+        $pdo->exec("UPDATE configuracion SET valor = '2' WHERE clave = 'recordatorio_dias'");
+        $pdo->exec("UPDATE configuracion SET valor = '5' WHERE clave = 'escalamiento_dias'");
+        $buscar = fn() => array_values(array_filter(recordarPendientes($pdo, false), fn($a) => str_contains($a['proceso'], 'ZZPRUEBA-PER')));
+        $edad = fn(int $d) => $pdo->exec("UPDATE registro_usuarios SET created_at = NOW() - INTERVAL $d DAY - INTERVAL 1 HOUR WHERE tabla = 'permisos' AND registro_id = $per");
+        $edad(1); iguales([], $buscar(), 'un día: nada');
+        $edad(3); $a = $buscar(); iguales(0, $a[0]['nivel'] ?? null, 'tres días: recordatorio'); afirmar(in_array($u['jefe'], $a[0]['usuarios'], true), 'el recordatorio va al jefe');
+        $edad(6); $a = $buscar(); iguales(1, $a[0]['nivel'] ?? null, 'seis días: escalado al nivel siguiente'); afirmar(!in_array($u['jefe'], $a[0]['usuarios'], true), 'el escalamiento va por encima del jefe');
+        // Ya enviado: no se repite
+        $pdo->prepare("INSERT INTO recordatorios (tabla, registro_id, paso, inicio, nivel) VALUES ('permisos', ?, 'revisar', ?, 1)")
+            ->execute([$per, date('Y-m-d H:i:s', strtotime(estadoFlujo($pdo, 'permisos.php', $per)['creado']['fecha']))]);
+        iguales([], $buscar(), 'un aviso ya enviado no se repite');
+    });
+});
+
+prueba('Orden de pago atómica: si no se genera la OP, la autorización se revierte', function () use ($pdo) {
+    $pdo->beginTransaction();
+    try {
+        $gv = $pdo->query("SELECT id FROM gastos_viaje ORDER BY id DESC LIMIT 1")->fetchColumn();
+        if (!$gv) throw new Omitir('no hay anticipos para probar');
+        $pdo->exec("UPDATE gastos_viaje SET estado = 'pendiente' WHERE id = $gv");
+        $pdo->exec("DELETE FROM aprobaciones WHERE tabla = 'gastos_viaje' AND registro_id = $gv");
+        $_POST = ['_action' => 'cambiar_estado', 'estado' => 'aprobada', 'id' => $gv];
+        ob_start();                                       // capa propia de la prueba
+        prepararOrdenPago($pdo, 'gastos_viajes.php');     // guarda el estado y retiene la respuesta
+        echo '{"success":true,"message":"Estado actualizado."}';   // lo que respondería el módulo
+        $pdo->exec("UPDATE gastos_viaje SET estado = 'aprobada' WHERE id = $gv");
+        $pdo->exec("INSERT INTO aprobaciones (tabla, registro_id, paso, usuario_id) VALUES ('gastos_viaje', $gv, 'autorizado', 1)");
+        revertirSinOrdenPago($pdo, 'gastos_viajes.php', (int)$gv, new RuntimeException('prueba'));
+        $respuesta = json_decode((string)ob_get_clean(), true);
+        iguales('pendiente', $pdo->query("SELECT estado FROM gastos_viaje WHERE id = $gv")->fetchColumn(), 'estado tras revertir');
+        iguales(0, (int)$pdo->query("SELECT COUNT(*) FROM aprobaciones WHERE tabla = 'gastos_viaje' AND registro_id = $gv AND paso = 'autorizado'")->fetchColumn(), 'paso autorizado');
+        iguales(false, $respuesta['success'] ?? null, 'la respuesta pasa a ser un error');
+        afirmar(str_contains($respuesta['message'] ?? '', 'NO se autorizó'), 'el mensaje explica que no se autorizó');
+    } finally {
+        while (ob_get_level() > 1) ob_end_clean();
+        $_POST = [];
+        unset($GLOBALS['_op_previo']);
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        http_response_code(200);
+    }
+});
+
+prueba('Bloqueo por IP: 5 fallos en 15 minutos bloquean 15 minutos', function () use ($pdoMaster) {
+    $pdoMaster->beginTransaction();
+    try {
+        $ip = 'prueba-' . bin2hex(random_bytes(4));
+        $fallo = fn(int $minutos) => $pdoMaster->prepare("INSERT INTO intentos_login (ip, created_at) VALUES (?, NOW() - INTERVAL $minutos MINUTE)")->execute([$ip]);
+        foreach ([20, 18, 16, 3] as $m) $fallo($m);
+        iguales(0, minutosBloqueoIp($pdoMaster, $ip), '4 fallos recientes: sin bloqueo');
+        $fallo(2);
+        iguales(0, minutosBloqueoIp($pdoMaster, $ip), '5 fallos repartidos en más de 15 minutos: sin bloqueo');
+        foreach ([1, 1, 0] as $m) $fallo($m);
+        afirmar(minutosBloqueoIp($pdoMaster, $ip) >= 14, '5 fallos en menos de 15 minutos: bloqueada unos 15 minutos');
+        limpiarFallosIp($pdoMaster, $ip);
+        iguales(0, minutosBloqueoIp($pdoMaster, $ip), 'tras un ingreso correcto se limpia');
+    } finally { $pdoMaster->rollBack(); }
+});
+
+prueba('Respaldo semanal: uno cada 7 días', function () use ($pdoMaster) {
+    $pdoMaster->beginTransaction();
+    try {
+        $pdoMaster->exec("DELETE FROM respaldos_descargas");
+        iguales(true, respaldoSemanalPendiente($pdoMaster), 'sin respaldos: pendiente');
+        $pdoMaster->exec("INSERT INTO respaldos_descargas (email, created_at) VALUES ('prueba', NOW() - INTERVAL 3 DAY)");
+        iguales(false, respaldoSemanalPendiente($pdoMaster), 'hace 3 días: no');
+        $pdoMaster->exec("UPDATE respaldos_descargas SET created_at = NOW() - INTERVAL 8 DAY");
+        iguales(true, respaldoSemanalPendiente($pdoMaster), 'hace 8 días: pendiente');
+    } finally { $pdoMaster->rollBack(); }
+});
+
+prueba('Excel: números, textos y un .xlsx válido', function () {
+    foreach (['L. 1,234.56' => 1234.56, '(250.00)' => -250.0, '15' => 15.0, '-3.5' => -3.5] as $t => $n) iguales($n, numeroExcel($t), "número de \"$t\"");
+    foreach (['0801199012345', '20/10/2026', 'OC26-0012', '9999-0000', 'Texto'] as $t) iguales(null, numeroExcel($t), "\"$t\" debe quedar como texto");
+    $tmp = tempnam(sys_get_temp_dir(), 'x');
+    file_put_contents($tmp, generarXlsx('Prueba <&>', ['Número', 'Monto'], [['A&B <c>', 'L. 10.00']]));
+    $z = new ZipArchive();
+    afirmar($z->open($tmp) === true, 'no es un zip válido');
+    foreach (['[Content_Types].xml', 'xl/workbook.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml'] as $f) {
+        afirmar(@simplexml_load_string((string)$z->getFromName($f)) !== false, "$f no es XML válido");
+    }
+    $z->close();
+    @unlink($tmp);
+});
+
+prueba('Búsqueda: catálogo de procesos coherente con los módulos del sistema', function () {
+    // buscar.php no se incluye (responde y termina): se lee su catálogo
+    preg_match_all("/'(\w+\.php)'\s*=>\s*\['(\w+)'/", (string)file_get_contents(RAIZ . '/buscar.php'), $m, PREG_SET_ORDER);
+    afirmar(count($m) >= 15, 'catálogo de búsqueda incompleto');
+    $todos = []; foreach (MODULOS as $items) $todos += $items;
+    foreach ($m as [, $modulo]) afirmar(isset($todos[$modulo]), "$modulo no es un módulo del menú");
+});

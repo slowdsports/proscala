@@ -130,8 +130,10 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
-// (respaldo.php valida que sea el super administrador)
-const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php', 'respaldo.php'];
+// (respaldo.php valida que sea el super administrador; mis_solicitudes.php y buscar.php muestran
+// solo lo que cada usuario puede ver)
+const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php',
+                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -155,7 +157,7 @@ function moduloLabel(?string $archivo): string {
         $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
                  'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
-                 'respaldo.php' => 'Respaldo del sistema'];
+                 'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'buscar.php' => 'Búsqueda'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
     return $mapa[$archivo] ?? (string)$archivo;
@@ -183,6 +185,7 @@ const ACCIONES_BITACORA = [
     'QUITAR_ADJUNTO'  => ['Adjunto quitado',   'danger'],
     'RESPALDO'        => ['Respaldo descargado', 'dark'],
     'ACTIVACION'      => ['Enlace de activación', 'info'],
+    'EXPORTAR'        => ['Exportación a Excel', 'success'],
 ];
 
 // ── Solicitudes ────────────────────────────────────────────────────
@@ -304,7 +307,8 @@ function puedeAcceder(string $pagina): bool {
     if ($pagina === 'empresas.php') return esSuperadmin();
     if (tieneAccesoTotal()) return true;
     if (in_array($pagina, MODULOS_SOLO_ADMIN, true)) return false;
-    return in_array($pagina, $_SESSION['modulos'] ?? [], true);
+    // Módulos de procesos de quien le delegó sus aprobaciones (config/aprobaciones.php)
+    return in_array($pagina, $_SESSION['modulos'] ?? [], true) || accesoPorDelegacion($pagina);
 }
 
 function puedeVerDocumento(string $tipo): bool {
@@ -314,14 +318,16 @@ function puedeVerDocumento(string $tipo): bool {
     return false;
 }
 
-// Primera página permitida, en el orden del menú (Mi Perfil si no tiene módulos)
+// Página de inicio: Mis solicitudes para quien solo ve las suyas; si no, la primera página
+// permitida en el orden del menú (Mis solicitudes si no tiene módulos)
 function paginaInicio(): string {
+    if (soloRegistrosPropios()) return 'mis_solicitudes.php';
     foreach (MODULOS as $items) {
         foreach (array_keys($items) as $modulo) {
             if (puedeAcceder($modulo)) return $modulo;
         }
     }
-    return 'perfil.php';
+    return 'mis_solicitudes.php';
 }
 
 /**

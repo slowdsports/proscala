@@ -296,6 +296,46 @@ body.nav-cargando::before {
 }
 #btn-theme:hover { background: var(--surface-2); color: var(--primary); border-color: var(--primary); }
 
+/* ── Búsqueda global (barra superior, proscala.js → Busqueda) ── */
+.buscador { position: relative; flex: 1; max-width: 520px; display: flex; align-items: center; }
+.buscador-icono { position: absolute; left: .8rem; color: var(--text-3); font-size: .82rem; pointer-events: none; }
+#buscador-input {
+  width: 100%; height: 36px; padding: 0 4.2rem 0 2.2rem; font: inherit; font-size: .84rem; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-full);
+  transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition);
+}
+#buscador-input:focus { outline: none; background: var(--surface); border-color: var(--primary); box-shadow: 0 0 0 3px rgba(var(--primary-rgb), .15); }
+#buscador-input::-webkit-search-cancel-button { display: none; }
+.buscador-atajo {
+  position: absolute; right: .55rem; font: 600 .66rem/1 'Inter', sans-serif; color: var(--text-3);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .22rem .4rem; pointer-events: none;
+}
+#buscador-input:focus ~ .buscador-atajo { display: none; }
+.buscador-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 1040; max-height: min(70vh, 520px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--el-4);
+}
+.buscador-grupo { padding: .5rem .9rem .25rem; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.buscador-item { display: flex; align-items: center; gap: .65rem; padding: .5rem .9rem; color: var(--text); text-decoration: none; font-size: .82rem; }
+.buscador-item:hover, .buscador-item.activo { background: rgba(var(--primary-rgb), .08); color: var(--text); }
+.buscador-item > i { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(var(--primary-rgb), .1); color: var(--primary); font-size: .78rem; }
+.buscador-item .bt { font-weight: 600; } .buscador-item .bs { color: var(--text-2); font-size: .76rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buscador-item .bx { min-width: 0; flex: 1; }
+.buscador-vacio { padding: 1.1rem; text-align: center; color: var(--text-3); font-size: .82rem; }
+#btn-buscar { display: none; background: none; border: 1px solid var(--border); color: var(--text-2); width: 34px; height: 34px; border-radius: var(--r-xs); cursor: pointer; align-items: center; justify-content: center; }
+[data-theme="dark"] #buscador-input { background: #1a1a22; border-color: rgba(255,255,255,.08); }
+[data-theme="dark"] .buscador-panel { border-color: rgba(255,255,255,.08); }
+[data-theme="dark"] #btn-buscar { border-color: rgba(255,255,255,.1); }
+@media (max-width: 768px) {
+  #btn-buscar { display: flex; }
+  .buscador { display: none; position: fixed; top: var(--topbar-h); left: 0; right: 0; max-width: none; padding: .55rem .7rem; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--el-2); z-index: 1035; }
+  .buscador.abierto { display: flex; }
+  .buscador-icono { left: 1.5rem; }
+  .buscador-atajo { display: none; }
+  .buscador-panel { left: .7rem; right: .7rem; }
+}
+
 /* ── Notificaciones (campana de la barra superior, proscala.js → Notificaciones) ── */
 .notif { position: relative; }
 #btn-notif {

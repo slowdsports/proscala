@@ -27,7 +27,9 @@ INSERT INTO configuracion (clave, valor, descripcion) VALUES
 ('prefijo_co', 'CO', 'Prefijo cotizaciones'),
 ('prefijo_oc', 'OC', 'Prefijo orden de compra'),
 ('prefijo_op', 'OP', 'Prefijo orden de pago'),
-('prefijo_nr', 'NR', 'Prefijo nota de recepción');
+('prefijo_nr', 'NR', 'Prefijo nota de recepción'),
+('recordatorio_dias', '2', 'Días que un proceso espera antes de recordar a quien le toca aprobarlo'),
+('escalamiento_dias', '5', 'Días que un proceso espera antes de avisar al siguiente nivel del organigrama');
 
 -- Puestos iniciales (se agregan, renombran y ordenan en Roles y Permisos)
 INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES

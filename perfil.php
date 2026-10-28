@@ -54,6 +54,47 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonOk([], $activo ? 'Recibirá los avisos también por correo.' : 'Ya no recibirá avisos por correo; seguirán en la campana.');
     }
 
+    // ── Delegar mis aprobaciones (config/aprobaciones.php) ──
+    if ($act === 'delegar') {
+        if (!tieneAccesoTotal() && empty($_SESSION['rol_aprueba'])) jsonErr('Su puesto no aprueba procesos: no tiene aprobaciones que delegar.');
+        $delegado = (int)($_POST['delegado_id'] ?? 0);
+        $desde = (string)($_POST['desde'] ?? '');
+        $hasta = (string)($_POST['hasta'] ?? '');
+        $motivo = mb_substr(trim((string)($_POST['motivo'] ?? '')), 0, 200);
+        $fecha = fn($f) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $f) && strtotime($f);
+        if (!$fecha($desde) || !$fecha($hasta)) jsonErr('Indique las fechas de inicio y fin.');
+        if ($desde < date('Y-m-d')) jsonErr('La delegación no puede empezar en una fecha pasada.');
+        if ($hasta < $desde) jsonErr('La fecha de fin debe ser igual o posterior a la de inicio.');
+        if ((strtotime($hasta) - strtotime($desde)) / 86400 > 90) jsonErr('Una delegación puede durar como máximo 90 días.');
+        $s = $pdo->prepare("SELECT u.id, u.nombre, u.rol FROM usuarios u WHERE u.id = ? AND u.activo = 1 AND u.id <> ?");
+        $s->execute([$delegado, $userId]);
+        if (!$d = $s->fetch()) jsonErr('Elija a la persona en quien delega.');
+        if (!empty(roles()[$d['rol']]['solo_propios'])) jsonErr("{$d['nombre']} solo ve sus propias solicitudes: elija a alguien con acceso a los módulos.");
+        $s = $pdo->prepare("SELECT COUNT(*) FROM delegaciones WHERE usuario_id = ? AND cancelada = 0 AND desde <= ? AND hasta >= ?");
+        $s->execute([$userId, $hasta, $desde]);
+        if ($s->fetchColumn()) jsonErr('Ya tiene una delegación en esas fechas. Cancélela primero si quiere cambiarla.');
+        $pdo->prepare("INSERT INTO delegaciones (usuario_id, delegado_id, desde, hasta, motivo) VALUES (?,?,?,?,?)")
+            ->execute([$userId, $d['id'], $desde, $hasta, $motivo ?: null]);
+        $idDel = (int)$pdo->lastInsertId();
+        $periodo = 'del ' . fmtFecha($desde) . ' al ' . fmtFecha($hasta);
+        registrarAuditoria($pdo, 'INSERT', 'delegaciones', $idDel, "Delegó sus aprobaciones en {$d['nombre']} $periodo" . ($motivo ? " ($motivo)" : ''));
+        avisar($pdo, [$d['id']], 'delegacion', 'Le delegaron aprobaciones',
+            ($_SESSION['usuario_nombre'] ?? 'Un usuario') . " le delegó sus aprobaciones $periodo" . ($motivo ? " ($motivo)" : '')
+            . '. En esas fechas podrá revisar y autorizar los procesos que le corresponden a esa persona.', 'perfil.php', 'delegaciones', $idDel, 'Le delegaron aprobaciones');
+        jsonOk(['id' => $idDel], "Sus aprobaciones quedan delegadas en {$d['nombre']} $periodo.");
+    }
+    if ($act === 'cancelar_delegacion') {
+        $s = $pdo->prepare("SELECT d.id, d.delegado_id, u.nombre FROM delegaciones d JOIN usuarios u ON u.id = d.delegado_id
+                            WHERE d.id = ? AND d.usuario_id = ? AND d.cancelada = 0");
+        $s->execute([(int)($_POST['id'] ?? 0), $userId]);
+        if (!$d = $s->fetch()) jsonErr('Delegación no encontrada.');
+        $pdo->prepare("UPDATE delegaciones SET cancelada = 1 WHERE id = ?")->execute([$d['id']]);
+        registrarAuditoria($pdo, 'UPDATE', 'delegaciones', (int)$d['id'], "Canceló la delegación de aprobaciones en {$d['nombre']}");
+        avisar($pdo, [$d['delegado_id']], 'delegacion', 'Delegación cancelada',
+            ($_SESSION['usuario_nombre'] ?? 'Un usuario') . ' canceló la delegación de sus aprobaciones.', 'perfil.php', 'delegaciones', (int)$d['id'], 'Delegación cancelada');
+        jsonOk([], 'Delegación cancelada.');
+    }
+
     if ($act === 'foto') {
         if (empty($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) jsonErr('No se recibió ningún archivo.');
         $file = $_FILES['foto'];
@@ -119,6 +160,23 @@ $stmt->execute([$userId]);
 $me = $stmt->fetch();
 
 $fotoUrl = $me['foto'] ? BASE_URL . $me['foto'] : BASE_URL . 'assets/images/proscala.png';
+
+// Delegación de aprobaciones: la puede hacer quien aprueba con su propio puesto
+$puedeDelegar = tieneAccesoTotal() || !empty($_SESSION['rol_aprueba']);
+$s = $pdo->prepare("SELECT d.*, u.nombre AS delegado FROM delegaciones d JOIN usuarios u ON u.id = d.delegado_id
+                    WHERE d.usuario_id = ? AND d.cancelada = 0 AND d.hasta >= CURDATE() ORDER BY d.desde");
+$s->execute([$userId]);
+$misDelegaciones = $s->fetchAll();
+$s = $pdo->prepare("SELECT d.*, u.nombre AS delegante FROM delegaciones d JOIN usuarios u ON u.id = d.usuario_id
+                    WHERE d.delegado_id = ? AND d.cancelada = 0 AND d.hasta >= CURDATE() ORDER BY d.desde");
+$s->execute([$userId]);
+$delegacionesRecibidas = $s->fetchAll();
+$candidatosDelegar = [];
+if ($puedeDelegar) {
+    $s = $pdo->prepare("SELECT id, nombre, rol FROM usuarios WHERE activo = 1 AND id <> ? ORDER BY nombre");
+    $s->execute([$userId]);
+    $candidatosDelegar = array_filter($s->fetchAll(), fn($u) => empty(roles()[$u['rol']]['solo_propios']));
+}
 $rolColor = $me['rol'] === 'admin' ? 'danger' : 'primary';
 
 include __DIR__ . '/includes/header.php';
@@ -233,6 +291,47 @@ include __DIR__ . '/includes/header.php';
         </div>
       </div>
     </div>
+
+    <!-- Delegación de aprobaciones -->
+    <?php if ($puedeDelegar || $delegacionesRecibidas): ?>
+    <div class="card mb-4">
+      <div class="card-header"><i class="fas fa-user-clock"></i> Delegación de aprobaciones</div>
+      <div class="card-body">
+        <?php foreach ($delegacionesRecibidas as $d): $vigente = $d['desde'] <= date('Y-m-d'); ?>
+        <div class="alert alert-info py-2 small mb-2"><i class="fas fa-hand-holding"></i>
+          <strong><?= htmlspecialchars($d['delegante']) ?></strong> le delegó sus aprobaciones del <?= fmtFecha($d['desde']) ?> al <?= fmtFecha($d['hasta']) ?>
+          <?= $vigente ? '(vigente: puede revisar y autorizar sus procesos)' : '(empieza el ' . fmtFecha($d['desde']) . ')' ?><?= $d['motivo'] ? ' — ' . htmlspecialchars($d['motivo']) : '' ?>.</div>
+        <?php endforeach; ?>
+
+        <?php if ($puedeDelegar): ?>
+        <p class="text-muted small mb-3">Si va a ausentarse, otra persona puede revisar y autorizar en su lugar los procesos que le corresponden.
+          Lo que apruebe quedará registrado "en nombre de" usted.</p>
+        <?php foreach ($misDelegaciones as $d): $vigente = $d['desde'] <= date('Y-m-d'); ?>
+        <div class="d-flex flex-wrap align-items-center gap-2 border rounded p-2 mb-2 small">
+          <span class="badge <?= $vigente ? 'bg-success' : 'bg-secondary' ?>"><?= $vigente ? 'Vigente' : 'Programada' ?></span>
+          <span>En <strong><?= htmlspecialchars($d['delegado']) ?></strong>, del <?= fmtFecha($d['desde']) ?> al <?= fmtFecha($d['hasta']) ?><?= $d['motivo'] ? ' — ' . htmlspecialchars($d['motivo']) : '' ?></span>
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 ms-auto" onclick="cancelarDelegacion(<?= (int)$d['id'] ?>)"><i class="fas fa-xmark"></i> Cancelar</button>
+        </div>
+        <?php endforeach; ?>
+        <form id="form-delegar" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+          <input type="hidden" name="_action" value="delegar">
+          <div class="col-md-4">
+            <label class="form-label">Delegar en *</label>
+            <select name="delegado_id" class="form-select" required>
+              <option value="">Seleccione…</option>
+              <?php foreach ($candidatosDelegar as $c): ?><option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['nombre']) ?> — <?= htmlspecialchars(rolLabel($c['rol'])) ?></option><?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-6 col-md-2"><label class="form-label">Desde *</label><input type="text" name="desde" class="form-control date-input" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="col-6 col-md-2"><label class="form-label">Hasta *</label><input type="text" name="hasta" class="form-control date-input" required></div>
+          <div class="col-md-4"><label class="form-label">Motivo</label><input type="text" name="motivo" class="form-control" maxlength="200" placeholder="Ej.: vacaciones"></div>
+          <div class="col-12"><button type="submit" class="btn-proscala"><i class="fas fa-user-check"></i> Delegar aprobaciones</button></div>
+        </form>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Cambiar contraseña -->
     <?php if ($me['debe_cambiar_password']): ?>
@@ -354,6 +453,17 @@ document.getElementById('chk-notificar-correo').addEventListener('change', async
   try { const r = await post('perfil.php', fd); Toast.show(r.message, 'success'); }
   catch (e) { this.checked = !this.checked; Toast.show(e.message, 'error'); }
 });
+
+bindAjaxForm('form-delegar', () => setTimeout(() => Nav.recargar(), 900));
+async function cancelarDelegacion(id) {
+  if (!await confirmar('Quien recibió la delegación dejará de poder aprobar en su nombre.', { titulo: '¿Cancelar la delegación?', aceptar: 'Cancelar delegación', peligro: true })) return;
+  const fd = new FormData();
+  fd.append('csrf_token', _csrfPerfil);
+  fd.append('_action', 'cancelar_delegacion');
+  fd.append('id', id);
+  try { const r = await post('perfil.php', fd); Toast.show(r.message, 'success'); setTimeout(() => Nav.recargar(), 800); }
+  catch (e) { Toast.show(e.message, 'error'); }
+}
 
 bindAjaxForm('form-datos', r => {
   Toast.show(r.message, 'success');

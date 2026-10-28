@@ -29,6 +29,11 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonOk(['logo' => $nuevo ? BASE_URL . LOGOS_DIR . $nuevo : ''], $nuevo ? 'Logo actualizado.' : 'Logo eliminado.');
     }
 
+    // Días de recordatorio y escalamiento de procesos pendientes (cron/recordatorios.php)
+    $rec = (int)($_POST['recordatorio_dias'] ?? 2);
+    $esc = (int)($_POST['escalamiento_dias'] ?? 5);
+    if ($rec < 1 || $rec > 60 || $esc < 1 || $esc > 90) jsonErr('Los días de recordatorio (1 a 60) y de escalamiento (1 a 90) deben ser números válidos.');
+    if ($esc <= $rec) jsonErr('El escalamiento debe ocurrir después del recordatorio (más días).');
     foreach ($_POST as $k => $v) {
         // 'logo' solo se cambia subiendo un archivo (arriba), nunca escribiendo una ruta
         // 'rtn' identifica a la empresa en el login: solo lo cambia el super administrador (Empresas)
@@ -84,6 +89,17 @@ include __DIR__ . '/includes/header.php';
         <?php foreach($prefijos as $k=>$lbl): ?>
         <div class="col-md-3"><label class="form-label"><?= $lbl ?></label><input type="text" name="<?= $k ?>" class="form-control" maxlength="5" value="<?= htmlspecialchars($cfg[$k]??'') ?>" style="text-transform:uppercase"></div>
         <?php endforeach; ?>
+      </div>
+
+      <div class="form-section-title">Procesos pendientes: recordatorios y escalamiento</div>
+      <div class="row g-3">
+        <div class="col-md-3"><label class="form-label">Recordar después de (días)</label>
+          <input type="number" name="recordatorio_dias" class="form-control" min="1" max="60" value="<?= (int)($cfg['recordatorio_dias'] ?? 2) ?>"></div>
+        <div class="col-md-3"><label class="form-label">Escalar después de (días)</label>
+          <input type="number" name="escalamiento_dias" class="form-control" min="1" max="90" value="<?= (int)($cfg['escalamiento_dias'] ?? 5) ?>"></div>
+        <div class="col-md-6 d-flex align-items-end"><div class="text-muted" style="font-size:.78rem">
+          Si un proceso lleva esos días esperando su revisión o autorización, se le recuerda a quien le toca; si sigue esperando,
+          se avisa al siguiente nivel del organigrama (y cada vez que vuelven a pasar esos días, al siguiente). Se revisa una vez al día.</div></div>
       </div>
 
       <div class="mt-4">

@@ -8,6 +8,10 @@ if ($flujo):
     $flujoPaso = function (?array $p, string $titulo, string $icono, string $pendiente): string {
         $hecho = $p !== null;
         $quien = $hecho ? htmlspecialchars($p['nombre']) : "<span class=\"text-muted\">{$pendiente}</span>";
+        // Paso hecho por delegación ("En nombre de …"); el comentario de un rechazo es su motivo, no se muestra aquí
+        if ($hecho && $titulo !== 'Rechazado por' && str_starts_with((string)($p['comentario'] ?? ''), 'En nombre de ')) {
+            $quien .= '<div class="text-muted" style="font-size:.72rem">' . htmlspecialchars($p['comentario']) . '</div>';
+        }
         $cuando = $hecho ? '<div class="text-muted" style="font-size:.72rem">' . date('d/m/Y H:i', strtotime($p['fecha'])) . '</div>' : '';
         return "<div class=\"flujo-paso" . ($hecho ? ' hecho' : '') . "\">
             <div class=\"flujo-icono\"><i class=\"fas {$icono}\"></i></div>

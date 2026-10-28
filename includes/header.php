@@ -66,7 +66,14 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <div class="brand">
     <img src="<?= BASE_URL ?>assets/images/proscala.png" alt="Proscala">
   </div>
-  <span class="topbar-title">Sistema de Administración Empresarial</span>
+  <?php // Búsqueda global (buscar.php; proscala.js → Busqueda). En celulares se abre con el botón de la lupa ?>
+  <div class="buscador" id="buscador" role="search">
+    <i class="fas fa-magnifying-glass buscador-icono"></i>
+    <input type="search" id="buscador-input" placeholder="Buscar número, empleado, proveedor, módulo…" autocomplete="off"
+           aria-label="Buscar en el sistema" aria-controls="buscador-panel" aria-expanded="false">
+    <kbd class="buscador-atajo">Ctrl K</kbd>
+    <div class="buscador-panel" id="buscador-panel" role="listbox" hidden></div>
+  </div>
   <span class="topbar-empresa" title="Empresa"><i class="fas fa-building"></i> <?= htmlspecialchars($_SESSION['empresa_nombre'] ?? '') ?></span>
   <div class="topbar-right">
     <a href="<?= BASE_URL ?>perfil.php" class="topbar-user d-none d-md-flex" style="text-decoration:none;color:inherit">
@@ -78,6 +85,7 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
       <span><?= htmlspecialchars($user['nombre']) ?></span>
       <span class="topbar-role"><?= htmlspecialchars(esSuperadmin() ? 'Super Administrador' : rolLabel($user['rol'])) ?></span>
     </a>
+    <button type="button" id="btn-buscar" title="Buscar" aria-label="Buscar"><i class="fas fa-magnifying-glass"></i></button>
     <?php // Notificaciones: lo pendiente de aprobar y los avisos del usuario (proscala.js → Notificaciones) ?>
     <div class="notif" id="notif">
       <button type="button" id="btn-notif" title="Notificaciones" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">

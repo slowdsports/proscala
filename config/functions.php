@@ -261,13 +261,15 @@ function proyectosMap(PDO $pdo): array {
 
 // ── Config helper ──────────────────────────────────────────────────
 function getConfig(PDO $pdo, string $clave, string $default = ''): string {
+    // Caché por conexión: los cron recorren varias empresas en la misma ejecución
     static $cache = [];
-    if (!isset($cache[$clave])) {
+    $k = spl_object_id($pdo) . "\0" . $clave;
+    if (!isset($cache[$k])) {
         $s = $pdo->prepare("SELECT valor FROM configuracion WHERE clave = ?");
         $s->execute([$clave]);
-        $cache[$clave] = $s->fetchColumn() ?: $default;
+        $cache[$k] = $s->fetchColumn() ?: $default;
     }
-    return $cache[$clave];
+    return $cache[$k];
 }
 
 function getAllConfig(PDO $pdo): array {

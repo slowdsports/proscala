@@ -26,6 +26,11 @@ function sidebarModulos(string $title, array $items, string $cur): string {
 
   <?php // Variables con prefijo propio: este archivo se incluye dentro de cada página y no debe pisar las suyas ?>
   <?php foreach (MODULOS as $_sbTitulo => $_sbItems): ?>
+    <?php if ($_sbTitulo === ''): // Dashboard y, para todos, Mis solicitudes ?>
+  <?= sidebarSection('', ...array_merge(array_map(fn($f) => sidebarItem($f, $_sbItems[$f][0], $_sbItems[$f][1], $cur), array_keys($_sbItems)),
+                                        [sidebarItem('mis_solicitudes.php', 'fa-folder-open', 'Mis solicitudes', $cur)])) ?>
+      <?php continue; ?>
+    <?php endif; ?>
     <?php if ($_sbTitulo === 'Administración'): ?>
   <!-- MI CUENTA -->
   <?= sidebarSection('',

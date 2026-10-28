@@ -7,12 +7,7 @@ if (!esSuperadmin()) { header('Location: ' . BASE_URL . paginaInicio()); exit; }
 $pagina = 'Empresas';
 
 // Ejecuta un archivo .sql sentencia por sentencia (cada una termina en ";" al final de línea)
-function ejecutarArchivoSQL(PDO $db, string $archivo): void {
-    $sql = preg_replace('/^--.*$/m', '', file_get_contents($archivo));
-    foreach (preg_split('/;\s*$/m', $sql) as $sentencia) {
-        if (trim($sentencia) !== '') $db->exec($sentencia);
-    }
-}
+require_once __DIR__ . '/config/esquema.php';   // ejecutarArchivoSQL
 
 function validarAdmin(string $nombre, string $email, string $password): void {
     if ($nombre === '') jsonErr('El nombre del administrador es requerido.');

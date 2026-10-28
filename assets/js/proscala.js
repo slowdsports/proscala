@@ -200,6 +200,7 @@ const Notificaciones = {
     const iconos = {
       revisar: ['fa-magnifying-glass', 'aviso'], autorizar: ['fa-signature', 'aviso'], pendiente: ['fa-hourglass-half', 'aviso'],
       revisado: ['fa-eye', ''], autorizado: ['fa-circle-check', 'exito'], rechazado: ['fa-circle-xmark', 'peligro'], corregido: ['fa-pen', ''],
+      delegacion: ['fa-user-clock', ''], recordatorio: ['fa-clock', 'aviso'], escalado: ['fa-arrow-up-right-dots', 'peligro'],
     };
     const item = (tipo, titulo, mensaje, fecha, url, id, noLeida) => {
       const [ic, clase] = iconos[tipo] || ['fa-bell', ''];
@@ -227,6 +228,86 @@ const Notificaciones = {
   },
 };
 document.addEventListener('DOMContentLoaded', () => Notificaciones.iniciar());
+
+// ── Búsqueda global (barra superior → buscar.php) ──────────────────
+// Procesos por número o texto, empleados, proveedores y módulos, solo los que el usuario puede
+// ver. Ctrl+K o "/" para buscar; flechas y Enter para elegir; Esc para cerrar.
+const Busqueda = {
+  temporizador: null, control: null, items: [], activo: -1,
+  iniciar() {
+    const input = document.getElementById('buscador-input');
+    if (!input) return;
+    this.input = input;
+    this.panel = document.getElementById('buscador-panel');
+    this.caja = document.getElementById('buscador');
+    input.addEventListener('input', () => { clearTimeout(this.temporizador); this.temporizador = setTimeout(() => this.buscar(), 250); });
+    input.addEventListener('keydown', e => this.teclas(e));
+    input.addEventListener('focus', () => { if (this.items.length) this.mostrar(true); });
+    document.getElementById('btn-buscar')?.addEventListener('click', e => { e.stopPropagation(); this.abrir(); });
+    document.addEventListener('click', e => { if (!this.caja.contains(e.target)) this.cerrar(); });
+    document.addEventListener('keydown', e => {
+      const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+      if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !escribiendo)) { e.preventDefault(); this.abrir(); }
+    });
+  },
+  abrir() { this.caja.classList.add('abierto'); this.input.focus(); this.input.select(); },
+  cerrar() { this.mostrar(false); this.caja.classList.remove('abierto'); },
+  mostrar(si) { this.panel.hidden = !si; this.input.setAttribute('aria-expanded', si ? 'true' : 'false'); },
+  async buscar() {
+    const q = this.input.value.trim();
+    if (q.length < 2) { this.items = []; this.mostrar(false); return; }
+    this.control?.abort();
+    this.control = new AbortController();
+    try {
+      const r = await fetch('buscar.php?q=' + encodeURIComponent(q), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: this.control.signal });
+      if (r.status === 401) { Sesion.expirada(); return; }
+      const d = await r.json();
+      Sesion.contacto();
+      this.pintar(d.resultados || [], q);
+    } catch (e) { if (e.name !== 'AbortError') this.pintar([], q); }
+  },
+  pintar(resultados, q) {
+    const esc = Notificaciones.esc;
+    this.items = resultados;
+    this.activo = resultados.length ? 0 : -1;
+    if (!resultados.length) {
+      this.panel.innerHTML = `<div class="buscador-vacio"><i class="fas fa-magnifying-glass"></i> Sin resultados para “${esc(q)}”.</div>`;
+    } else {
+      let html = '', grupo = null;
+      resultados.forEach((r, i) => {
+        if (r.grupo !== grupo) { grupo = r.grupo; html += `<div class="buscador-grupo">${esc(grupo)}</div>`; }
+        html += `<a class="buscador-item${i === 0 ? ' activo' : ''}" href="${esc(r.url)}" data-i="${i}" role="option">
+          <i class="fas ${esc(r.icono || 'fa-file')}"></i><span class="bx"><span class="bt">${esc(r.titulo)}</span>${r.subtitulo ? `<span class="bs">${esc(r.subtitulo)}</span>` : ''}</span>
+          ${r.estado ? `<span class="badge bg-secondary text-capitalize">${esc(r.estado)}</span>` : ''}</a>`;
+      });
+      this.panel.innerHTML = html;
+      this.panel.querySelectorAll('.buscador-item').forEach(a => a.addEventListener('click', e => { e.preventDefault(); this.ir(+a.dataset.i); }));
+    }
+    this.mostrar(true);
+  },
+  marcar(i) {
+    const els = this.panel.querySelectorAll('.buscador-item');
+    if (!els.length) return;
+    this.activo = (i + els.length) % els.length;
+    els.forEach((el, k) => el.classList.toggle('activo', k === this.activo));
+    els[this.activo].scrollIntoView({ block: 'nearest' });
+  },
+  teclas(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); this.marcar(this.activo + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); this.marcar(this.activo - 1); }
+    else if (e.key === 'Enter' && this.activo >= 0) { e.preventDefault(); this.ir(this.activo); }
+    else if (e.key === 'Escape') { this.cerrar(); this.input.blur(); }
+  },
+  ir(i) {
+    const r = this.items[i];
+    if (!r) return;
+    this.cerrar();
+    this.input.value = '';
+    this.items = [];
+    Nav.ir(r.url);
+  },
+};
+document.addEventListener('DOMContentLoaded', () => Busqueda.iniciar());
 
 async function post(url, data) { return ajax(url, data, 'POST'); }
 
@@ -419,6 +500,7 @@ const Nav = {
 
     initFechas(main);
     await this.ejecutarScripts(main, doc);
+    Excel.botonesTablas(main);
     initSelect2(main);
     animarContenido(main);
     if (mantenerScroll) window.scrollTo(0, scroll);
@@ -1031,13 +1113,77 @@ function initDataTable(selector, opts = {}) {
   const textoVacio = $vacia.first().text().trim();
   $vacia.remove();
   const idioma = Object.assign({}, window.DATATABLES_ES || {}, textoVacio ? { emptyTable: textoVacio } : {});   // assets/vendor/datatables/es-MX.js
-  $tabla.DataTable(Object.assign({
+  const dt = $tabla.DataTable(Object.assign({
     language: idioma,
     pageLength: 20,
     responsive: true,
     dom: '<"d-flex justify-content-between align-items-center mb-2"lf>rt<"d-flex justify-content-between align-items-center mt-2"ip>',
   }, opts));
+  // ?buscar=texto (desde la búsqueda global): la lista llega filtrada
+  const buscar = new URLSearchParams(location.search).get('buscar');
+  if (buscar) dt.search(buscar).draw();
+  Excel.botonLista(dt);
+  return dt;
 }
+
+// ── Exportar a Excel (exportar_excel.php → .xlsx) ──────────────────
+// Listas (DataTables): las filas que pasan el filtro de búsqueda, de todas las páginas. Otras
+// tablas: <table data-exportar="Nombre de la hoja"> recibe su botón en el encabezado de la tarjeta.
+// Se omiten las columnas sin título (botones de acción).
+const Excel = {
+  titulo() { return (document.querySelector('#main-content .page-header h1')?.textContent || document.title).trim(); },
+  texto(el) { return (el?.innerText ?? el?.textContent ?? '').replace(/\s+/g, ' ').trim(); },
+  async descargar(titulo, columnas, filas) {
+    if (!filas.length) { Toast.show('No hay filas para exportar.', 'warning'); return; }
+    const fd = new FormData();
+    fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+    fd.append('datos', JSON.stringify({ titulo, columnas, filas }));
+    try {
+      const r = await fetch('exportar_excel.php', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!r.ok) { let m = ''; try { m = (await r.json()).message; } catch (_) {} throw new Error(m || 'No se pudo generar el archivo.'); }
+      const nombre = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'Proscala.xlsx';
+      const url = URL.createObjectURL(await r.blob());
+      const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      Toast.show(`Exportadas ${filas.length} fila${filas.length === 1 ? '' : 's'} a Excel.`, 'success');
+    } catch (e) { Toast.show(e.message, 'error'); }
+  },
+  boton(onclick) {
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-outline-success py-0 px-2 btn-excel', title: 'Exportar a Excel' });
+    b.innerHTML = '<i class="fas fa-file-excel"></i> Excel';
+    b.addEventListener('click', onclick);
+    return b;
+  },
+  botonLista(dt) {
+    const filtro = dt.table().container().querySelector('.dataTables_filter');
+    if (!filtro || filtro.querySelector('.btn-excel')) return;
+    filtro.classList.add('d-flex', 'align-items-center', 'gap-2');
+    filtro.prepend(this.boton(() => {
+      const ths = [...dt.table().header().querySelectorAll('th')];
+      const cols = ths.map((th, i) => [i, this.texto(th)]).filter(([, t]) => t !== '');
+      const filas = [...dt.rows({ search: 'applied' }).nodes()].map(tr => cols.map(([i]) => this.texto(tr.cells[i])));
+      this.descargar(this.titulo(), cols.map(([, t]) => t), filas);
+    }));
+  },
+  botonesTablas(root = document) {
+    root.querySelectorAll('table[data-exportar]').forEach(tabla => {
+      const cab = tabla.closest('.card')?.querySelector('.card-header');
+      if (!cab || cab.querySelector('.btn-excel')) return;
+      cab.classList.add('d-flex', 'align-items-center', 'gap-2');
+      const b = this.boton(() => {
+        const ths = [...tabla.querySelectorAll('thead th')];
+        const cols = ths.map((th, i) => [i, this.texto(th)]).filter(([, t]) => t !== '');
+        const filas = [...tabla.querySelectorAll('tbody tr, tfoot tr')].filter(tr => tr.cells.length >= cols.length)
+          .map(tr => cols.map(([i]) => this.texto(tr.cells[i])));
+        this.descargar(this.titulo() + ' — ' + tabla.dataset.exportar, cols.map(([, t]) => t), filas);
+      });
+      b.classList.add('ms-auto');
+      cab.appendChild(b);
+    });
+  },
+};
+document.addEventListener('DOMContentLoaded', () => Excel.botonesTablas());
 
 // ── Delete with confirmation ──────────────────────────────────────
 async function deleteRecord(url, id, onDone) {

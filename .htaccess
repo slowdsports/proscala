@@ -16,7 +16,7 @@ ServerSignature Off
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
     # Carpetas internas: nunca se sirven por la web
-    RewriteRule ^(config|database|includes|storage|templates|vendor|cron|\.claude|\.git)(/|$) - [F,L]
+    RewriteRule ^(config|database|includes|storage|templates|tests|vendor|cron|\.claude|\.git)(/|$) - [F,L]
 
     # Archivos ocultos (.htaccess, .cpanel.yml, .gitattributes…), salvo la validación del certificado SSL
     RewriteCond %{REQUEST_URI} !/\.well-known/

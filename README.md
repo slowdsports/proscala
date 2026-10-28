@@ -11,7 +11,7 @@ Este manual explica cómo usar Proscala en el día a día. Está dirigido al per
 1. [Qué es Proscala](#1-qué-es-proscala)
 2. [Ingresar al sistema](#2-ingresar-al-sistema)
 3. [Conocer la pantalla](#3-conocer-la-pantalla)
-4. [Mi Perfil](#4-mi-perfil)
+4. [Mi Perfil y Mis solicitudes](#4-mi-perfil-y-mis-solicitudes)
 5. [Cómo funcionan las aprobaciones](#5-cómo-funcionan-las-aprobaciones)
 6. [Notificaciones](#6-notificaciones)
 7. [Documentos adjuntos](#7-documentos-adjuntos)
@@ -83,25 +83,34 @@ Para salir manualmente, pulse **Salir** en la esquina superior derecha.
 
 | Zona | Qué contiene |
 |---|---|
-| **Barra superior** | Botón ☰ para mostrar u ocultar el menú, nombre de la empresa, su nombre y puesto (lleva a Mi Perfil), la campana de notificaciones 🔔, el botón de modo claro/oscuro 🌙 y **Salir**. |
+| **Barra superior** | Botón ☰ para mostrar u ocultar el menú, el **buscador**, nombre de la empresa, su nombre y puesto (lleva a Mi Perfil), la campana de notificaciones 🔔, el botón de modo claro/oscuro 🌙 y **Salir**. |
 | **Menú lateral** | Los módulos agrupados por área. Solo verá los módulos que su puesto tiene permitidos. |
 | **Área de trabajo** | El módulo abierto: listas, formularios y el detalle de cada registro. |
 
 - **Modo oscuro**: pulse 🌙 para cambiar entre modo claro y oscuro. El sistema recuerda su elección en ese navegador.
 - **En el celular** el menú lateral se oculta. Ábralo con ☰.
+- **Buscador**: escriba un número de documento (por ejemplo `SC26-0201`), el nombre de un empleado o proveedor, una palabra de la descripción o el nombre de un módulo. Ábralo con **Ctrl + K** o la tecla **/**; elija con las flechas y **Enter**. Solo muestra lo que usted puede ver: si su puesto solo ve sus propias solicitudes, solo encontrará las suyas. En el celular se abre con la lupa 🔍.
 - **Listas**: puede buscar con el campo **Buscar**, ordenar con un clic en el título de la columna y cambiar cuántos registros ver por página.
+- **Exportar a Excel**: el botón **Excel** de cada lista descarga las filas que se ven con el filtro actual (de todas las páginas) como hoja de cálculo, con los montos como números. Las tablas de Reportes Financieros tienen su propio botón.
 - **Actuales e Históricos**: en los procesos, el botón **Histórico** muestra los registros anteriores a la puesta en marcha del sistema. Estos se pueden consultar, imprimir y terminar de tramitar, pero no se editan.
 
 ---
 
-## 4. Mi Perfil
+## 4. Mi Perfil y Mis solicitudes
+
+### Mi Perfil
 
 Pulse su nombre en la barra superior. Allí puede:
 
 - **Cambiar su foto**: pulse la foto o **Cambiar foto**, y elija una imagen JPG, PNG, GIF o WEBP de hasta 5 MB.
 - **Actualizar su nombre y correo.**
 - **Activar o desactivar los avisos por correo** (vea [Notificaciones](#6-notificaciones)).
+- **Delegar sus aprobaciones** si su puesto aprueba procesos (vea [Delegación](#56-delegación-de-aprobaciones)).
 - **Cambiar su contraseña**: escriba la actual y la nueva dos veces.
+
+### Mis solicitudes
+
+En el menú, **Mis solicitudes** reúne todo lo suyo: las solicitudes que usted creó y las que están a su nombre (compras, anticipos, liquidaciones, vacaciones, permisos y sus órdenes de pago). Para cada una muestra el estado, **en qué va** (por ejemplo, "Esperando revisión de Ana Ruiz") y, si se rechazó, el motivo. Arriba están los botones para crear una solicitud nueva. Si su puesto solo ve sus propias solicitudes, esta es su página de inicio.
 
 ---
 
@@ -148,6 +157,19 @@ Ejemplo: si *Asistente* depende de *Coordinación* y *Coordinación* de *Direcci
 ### 5.5 Firmas en los documentos
 
 Los documentos impresos muestran **"Elaborado por", "Revisado por" y "Autorizado por"** con los nombres de las personas que hicieron cada paso. Un paso pendiente queda con la línea en blanco.
+
+### 5.6 Delegación de aprobaciones
+
+Si usted aprueba procesos y va a ausentarse (vacaciones, viaje), puede **delegar sus aprobaciones** en otra persona por un rango de fechas, desde **Mi Perfil → Delegación de aprobaciones**:
+
+1. Elija a la persona, las fechas (máximo 90 días) y, si quiere, el motivo.
+2. Pulse **Delegar aprobaciones**. La persona recibe un aviso.
+
+Mientras la delegación esté vigente, esa persona puede revisar y autorizar los procesos que le corresponden a usted, con su mismo nivel en el organigrama. En el panel del flujo queda **"En nombre de"** usted. No puede aprobar lo que usted creó ni autorizar lo que usted revisó. Puede cancelar la delegación en cualquier momento.
+
+### 5.7 Recordatorios y escalamiento
+
+Si un proceso lleva varios días esperando su revisión o autorización, el sistema **le recuerda** a quien le toca. Si sigue esperando, **avisa al siguiente nivel del organigrama** para que lo atienda, y luego al siguiente. Los días se definen en **Configuración** (por defecto, recordatorio a los 2 días y escalamiento a los 5).
 
 ---
 
@@ -278,7 +300,7 @@ Abra un fondo de caja chica para un responsable, registre cada gasto con su cuen
 ## 10. Administración de la cuenta (solo administradores)
 
 ### 10.1 Configuración
-Datos de la organización que aparecen en los documentos: nombre, razón social completa, RTN, dirección, teléfono, correo, moneda y **logo**.
+Datos de la organización que aparecen en los documentos: nombre, razón social completa, RTN, dirección, teléfono, correo, moneda y **logo**. También los prefijos de numeración y los días de **recordatorio y escalamiento** de los procesos pendientes.
 
 ### 10.2 Catálogos
 Listas que usa todo el sistema, en pestañas: **catálogo contable** (cuentas con código, tipo y nivel), **cargos**, **departamentos** y **bancos**.

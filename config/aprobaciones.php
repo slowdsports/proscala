@@ -20,10 +20,51 @@ const PROCESOS = [
     'compras_pago.php'      => ['tabla' => 'ordenes_pago',     'docs' => ['op'],             'autorizado' => 'aprobada', 'rechazado' => null,        'abiertos' => ['pendiente']],
 ];
 
-// ¿El puesto puede revisar y autorizar procesos?
+// ── Delegación de aprobaciones (tabla delegaciones; se configura en Mi Perfil) ──
+// Quien aprueba procesos puede delegar sus aprobaciones en otro usuario por un rango de fechas
+// (p. ej. sus vacaciones). Mientras esté vigente, el delegado aprueba como si tuviera el puesto
+// de quien delegó: su jerarquía y el acceso a los módulos de procesos. No puede aprobar lo que
+// creó quien delegó ni autorizar lo que esa persona revisó. Cada paso queda "en nombre de" ella.
+
+/** ¿Un puesto aprueba procesos? */
+function rolApruebaProcesos(string $rol): bool {
+    if ($rol === 'admin') return true;
+    $r = roles()[$rol] ?? null;
+    return $r && $r['aprueba'] && !$r['solo_propios'];
+}
+
+/** Quienes delegaron hoy sus aprobaciones en el usuario actual: [usuario_id => ['rol', 'nombre', 'modulos']]. */
+function delegantesActivos(): array {
+    static $cache = [];
+    $uid = (int)($_SESSION['usuario_id'] ?? 0);
+    if (isset($cache[$uid])) return $cache[$uid];
+    $cache[$uid] = [];
+    if (!$uid || empty($GLOBALS['pdo'])) return [];
+    try {
+        $s = $GLOBALS['pdo']->prepare("SELECT d.usuario_id, u.rol, u.nombre FROM delegaciones d JOIN usuarios u ON u.id = d.usuario_id AND u.activo = 1
+                                      WHERE d.delegado_id = ? AND d.cancelada = 0 AND CURDATE() BETWEEN d.desde AND d.hasta");
+        $s->execute([$uid]);
+        $m = $GLOBALS['pdo']->prepare("SELECT modulo FROM rol_modulos WHERE rol = ?");
+        foreach ($s->fetchAll() as $d) {
+            if (!rolApruebaProcesos($d['rol'])) continue;
+            $m->execute([$d['rol']]);
+            $cache[$uid][(int)$d['usuario_id']] = ['rol' => $d['rol'], 'nombre' => $d['nombre'], 'modulos' => $m->fetchAll(PDO::FETCH_COLUMN)];
+        }
+    } catch (PDOException $e) { /* base sin la tabla todavía (actualizar_bd.php) */ }
+    return $cache[$uid];
+}
+
+/** ¿Puede abrir el módulo de procesos por una delegación? (puedeAcceder) */
+function accesoPorDelegacion(string $modulo): bool {
+    if (!isset(PROCESOS[$modulo])) return false;
+    foreach (delegantesActivos() as $d) if ($d['rol'] === 'admin' || in_array($modulo, $d['modulos'], true)) return true;
+    return false;
+}
+
+// ¿El puesto puede revisar y autorizar procesos? (propio o por delegación)
 function puedeAprobar(): bool {
     if (soloRegistrosPropios()) return false;
-    return tieneAccesoTotal() || !empty($_SESSION['rol_aprueba']);
+    return tieneAccesoTotal() || !empty($_SESSION['rol_aprueba']) || (bool)delegantesActivos();
 }
 
 // ── Jerarquía (organigrama de Roles y Permisos: roles.depende_de) ───
@@ -46,7 +87,25 @@ function esSuperiorDe(string $superior, string $rol): bool {
 function motivoJerarquia(?string $rolCreador): ?string {
     if (tieneAccesoTotal() || !$rolCreador || !isset(roles()[$rolCreador])) return null;
     if (esSuperiorDe($_SESSION['usuario_rol'] ?? '', $rolCreador)) return null;
+    if (delegacionQueHabilita($rolCreador)) return null;
     return 'Según el organigrama, solo un puesto superior a ' . roles()[$rolCreador]['nombre'] . ' puede aprobar o corregir este proceso.';
+}
+
+/** ¿Lo aprueba con su propio puesto (sin delegación)? */
+function apruebaConPuestoPropio(?string $rolCreador): bool {
+    if (tieneAccesoTotal()) return true;
+    if (empty($_SESSION['rol_aprueba'])) return false;
+    return !$rolCreador || !isset(roles()[$rolCreador]) || esSuperiorDe($_SESSION['usuario_rol'] ?? '', $rolCreador);
+}
+
+/** Quien delegó y permite aprobar un proceso creado por $rolCreador: ['id', 'nombre'] o null. */
+function delegacionQueHabilita(?string $rolCreador): ?array {
+    foreach (delegantesActivos() as $id => $d) {
+        if ($d['rol'] === 'admin' || !$rolCreador || !isset(roles()[$rolCreador]) || esSuperiorDe($d['rol'], $rolCreador)) {
+            return ['id' => $id, 'nombre' => $d['nombre']];
+        }
+    }
+    return null;
 }
 
 /**
@@ -98,16 +157,22 @@ function estadoFlujo(PDO $pdo, string $modulo, int $id): ?array {
 function accionesFlujo(array $flujo, string $modulo): array {
     $def     = PROCESOS[$modulo];
     $uid     = (int)($_SESSION['usuario_id'] ?? 0);
-    $creador = $flujo['creado'] && (int)$flujo['creado']['usuario_id'] === $uid;
+    $delegantes = array_keys(delegantesActivos());
+    $creadoPor  = (int)($flujo['creado']['usuario_id'] ?? 0);
+    $revisadoPor = (int)($flujo['revisado']['usuario_id'] ?? 0);
+    $creador = $flujo['creado'] && $creadoPor === $uid;
     $abierto = in_array($flujo['estado'], $def['abiertos'], true) && !$flujo['autorizado'] && !$flujo['rechazado'];
 
     $base = !puedeAprobar() ? 'Su puesto no puede revisar ni autorizar procesos.'
           : (!$abierto      ? 'El proceso ya no está pendiente.'
           : ($creador       ? 'No puede revisar, autorizar ni rechazar un proceso que usted creó.'
-          : (motivoJerarquia(rolCreador($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id'])) ?? true)));
+          : (in_array($creadoPor, $delegantes, true) && !apruebaConPuestoPropio(rolCreador($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id']))
+                            ? 'No puede aprobar, en nombre de quien le delegó, un proceso que esa persona creó.'
+          : (motivoJerarquia(rolCreador($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id'])) ?? true))));
     if ($base !== true)                                            $autorizar = $base;
     elseif (!$flujo['revisado'])                                   $autorizar = 'Primero debe ser revisado.';
-    elseif ((int)$flujo['revisado']['usuario_id'] === $uid)        $autorizar = 'Quien revisó no puede autorizar el mismo proceso.';
+    elseif ($revisadoPor === $uid)                                 $autorizar = 'Quien revisó no puede autorizar el mismo proceso.';
+    elseif (in_array($revisadoPor, $delegantes, true))             $autorizar = 'Lo revisó quien le delegó: la autorización le corresponde a otra persona.';
     // Una OP generada por un proceso editado espera a que el proceso se autorice de nuevo
     elseif ($modulo === 'compras_pago.php')                        $autorizar = origenOrdenPagoAutorizado($GLOBALS['pdo'], (int)$flujo['id']);
     else                                                           $autorizar = true;
@@ -119,6 +184,11 @@ function accionesFlujo(array $flujo, string $modulo): array {
 }
 
 function registrarPasoFlujo(PDO $pdo, string $modulo, int $id, string $paso, ?string $comentario = null): void {
+    // Aprobado gracias a una delegación: queda "en nombre de" quien delegó
+    if ($comentario === null && in_array($paso, ['revisado', 'autorizado'], true)) {
+        $rolCreador = rolCreador($pdo, PROCESOS[$modulo]['tabla'], $id);
+        if (!apruebaConPuestoPropio($rolCreador) && ($d = delegacionQueHabilita($rolCreador))) $comentario = 'En nombre de ' . $d['nombre'];
+    }
     $pdo->prepare("INSERT INTO aprobaciones (tabla, registro_id, paso, usuario_id, comentario) VALUES (?,?,?,?,?)
                    ON DUPLICATE KEY UPDATE usuario_id = VALUES(usuario_id), comentario = VALUES(comentario), created_at = CURRENT_TIMESTAMP")
         ->execute([PROCESOS[$modulo]['tabla'], $id, $paso, $_SESSION['usuario_id'], $comentario]);

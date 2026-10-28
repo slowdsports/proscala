@@ -11,6 +11,17 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.9.0 — 2026-10-27
+**Búsqueda, Mis solicitudes, delegación, recordatorios, Excel y pruebas automáticas**
+- **Búsqueda global** en la barra superior (Ctrl + K o "/"). Encuentra procesos por número o texto, y también empleados, proveedores, activos, proyectos y módulos. Respeta los permisos: solo busca en los módulos que el usuario puede abrir y, si su puesto solo ve sus propias solicitudes, solo encuentra las suyas. Las listas aceptan `?buscar=` para llegar ya filtradas.
+- **Mis solicitudes**: lo que cada usuario creó o está a su nombre, con el estado, en qué paso va y a quién espera, el motivo si se rechazó, y botones para crear solicitudes. Es la página de inicio de quien solo ve sus propias solicitudes.
+- **Delegación de aprobaciones** (Mi Perfil): quien aprueba procesos delega en otra persona por un rango de fechas (máximo 90 días). El delegado aprueba con la jerarquía y el acceso a módulos de quien delegó, y queda "en nombre de" esa persona. No puede aprobar lo que creó quien delegó ni autorizar lo que esa persona revisó. Recibe también los avisos.
+- **Recordatorios y escalamiento** (`cron/recordatorios.php`, diario): a los días configurados se recuerda a quien le toca aprobar; después se avisa al siguiente nivel del organigrama, y luego al siguiente. Cada aviso se envía una vez por paso; los procesos históricos no generan avisos. Los días se configuran en **Configuración**.
+- **Exportar a Excel** (.xlsx real, sin librerías externas): botón en todas las listas (las filas filtradas, de todas las páginas) y en las tablas de Reportes Financieros, con los montos como números. Queda en la bitácora.
+- **Pruebas automáticas** (`php tests/ejecutar.php`): 21 pruebas que cubren la sintaxis, la instalación limpia de los esquemas, la base al día, la zona horaria, el despliegue, la jerarquía, la delegación, las notificaciones, los recordatorios, la OP atómica, el bloqueo por IP, el respaldo semanal, Excel, las páginas principales, los 26 documentos impresos y los permisos de la búsqueda. La carpeta `tests/` no se despliega.
+- Corregido: la configuración de una empresa podía usarse para otra cuando un proceso recorre varias empresas (cron).
+- Base de datos (`actualizar_bd.php`): tablas `delegaciones` y `recordatorios`, configuración `recordatorio_dias` y `escalamiento_dias`.
+
 ## 1.8.0 — 2026-10-27
 **Seguridad, despliegue y base de datos**
 - **Zona horaria**: MySQL usa la misma hora que PHP (Honduras) en cada conexión. Fechas de creación, bitácora, notificaciones y vencimientos ya no dependen de la zona del servidor de base de datos.

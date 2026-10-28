@@ -33,18 +33,41 @@ function nombreProceso(PDO $pdo, string $modulo, int $id): string {
  * (en la rama del organigrama de quien lo creó) que aprueba procesos; si ninguno tiene usuarios
  * activos, los Administradores. Nunca los de $excluir (quien lo creó, quien ya lo revisó).
  */
-function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir): array {
+function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir, int $saltar = 0): array {
+    return conDelegados($pdo, nivelesAprobadores($pdo, $modulo, $id, $excluir)[$saltar] ?? [], $excluir);
+}
+
+/**
+ * Niveles del organigrama que pueden aprobar el proceso, del más cercano a quien lo creó hacia
+ * arriba: [[ids del nivel 1], [ids del nivel 2], …], terminando con los Administradores. Solo
+ * cuentan los puestos que aprueban procesos y tienen usuarios activos (sin los de $excluir).
+ * El nivel 0 recibe los avisos; los siguientes, el escalamiento (cron/recordatorios.php).
+ */
+function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir): array {
     $roles = roles();
     $s = $pdo->prepare("SELECT id FROM usuarios WHERE rol = ? AND activo = 1");
     $usuarios = function (string $rol) use ($s, $excluir): array {
         $s->execute([$rol]);
         return array_values(array_diff(array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)), $excluir));
     };
+    $niveles = [];
     $rol = rolCreador($pdo, PROCESOS[$modulo]['tabla'], $id);
     for ($p = $rol ? ($roles[$rol]['depende_de'] ?? null) : null, $n = 0; $p !== null && $p !== 'admin' && $n < 50; $p = $roles[$p]['depende_de'] ?? null, $n++) {
-        if (!empty($roles[$p]['aprueba']) && empty($roles[$p]['solo_propios']) && ($ids = $usuarios($p))) return $ids;
+        if (!empty($roles[$p]['aprueba']) && empty($roles[$p]['solo_propios']) && ($ids = $usuarios($p))) $niveles[] = $ids;
     }
-    return $usuarios('admin');
+    if ($admins = $usuarios('admin')) $niveles[] = $admins;
+    return $niveles;
+}
+
+/** Agrega a quienes tienen hoy una delegación vigente de esos usuarios (también reciben los avisos). */
+function conDelegados(PDO $pdo, array $ids, array $excluir = []): array {
+    if (!$ids) return [];
+    try {
+        $s = $pdo->query("SELECT delegado_id FROM delegaciones WHERE cancelada = 0 AND CURDATE() BETWEEN desde AND hasta
+                          AND usuario_id IN (" . implode(',', array_map('intval', $ids)) . ")");
+        $ids = array_merge($ids, array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)));
+    } catch (PDOException $e) { /* base sin la tabla todavía */ }
+    return array_values(array_diff(array_unique($ids), $excluir));
 }
 
 /**
@@ -83,20 +106,29 @@ function interesadosProceso(PDO $pdo, string $modulo, int $id): array {
  * para enviarse al terminar la petición.
  */
 function notificar(PDO $pdo, array $usuarios, string $tipo, string $titulo, string $mensaje, string $modulo, int $id): void {
+    avisar($pdo, $usuarios, $tipo, $titulo, $mensaje, "$modulo?action=ver&id=$id", PROCESOS[$modulo]['tabla'], $id,
+        $titulo . ' — ' . nombreProceso($pdo, $modulo, $id), 'Abrir el proceso');
+}
+
+/**
+ * Aviso a usuarios (campana + correo) que lleva a $url. Para avisos de procesos use notificar();
+ * este sirve también para otros (delegaciones, recordatorios). Nunca a quien hace la acción.
+ */
+function avisar(PDO $pdo, array $usuarios, string $tipo, string $titulo, string $mensaje, string $url, ?string $tabla, ?int $id,
+                string $asunto, string $boton = 'Abrir en Proscala'): void {
     $usuarios = array_values(array_diff(array_unique(array_map('intval', $usuarios)), [0, (int)($_SESSION['usuario_id'] ?? 0)]));
     if (!$usuarios) return;
-    $url = "$modulo?action=ver&id=$id";
     $ins = $pdo->prepare("INSERT INTO notificaciones (usuario_id, tipo, titulo, mensaje, url, tabla, registro_id) VALUES (?,?,?,?,?,?,?)");
-    foreach ($usuarios as $u) $ins->execute([$u, $tipo, $titulo, mb_substr($mensaje, 0, 2000), $url, PROCESOS[$modulo]['tabla'], $id]);
+    foreach ($usuarios as $u) $ins->execute([$u, $tipo, $titulo, mb_substr($mensaje, 0, 2000), $url, $tabla, $id]);
 
     require_once __DIR__ . '/correo.php';
     $h = fn($s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     $empresa = $_SESSION['empresa_nombre'] ?? '';
-    // El enlace pasa por el inicio de sesión: si no hay sesión abierta, al entrar abre el proceso
+    // El enlace pasa por el inicio de sesión: si no hay sesión abierta, al entrar abre la página
     $enlace = urlAbsoluta('login.php?' . http_build_query(['ir' => $url, 'e' => (int)($_SESSION['empresa_id'] ?? 0)]));
     $html = plantillaCorreo($titulo, '<p style="margin:0 0 12px">' . nl2br($h($mensaje)) . '</p>'
-        . ($empresa ? '<p style="margin:0;font-size:12px;color:#8ea3b4">Empresa: ' . $h($empresa) . '</p>' : ''), 'Abrir el proceso', $enlace);
-    $asunto = 'Proscala: ' . $titulo . ' — ' . nombreProceso($pdo, $modulo, $id);
+        . ($empresa ? '<p style="margin:0;font-size:12px;color:#8ea3b4">Empresa: ' . $h($empresa) . '</p>' : ''), $boton, $enlace);
+    $asunto = 'Proscala: ' . $asunto;
     $s = $pdo->query("SELECT email FROM usuarios WHERE id IN (" . implode(',', $usuarios) . ") AND activo = 1 AND notificar_correo = 1 AND email <> ''");
     foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) $GLOBALS['_correos_notificacion'][] = [$email, $asunto, $html];
     if (empty($GLOBALS['_correos_programados'])) {
@@ -114,6 +146,7 @@ function enviarCorreosNotificacion(): void {
     if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
     elseif (function_exists('litespeed_finish_request')) litespeed_finish_request();
     foreach ($correos as [$para, $asunto, $html]) enviarCorreo($para, $asunto, $html);
+    $GLOBALS['_correos_notificacion'] = [];   // en el cron se envían por empresa: no repetir
 }
 
 /** Avisa a quien le toca el siguiente paso ('revisar' o 'autorizar') del proceso. */
@@ -155,6 +188,65 @@ function notificarFlujo(PDO $pdo, string $modulo, string $act, int $id): void {
         notificar($pdo, interesadosProceso($pdo, $modulo, $id), 'rechazado', 'Proceso rechazado',
             "$quien rechazó " . nombreProceso($pdo, $modulo, $id) . ".\nMotivo: " . comentarioRechazo(), $modulo, $id);
     }
+}
+
+/**
+ * Recordatorios y escalamiento de procesos pendientes (cron/recordatorios.php, una vez al día).
+ * Un paso (revisar o autorizar) que lleva 'recordatorio_dias' esperando se recuerda a quien le toca
+ * (nivel 0); a los 'escalamiento_dias' se avisa al siguiente nivel del organigrama, y cada vez que
+ * vuelven a pasar esos días, al siguiente (nivel 1, 2…). Cada aviso se envía una vez por paso
+ * (tabla recordatorios); si el proceso se corrige y el paso vuelve a empezar, se cuenta de nuevo.
+ * Con $enviar = false solo devuelve lo que se enviaría. Devuelve la lista de avisos.
+ */
+function recordarPendientes(PDO $pdo, bool $enviar = true): array {
+    $diasRec = max(1, (int)getConfig($pdo, 'recordatorio_dias', '2'));
+    $diasEsc = max($diasRec + 1, (int)getConfig($pdo, 'escalamiento_dias', '5'));
+    $ya = $pdo->prepare("SELECT 1 FROM recordatorios WHERE tabla = ? AND registro_id = ? AND paso = ? AND inicio = ? AND nivel = ?");
+    $anotar = $pdo->prepare("INSERT IGNORE INTO recordatorios (tabla, registro_id, paso, inicio, nivel) VALUES (?,?,?,?,?)");
+    $avisos = [];
+    foreach (PROCESOS as $modulo => $def) {
+        $marcas = implode(',', array_fill(0, count($def['abiertos']), '?'));
+        // Los procesos históricos (anteriores al corte del sistema) no generan recordatorios
+        $s = $pdo->prepare("SELECT id, created_at FROM `{$def['tabla']}` WHERE estado IN ($marcas) AND historico = 0");
+        $s->execute($def['abiertos']);
+        foreach ($s->fetchAll() as $r) {
+            $flujo = estadoFlujo($pdo, $modulo, (int)$r['id']);
+            if (!$flujo || $flujo['autorizado'] || $flujo['rechazado']) continue;
+            $paso   = $flujo['revisado'] ? 'autorizar' : 'revisar';
+            $inicio = date('Y-m-d H:i:s', strtotime($flujo['revisado']['fecha'] ?? $flujo['creado']['fecha'] ?? $r['created_at']));
+            $dias   = (int)floor((time() - strtotime($inicio)) / 86400);
+            if ($dias < $diasRec) continue;
+            // Nivel que corresponde hoy: 0 = recordatorio; 1, 2… = escalamiento cada $diasEsc días
+            $nivel = $dias >= $diasEsc ? (int)floor($dias / $diasEsc) : 0;
+            $excluir = array_filter([(int)($flujo['creado']['usuario_id'] ?? 0), $paso === 'autorizar' ? (int)($flujo['revisado']['usuario_id'] ?? 0) : 0]);
+            $niveles = nivelesAprobadores($pdo, $modulo, (int)$r['id'], $excluir);
+            $nivel = min($nivel, count($niveles) - 1);
+            if ($nivel < 0) continue;   // nadie que pueda aprobarlo
+            $ya->execute([$def['tabla'], $r['id'], $paso, $inicio, $nivel]);
+            if ($ya->fetchColumn()) continue;
+
+            $proceso = nombreProceso($pdo, $modulo, (int)$r['id']) . ($flujo['creado'] ? ' de ' . $flujo['creado']['nombre'] : '');
+            $accion  = $paso === 'revisar' ? 'revisión' : 'autorización';
+            if ($nivel === 0) {
+                $tipo = 'recordatorio';
+                $titulo = 'Recordatorio: pendiente de su ' . $accion;
+                $mensaje = "$proceso lleva $dias días esperando su $accion.";
+            } else {
+                $tipo = 'escalado';
+                $titulo = "Proceso detenido: $dias días sin $accion";
+                $s2 = $pdo->query("SELECT nombre FROM usuarios WHERE id IN (" . implode(',', $niveles[0]) . ")");
+                $mensaje = "$proceso lleva $dias días esperando la $accion de " . implode(', ', $s2->fetchAll(PDO::FETCH_COLUMN))
+                         . '. Como superior en el organigrama, usted puede atenderlo o pedir que lo resuelvan.';
+            }
+            $destinos = conDelegados($pdo, $niveles[$nivel], $excluir);
+            $avisos[] = ['proceso' => $proceso, 'paso' => $paso, 'dias' => $dias, 'nivel' => $nivel, 'usuarios' => $destinos];
+            if (!$enviar) continue;
+            avisar($pdo, $destinos, $tipo, $titulo, $mensaje, "$modulo?action=ver&id={$r['id']}", $def['tabla'], (int)$r['id'],
+                $titulo . ' — ' . nombreProceso($pdo, $modulo, (int)$r['id']), 'Abrir el proceso');
+            $anotar->execute([$def['tabla'], $r['id'], $paso, $inicio, $nivel]);
+        }
+    }
+    return $avisos;
 }
 
 /** Al abrir un proceso: sus avisos para el usuario quedan leídos. */

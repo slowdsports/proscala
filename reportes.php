@@ -113,7 +113,7 @@ include __DIR__ . '/includes/header.php';
     <div class="card h-100">
       <div class="card-header"><i class="fas fa-truck"></i> Top Proveedores (Pagos)</div>
       <div class="card-body p-0">
-        <table class="table-proscala w-100">
+        <table class="table-proscala w-100" data-exportar="Top proveedores">
           <thead><tr><th>Proveedor</th><th class="text-end">Total</th></tr></thead>
           <tbody>
             <?php foreach($topProv as $r): ?>
@@ -131,7 +131,7 @@ include __DIR__ . '/includes/header.php';
     <div class="card h-100">
       <div class="card-header"><i class="fas fa-book"></i> Gastos por Cuenta Contable</div>
       <div class="card-body p-0">
-        <table class="table-proscala w-100">
+        <table class="table-proscala w-100" data-exportar="Gastos por cuenta">
           <thead><tr><th>Código</th><th>Cuenta</th><th class="text-end">Total</th></tr></thead>
           <tbody>
             <?php foreach($gastCta as $r): ?>
@@ -149,7 +149,7 @@ include __DIR__ . '/includes/header.php';
     <div class="card">
       <div class="card-header"><i class="fas fa-diagram-project"></i> Gastos por Proyecto</div>
       <div class="card-body p-0">
-        <table class="table-proscala w-100">
+        <table class="table-proscala w-100" data-exportar="Gastos por proyecto">
           <thead><tr><th>Proyecto</th><th class="text-end">Total Gastos Reembolsados</th></tr></thead>
           <tbody>
             <?php foreach($gastProy as $r): ?>
