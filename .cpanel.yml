@@ -1,13 +1,6 @@
 ---
-# Despliegue desde cPanel (Git Version Control → Deploy HEAD Commit).
-# rsync --delete deja el servidor igual al repositorio y borra los archivos que ya no existen en
-# él; los datos del servidor (archivos subidos, sesiones, respaldos) están protegidos en
-# .deployfilter. Para revisar antes qué se copiaría y qué se borraría (sin cambiar nada), en
-# cPanel → Terminal, dentro de la carpeta del repositorio:
-#   rsync -a --delete --dry-run --itemize-changes --filter='merge .deployfilter' ./ /home/u6613652/web/ahdeco/
-# Después de cada despliegue con cambios de base de datos, ejecute actualizar_bd.php.
 deployment:
   tasks:
     #- export DEPLOYPATH=/home/u6514444/web/spicy
     - export DEPLOYPATH=/home/u6613652/web/ahdeco
-    - rsync -a --delete --filter='merge .deployfilter' ./ $DEPLOYPATH/
+    - /bin/cp -Rf * $DEPLOYPATH
