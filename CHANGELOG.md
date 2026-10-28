@@ -11,6 +11,19 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.5.0 — 2026-10-27
+**Impresión: una plantilla por documento**
+- `print.php` ya no es un archivo de más de 3,500 líneas: ahora solo valida el pedido y entrega el documento con su plantilla en `templates/print/`, una por documento (solicitud de compra, orden de compra, orden de pago, planillas, recibos, anticipos, liquidaciones, vacaciones, permisos, constancias, caja chica, memorandos, actas…).
+- Todas las plantillas comparten las mismas partes comunes, así que el diseño es igual en todos los procesos y un cambio de estilo se hace en un solo lugar:
+  - `_inicio.php`: estilos y barra Cerrar / Descargar PDF.
+  - `_org.php`: encabezado de la organización (antes estaba copiado 10 veces).
+  - `_pagina_inicio.php` / `_pagina_fin.php`: página común.
+  - `_fin.php`: descarga en PDF.
+  - `_funciones.php`: firmas.
+- Los documentos se ven exactamente igual que antes. Se comprobó comparando el HTML de los 26 tipos de documento (33 casos, incluidos recibos individuales, liquidación con voucher de alimentación y proceso de compra completo), antes y después del cambio.
+- `print.php` y `pdf_download.php` validan los tipos de documento con la misma lista del sistema.
+- La carpeta `templates` no se puede abrir desde la web, igual que las demás carpetas internas.
+
 ## 1.4.0 — 2026-10-27
 **Notificaciones**
 - Campana en la barra superior con un consolidado de lo importante para cada usuario:
