@@ -23,7 +23,10 @@ const Toast = {
 };
 
 // ── AJAX helper ──────────────────────────────────────────────────
-async function ajax(url, data = null, method = 'GET') {
+// Token CSRF vencido (página abierta antes de cerrar sesión y volver a entrar): el servidor no
+// ejecutó nada; se toma el token vigente de sesion.php, se actualiza en la página y se reenvía
+// una vez, así no se pierde lo que el usuario escribió.
+async function ajax(url, data = null, method = 'GET', reintento = false) {
   const opts = {
     method,
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -42,6 +45,13 @@ async function ajax(url, data = null, method = 'GET') {
     let body;
     try { body = await res.json(); } catch (_) {}
     if (res.status === 401 && body?.sesion_expirada) Sesion.expirada(body.message);
+    if (res.status === 403 && body?.csrf_invalido && !reintento && data) {
+      const token = await Sesion.tokenVigente();
+      if (token) {
+        if (data instanceof FormData) data.set('csrf_token', token); else data.csrf_token = token;
+        return ajax(url, data, method, true);
+      }
+    }
     throw new Error(body?.message || `HTTP ${res.status}`);
   }
   // Una acción (revisar, autorizar, crear…) puede cambiar lo pendiente de la campana
@@ -73,6 +83,18 @@ const Sesion = {
       if (r.status === 401) { let b = {}; try { b = await r.json(); } catch (_) {} this.expirada(b.message); return; }
       if (r.ok) this.contacto();
     } catch (_) { /* sin red: se reintenta en el próximo pulso */ }
+  },
+  // Token CSRF de la sesión actual; lo deja en la página (meta y formularios) para los envíos siguientes
+  async tokenVigente() {
+    try {
+      const r = await fetch('sesion.php', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' });
+      if (!r.ok) return null;
+      const token = (await r.json()).csrf;
+      if (!token) return null;
+      document.querySelector('meta[name="csrf"]')?.setAttribute('content', token);
+      document.querySelectorAll('input[name="csrf_token"]').forEach(i => { i.value = token; });
+      return token;
+    } catch (_) { return null; }
   },
   expirada(mensaje) {
     if (this.terminada) return;

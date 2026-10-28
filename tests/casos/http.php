@@ -113,6 +113,21 @@ try {
         iguales(302, $cod, 'un id inexistente vuelve a la lista');
     });
 
+    prueba('Token de seguridad vencido: se rechaza sin ejecutar, queda explicado y sesion.php da el vigente', function () use ($baseUrl, $sesAdmin, $pdo) {
+        $antes = (int)$pdo->query("SELECT COUNT(*) FROM solicitud_compra")->fetchColumn();
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true,
+            'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+            'content' => http_build_query(['csrf_token' => 'vencido', '_action' => 'guardar', 'id' => 0, 'descripcion' => 'x'])]]);
+        $r = json_decode((string)@file_get_contents("$baseUrl/compras_solicitud.php", false, $ctx), true) ?: [];
+        afirmar(!empty($r['csrf_invalido']) && str_contains($r['message'] ?? '', 'sesión anterior'), 'la respuesta no marca el token vencido');
+        iguales($antes, (int)$pdo->query("SELECT COUNT(*) FROM solicitud_compra")->fetchColumn(), 'no se guardó nada');
+        $ev = $pdo->query("SELECT resultado, detalle FROM auditoria WHERE modulo = 'compras_solicitud.php' ORDER BY id DESC LIMIT 1")->fetch();
+        afirmar($ev && $ev['resultado'] === 'error' && str_contains($ev['detalle'], 'Token de seguridad'), 'la bitácora no explica el rechazo');
+        $pdo->exec("DELETE FROM auditoria WHERE modulo = 'compras_solicitud.php' AND detalle LIKE '%Token de seguridad vencido%' AND ip IN ('127.0.0.1', '::1')");
+        [, $json] = pedir("$baseUrl/sesion.php", $sesAdmin);
+        iguales('tokenprueba', json_decode($json, true)['csrf'] ?? null, 'token vigente de sesion.php');
+    });
+
     prueba('Catálogo de cuentas: se descargan la plantilla y el catálogo actual en Excel', function () use ($baseUrl, $sesAdmin) {
         foreach (['plantilla', 'catalogo'] as $tipo) {
             [$cod, $xlsx] = pedir("$baseUrl/catalogos.php?export=$tipo", $sesAdmin);

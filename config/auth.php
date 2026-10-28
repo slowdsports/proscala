@@ -595,11 +595,17 @@ function csrfToken() {
     return $_SESSION['csrf_token'];
 }
 
+// Token que no coincide: casi siempre una página abierta antes de cerrar sesión y volver a entrar
+// (en otra pestaña). La respuesta lo marca con csrf_invalido: proscala.js (ajax) toma el token
+// vigente de sesion.php y reenvía una vez, así no se pierde lo escrito. Queda en la bitácora.
 function verifyCsrf() {
     $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-    if (!hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
+    if (!hash_equals($_SESSION['csrf_token'] ?? '', (string)$token)) {
+        $msg = 'La página se abrió en una sesión anterior (token de seguridad vencido). Recargue la página e intente de nuevo.';
+        $GLOBALS['_resultado'] = ['error', 'Token de seguridad vencido o inválido', null];
         http_response_code(403);
-        die(json_encode(['success' => false, 'message' => 'Token de seguridad inválido.']));
+        header('Content-Type: application/json');
+        die(json_encode(['success' => false, 'csrf_invalido' => true, 'message' => $msg], JSON_UNESCAPED_UNICODE));
     }
 }
 

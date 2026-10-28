@@ -143,7 +143,8 @@ if ($cli) {
         }
         echo "\n";
     }
-    echo !$aplicar ? ($totalPendientes ? "$totalPendientes cambio(s) pendiente(s). Ejecute con --aplicar para aplicarlos.\n" : "Todo está al día.\n")
+    echo !$aplicar ? ($errores ? "$errores base(s) no se pudieron revisar.\n" : '')
+                     . ($totalPendientes ? "$totalPendientes cambio(s) pendiente(s). Ejecute con --aplicar para aplicarlos.\n" : ($errores ? '' : "Todo está al día.\n"))
                    : ($errores ? "Terminó con $errores error(es).\n" : "Actualización completa.\n");
     exit($errores ? 1 : 0);
 }
@@ -164,6 +165,8 @@ if ($cli) {
 <p>Estructura de la versión <strong><?= VERSION_BD ?></strong> · sistema <?= $h(APP_VERSION) ?> · <?= count($bases) ?> base(s)</p>
 <?php if ($aplicar): ?>
   <p class="<?= $errores ? 'error' : 'ok' ?>"><strong><?= $errores ? "Terminó con $errores error(es). Revise el detalle." : 'Actualización completa.' ?></strong></p>
+<?php elseif ($errores): ?>
+  <p class="error"><strong><?= $errores ?> base(s) no se pudieron revisar: corrija el error que se muestra en cada una y vuelva a revisar.</strong><?= $totalPendientes ? " Las demás tienen $totalPendientes cambio(s) pendiente(s)." : '' ?></p>
 <?php elseif ($totalPendientes): ?>
   <p class="aviso"><?= $totalPendientes ?> cambio(s) pendiente(s). Revise la lista y haga un respaldo antes de aplicar.</p>
 <?php else: ?>

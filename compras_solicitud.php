@@ -310,7 +310,7 @@ document.getElementById('form-sc')?.addEventListener('submit',function(e){
   post('compras_solicitud.php',new FormData(this)).then(r=>{
     if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.ir('compras_solicitud.php'), 1200);}
     else Toast.show(r.message,'error');
-  }).catch(()=>Toast.show('Error','error'));
+  }).catch(e=>Toast.show(e.message||'No se pudo guardar.','error',8000));
 });
 
 JS;
