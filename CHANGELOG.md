@@ -11,12 +11,18 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
-## Sin publicar
+## 1.11.0 — 2026-10-28
+**Resumen de cotizaciones en PDF, edición por el creador y correcciones de guardado**
+- **Resumen de Cotizaciones en PDF** (botón **PDF Resumen** al ver una cotización): la solicitud de compra de referencia y lo que se pidió, el cuadro comparativo de las ofertas de la menor a la mayor (condiciones, tiempo de entrega y diferencia con la menor), el proveedor seleccionado (con aviso si no es la menor oferta), la justificación y las firmas Elaborado por / Aprobado por. Reemplaza el botón que imprimía la pantalla.
+- **Quien crea una solicitud puede editarla** mientras nadie la haya revisado, autorizado ni rechazado (Solicitud de Compra, Anticipos, Liquidaciones / Reembolsos, Vacaciones, Permisos, Orden de Compra y Orden de Pago). Con el primer paso del flujo ya no puede, y la corrección vuelve a ser de un rango superior, como antes. Esa edición del creador no genera avisos de "proceso corregido": para los aprobadores sigue igual de pendiente.
 - Corregido (desde 1.9.0): en los formularios de Nuevo / Editar de varios módulos (entre ellos Solicitud de Compra) Guardar no guardaba nada. El botón Excel de las listas fallaba cuando la lista no estaba en la página, el error cortaba el script del módulo y el formulario se enviaba sin AJAX: la página se recargaba y la bitácora registraba la acción como correcta, sin mensaje ni número. `initDataTable` ya no hace nada si la tabla no existe.
 - Un formulario abierto antes de cerrar sesión y volver a entrar (por ejemplo en otra pestaña) ya no se pierde: si el token de seguridad venció, el sistema toma el vigente y reenvía solo; si aun así falla, muestra el motivo, y la bitácora registra "Token de seguridad vencido o inválido" (antes, sin explicación).
 - Corregido: Solicitud de Compra, Cotizaciones, Orden de Compra, Nota de Recepción y Anticipos mostraban "Error" sin el motivo cuando no se podía guardar.
 - Las páginas con sesión se envían siempre como "no guardar en caché" (también para la caché de LiteSpeed del hosting): una página guardada y servida a otra sesión llevaría un token de seguridad ajeno.
+- `actualizar_bd.php` (desde el navegador) avisa si la dirección `url` de `proscala_config.php` no es la del sistema: con una dirección equivocada, los enlaces de los correos (activar la cuenta, restablecer la contraseña) llevan a otro sitio.
 - Corregido: `actualizar_bd.php` decía "Todo está al día" aunque no hubiera podido revisar alguna base; ahora avisa cuántas fallaron.
+- **Pruebas automáticas**: 30 (2 nuevas): token de seguridad vencido y edición por quien creó el proceso; la de documentos impresos incluye el resumen de cotizaciones.
+- Sin cambios en la base de datos.
 
 ## 1.10.0 — 2026-10-28
 **Agregar desde las listas, catálogo contable en Excel y planillas mensuales**

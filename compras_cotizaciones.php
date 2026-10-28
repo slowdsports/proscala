@@ -114,7 +114,7 @@ include __DIR__ . '/includes/header.php';
       <a href="<?= BASE_URL ?>compras_orden.php?action=nuevo&co_id=<?= $co['id'] ?>" class="btn btn-sm btn-primary"><i class="fas fa-file-circle-check"></i> Crear OC</a>
       <?php endif; ?>
       <?= botonEditar($pdo, 'compras_cotizaciones.php', (int)$co['id'], '?action=editar&id=' . $co['id']) ?>
-      <button class="btn btn-sm btn-outline-secondary" onclick="printDoc()"><i class="fas fa-print"></i></button>
+      <a href="<?= BASE_URL ?>print.php?tipo=co&id=<?= $co['id'] ?>" target="_blank" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF Resumen</a>
     </div>
   </div>
   <div class="card-body" style="font-size:.85rem;">

@@ -224,6 +224,7 @@ include __DIR__ . '/includes/header.php';
   Marque los módulos que puede abrir cada puesto. El <strong>Administrador</strong> y el <strong>Super Administrador</strong> tienen acceso total.
   <strong>Usuarios</strong> y <strong>Roles y Permisos</strong> son exclusivos del Administrador. Todos los usuarios pueden entrar a <strong>Mi Perfil</strong>.
   Cada puesto puede imprimir los documentos de los módulos a los que tiene acceso.
+  Quien crea una solicitud puede <strong>editarla mientras nadie la haya revisado, autorizado ni rechazado</strong>.
   Los puestos que <strong>aprueban procesos</strong> pueden revisarlos, autorizarlos, rechazarlos y corregirlos, nunca los que ellos mismos crearon
   y solo si están <strong>por encima</strong> de quien creó el proceso en el organigrama (el Administrador puede con todos).
   Ejemplo: si Empleado depende de Contabilidad y Contabilidad de Finanzas, los procesos de un empleado los aprueban Contabilidad, Finanzas y sus superiores.

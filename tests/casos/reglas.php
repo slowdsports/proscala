@@ -256,3 +256,14 @@ prueba('Planillas quincenales y mensuales: días trabajados, deducciones y nombr
     iguales('2ª Quincena (16-31)', nombrePeriodoPlanilla($q2), 'nombre de la segunda quincena');
     iguales('Mensual', nombrePeriodoPlanilla($m, true), 'nombre corto');
 });
+
+prueba('Edición: quien creó el proceso lo edita hasta que alguien lo revisa; después, solo un superior', function () use ($pdo) {
+    conEscenario($pdo, function ($u, $per) use ($pdo) {
+        comoUsuario($pdo, $u['asistente']); iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'el creador edita su permiso sin revisar');
+        comoUsuario($pdo, $u['par']);       afirmar(puedeEditar($pdo, 'permisos.php', $per) !== true, 'alguien fuera de su rama no lo edita');
+        comoUsuario($pdo, $u['jefe']);      iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'el superior lo edita');
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        comoUsuario($pdo, $u['asistente']); afirmar(str_contains((string)puedeEditar($pdo, 'permisos.php', $per), 'Ya fue revisado'), 'revisado: el creador ya no lo edita');
+        comoUsuario($pdo, $u['jefe']);      iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'revisado: el superior aún lo corrige');
+    });
+});

@@ -53,10 +53,10 @@ try {
         afirmar(!$fallas, implode(', ', $fallas));
     });
 
-    prueba('Documentos impresos: los 26 tipos con datos reales', function () use ($baseUrl, $sesAdmin, $pdo) {
+    prueba('Documentos impresos: los 27 tipos con datos reales', function () use ($baseUrl, $sesAdmin, $pdo) {
         $uno = fn(string $sql) => $pdo->query($sql)->fetchColumn() ?: null;
         $emp = $uno("SELECT id FROM empleados ORDER BY id LIMIT 1");
-        $tipos = ['sc' => 'solicitud_compra', 'oc' => 'ordenes_compra', 'op' => 'ordenes_pago', 'pl' => 'planilla_periodos', 'plp' => 'planilla_periodos',
+        $tipos = ['sc' => 'solicitud_compra', 'co' => 'cotizaciones', 'oc' => 'ordenes_compra', 'op' => 'ordenes_pago', 'pl' => 'planilla_periodos', 'plp' => 'planilla_periodos',
                   'plc' => 'planilla_periodos', 'plv' => 'planilla_periodos', 'gv' => 'gastos_viaje', 'sg' => 'solicitud_gastos', 'pa' => 'planilla_asignacion',
                   'pav' => 'planilla_asignacion', 'pb' => 'planilla_beneficios', 'pbp' => 'planilla_beneficios', 'pbv' => 'planilla_beneficios',
                   'proceso' => 'solicitud_compra', 'vac' => 'vacaciones', 'per' => 'permisos', 'cc' => 'caja_chica', 'liq' => 'liquidaciones',

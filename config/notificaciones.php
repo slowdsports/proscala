@@ -173,6 +173,8 @@ function notificarFlujo(PDO $pdo, string $modulo, string $act, int $id): void {
 
     if ($guardar && !(int)($_POST['id'] ?? 0)) {
         avisarPendiente($pdo, $modulo, $id, 'revisar');
+    } elseif ($guardar && !empty($GLOBALS['_edicion_sin_revisar'])) {
+        // Editado antes de cualquier revisión (config/edicion.php): sigue pendiente igual, sin avisos nuevos
     } elseif ($guardar) {
         notificar($pdo, interesadosProceso($pdo, $modulo, $id), 'corregido', 'Proceso corregido',
             "$quien corrigió " . nombreProceso($pdo, $modulo, $id) . '. Vuelve a revisión.', $modulo, $id);

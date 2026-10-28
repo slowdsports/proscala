@@ -25,6 +25,15 @@ function requisitosServidor(PDO $pdo): array {
     $v = (string)$pdo->query('SELECT VERSION()')->fetchColumn();
     $esMaria = stripos($v, 'mariadb') !== false;
     $r[] = ['MySQL 5.7+ / MariaDB 10.3+', version_compare(preg_replace('/[^0-9.].*$/', '', $v), $esMaria ? '10.3' : '5.7', '>='), $v, true];
+    // Desde el navegador: la dirección de proscala_config.php ('url') es la de los enlaces de los
+    // correos (activar la cuenta, restablecer la contraseña); debe ser la que se está usando
+    if (PHP_SAPI !== 'cli' && !empty($_SERVER['HTTP_HOST'])) {
+        $url = rtrim((string)(credenciales()['url'] ?? ''), '/');
+        $https = ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+        $actual = ($https ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . rtrim(BASE_URL, '/');
+        $r[] = ['Dirección del sistema (url) para los enlaces de los correos', strcasecmp($url, $actual) === 0,
+                $url === '' ? "sin definir; debería ser $actual" : (strcasecmp($url, $actual) === 0 ? $url : "es $url y debería ser $actual"), false];
+    }
     return $r;
 }
 

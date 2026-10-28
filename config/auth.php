@@ -137,7 +137,7 @@ const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.ph
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
-    'sc'  => ['compras_solicitud.php'], 'oc' => ['compras_orden.php'], 'op' => ['compras_pago.php'],
+    'sc'  => ['compras_solicitud.php'], 'co' => ['compras_cotizaciones.php'], 'oc' => ['compras_orden.php'], 'op' => ['compras_pago.php'],
     'proceso' => ['compras_solicitud.php', 'compras_orden.php', 'compras_pago.php'],
     'pl'  => ['planillas.php'], 'plp' => ['planillas.php'], 'plc' => ['planillas.php'], 'plv' => ['planillas.php'],
     'pa'  => ['planillas_asignacion.php'], 'pav' => ['planillas_asignacion.php'],

@@ -1,8 +1,9 @@
 <?php
 // ── Edición de procesos ────────────────────────────────────────────
-// Cualquiera con el módulo puede crear un proceso, pero editarlo (o eliminarlo) le
-// corresponde a los puestos que aprueban procesos (puedeAprobar: roles.aprueba), nunca a
-// quien lo creó; el Administrador y el super administrador pueden editar todo.
+// Cualquiera con el módulo puede crear un proceso. Quien lo creó puede editarlo mientras nadie
+// lo haya revisado, autorizado ni rechazado (procesos con flujo: PROCESOS); después, editarlo (o
+// eliminarlo) le corresponde a los puestos que aprueban procesos (puedeAprobar: roles.aprueba)
+// por encima de él. El Administrador y el super administrador pueden editar todo.
 // Se puede editar incluso ya autorizado, mientras no esté cerrado ni pagado: la edición
 // anula revisión y autorización, devuelve el proceso a su estado inicial y actualiza su
 // orden de pago (que también vuelve a pendiente).
@@ -54,11 +55,23 @@ function puedeEditar(PDO $pdo, string $modulo, int $id) {
     if ($motivo = motivoCierre($pdo, $modulo, $id)) return $motivo;
 
     if (tieneAccesoTotal()) return true;
-    if (!puedeAprobar()) return 'Solo los puestos que aprueban procesos pueden editarlos.';
     $s = $pdo->prepare("SELECT usuario_id FROM registro_usuarios WHERE tabla = ? AND registro_id = ? AND participacion = 'creador'");
     $s->execute([$def['tabla'], $id]);
-    if ((int)$s->fetchColumn() === (int)($_SESSION['usuario_id'] ?? 0)) return 'No puede editar un proceso que usted creó: debe corregirlo un rango superior.';
+    if ((int)$s->fetchColumn() === (int)($_SESSION['usuario_id'] ?? 0)) {
+        if (!isset(PROCESOS[$modulo])) return 'No puede editar un proceso que usted creó: debe corregirlo un rango superior.';
+        return pasosFlujoDados($pdo, $def['tabla'], $id)
+            ? 'Ya fue revisado, autorizado o rechazado: ya no puede editarlo. Si hay que cambiarlo, debe corregirlo un rango superior.'
+            : true;
+    }
+    if (!puedeAprobar()) return 'Solo los puestos que aprueban procesos pueden editarlos.';
     return motivoJerarquia(rolCreador($pdo, $def['tabla'], $id)) ?? true;
+}
+
+/** ¿Alguien ya revisó, autorizó o rechazó el proceso? (tabla aprobaciones) */
+function pasosFlujoDados(PDO $pdo, string $tabla, int $id): bool {
+    $s = $pdo->prepare("SELECT 1 FROM aprobaciones WHERE tabla = ? AND registro_id = ? LIMIT 1");
+    $s->execute([$tabla, $id]);
+    return (bool)$s->fetchColumn();
 }
 
 /** Por qué el proceso ya no se modifica para nadie (histórico, cerrado, pagado…), o null. */
@@ -105,6 +118,12 @@ function verificarEdicion(PDO $pdo, string $modulo): void {
             $GLOBALS['_bitacora_explicita'] = true;
             registrarEvento($pdo, 'ACCESO_DENEGADO', ['resultado' => 'error', 'registro_id' => $id, 'detalle' => "No pudo editar: $motivo"]);
             jsonErr($motivo, 403);
+        }
+        // El creador ajusta su propio proceso aún sin revisar: no es una corrección (notificarFlujo)
+        if ($id && isset(PROCESOS[$modulo]) && !pasosFlujoDados($pdo, $def['tabla'], $id)) {
+            $s = $pdo->prepare("SELECT usuario_id FROM registro_usuarios WHERE tabla = ? AND registro_id = ? AND participacion = 'creador'");
+            $s->execute([$def['tabla'], $id]);
+            if ((int)$s->fetchColumn() === (int)($_SESSION['usuario_id'] ?? 0)) $GLOBALS['_edicion_sin_revisar'] = true;
         }
         return;
     }
