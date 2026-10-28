@@ -1252,10 +1252,14 @@ function lps(n) {
 // Las listas vacías traen una fila "No hay…" con colspan: DataTables no la acepta (otro número de
 // columnas) y avisaba con un alert() del navegador. Se quita esa fila y su texto pasa a ser el
 // mensaje de tabla vacía. Cualquier otro aviso de DataTables va a la consola, nunca a un alert().
+// Sin la tabla en la página (los módulos la inicializan también en Nuevo / Editar / Ver) no hace
+// nada: antes Excel.botonLista fallaba sobre una tabla inexistente y el error cortaba el resto del
+// script de la página (p. ej. el envío por AJAX del formulario, que se enviaba sin guardar).
 function initDataTable(selector, opts = {}) {
   if (typeof $ === 'undefined' || !$.fn.DataTable) return;
   $.fn.dataTable.ext.errMode = (s, tn, msg) => console.warn('DataTables:', msg);
   const $tabla = $(selector);
+  if (!$tabla.length) return;
   const $vacia = $tabla.find('tbody > tr').filter((_, tr) => tr.cells.length === 1 && tr.cells[0].colSpan > 1);
   const textoVacio = $vacia.first().text().trim();
   $vacia.remove();
@@ -1303,7 +1307,7 @@ const Excel = {
     return b;
   },
   botonLista(dt) {
-    const filtro = dt.table().container().querySelector('.dataTables_filter');
+    const filtro = dt.table().container()?.querySelector('.dataTables_filter');
     if (!filtro || filtro.querySelector('.btn-excel')) return;
     filtro.classList.add('d-flex', 'align-items-center', 'gap-2');
     filtro.prepend(this.boton(() => {

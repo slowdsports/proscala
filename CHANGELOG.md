@@ -12,7 +12,8 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 ---
 
 ## Sin publicar
-- Corregido: un formulario abierto antes de cerrar sesión y volver a entrar (por ejemplo en otra pestaña) no se guardaba: el token de seguridad ya no coincidía, en pantalla solo aparecía "Error" y la bitácora registraba la acción sin explicación. Ahora el sistema toma el token vigente y reenvía el formulario solo, sin perder lo escrito; si aun así falla, muestra el motivo, y la bitácora registra "Token de seguridad vencido o inválido".
+- Corregido (desde 1.9.0): en los formularios de Nuevo / Editar de varios módulos (entre ellos Solicitud de Compra) Guardar no guardaba nada. El botón Excel de las listas fallaba cuando la lista no estaba en la página, el error cortaba el script del módulo y el formulario se enviaba sin AJAX: la página se recargaba y la bitácora registraba la acción como correcta, sin mensaje ni número. `initDataTable` ya no hace nada si la tabla no existe.
+- Un formulario abierto antes de cerrar sesión y volver a entrar (por ejemplo en otra pestaña) ya no se pierde: si el token de seguridad venció, el sistema toma el vigente y reenvía solo; si aun así falla, muestra el motivo, y la bitácora registra "Token de seguridad vencido o inválido" (antes, sin explicación).
 - Corregido: Solicitud de Compra, Cotizaciones, Orden de Compra, Nota de Recepción y Anticipos mostraban "Error" sin el motivo cuando no se podía guardar.
 - Las páginas con sesión se envían siempre como "no guardar en caché" (también para la caché de LiteSpeed del hosting): una página guardada y servida a otra sesión llevaría un token de seguridad ajeno.
 - Corregido: `actualizar_bd.php` decía "Todo está al día" aunque no hubiera podido revisar alguna base; ahora avisa cuántas fallaron.
