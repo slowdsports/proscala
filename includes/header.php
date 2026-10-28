@@ -104,9 +104,25 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
 
 <!-- Fuera de <main>: la navegación sin recarga solo reemplaza el contenido de <main> -->
 <div id="toast-container"></div>
+<?php
+// Respaldo semanal del super administrador (respaldo.php): se descarga en un marco oculto, fuera
+// de <main> para que siga aunque se navegue a otra página. Se pide una sola vez por sesión.
+$_respaldoSemanal = !empty($_SESSION['respaldo_semanal']) && esSuperadmin();
+unset($_SESSION['respaldo_semanal']);
+if ($_respaldoSemanal): ?>
+<iframe src="<?= BASE_URL ?>respaldo.php?t=<?= urlencode($csrf) ?>" title="Respaldo semanal" hidden></iframe>
+<?php endif; ?>
 
 <!-- MAIN CONTENT -->
 <main id="main-content">
+<?php if ($_respaldoSemanal): ?>
+  <div class="alert alert-info py-2 no-print d-flex gap-2 align-items-start" style="font-size:.85rem;">
+    <i class="fas fa-box-archive mt-1"></i>
+    <div><strong>Respaldo semanal del sistema.</strong> Se está preparando y se descargará solo en unos momentos
+      (bases de datos y archivos subidos de todas las empresas). Guárdelo en un lugar seguro fuera del servidor.
+      El próximo será dentro de <?= DIAS_RESPALDO_SEMANAL ?> días.</div>
+  </div>
+<?php endif; ?>
 <?php if (!empty($_SESSION['aviso'])): ?>
   <div class="alert alert-warning py-2 no-print" style="font-size:.85rem;"><i class="fas fa-triangle-exclamation"></i> <?= htmlspecialchars($_SESSION['aviso']) ?></div>
 <?php unset($_SESSION['aviso']); endif; ?>

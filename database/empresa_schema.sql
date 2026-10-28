@@ -23,7 +23,9 @@ CREATE TABLE `actas_reunion` (
   `estado` enum('borrador','aprobada') NOT NULL DEFAULT 'borrador',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `activos_fijos` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -122,6 +124,7 @@ CREATE TABLE `caja_chica` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
   KEY `empleado_id` (`empleado_id`),
   CONSTRAINT `caja_chica_ibfk_1` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -185,6 +188,8 @@ CREATE TABLE `cotizaciones` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `solicitud_id` (`solicitud_id`),
   KEY `elaborado_por_id` (`elaborado_por_id`),
@@ -210,22 +215,6 @@ CREATE TABLE `cotizaciones_proveedores` (
   KEY `proveedor_id` (`proveedor_id`),
   CONSTRAINT `cotizaciones_proveedores_ibfk_1` FOREIGN KEY (`cotizacion_id`) REFERENCES `cotizaciones` (`id`) ON DELETE CASCADE,
   CONSTRAINT `cotizaciones_proveedores_ibfk_2` FOREIGN KEY (`proveedor_id`) REFERENCES `proveedores` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE `cuentas_bancarias` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(100) NOT NULL,
-  `banco` varchar(100) NOT NULL,
-  `numero_cuenta` varchar(60) DEFAULT '',
-  `tipo_cuenta` enum('ahorros','cheques') DEFAULT 'ahorros',
-  `moneda` enum('HNL','USD') DEFAULT 'HNL',
-  `saldo_disponible` decimal(14,2) DEFAULT 0.00,
-  `fecha_saldo` date DEFAULT NULL,
-  `activa` tinyint(1) DEFAULT 1,
-  `notas` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `saldo_minimo` decimal(14,2) DEFAULT 0.00,
-  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `cuentas_contables` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -286,6 +275,7 @@ CREATE TABLE `empleados` (
   `ded_isr` decimal(10,2) NOT NULL DEFAULT 0.00,
   `ded_credimpulsa` decimal(10,2) NOT NULL DEFAULT 0.00,
   PRIMARY KEY (`id`),
+  KEY `idx_activo` (`activo`),
   UNIQUE KEY `codigo` (`codigo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `firmantes` (
@@ -321,6 +311,8 @@ CREATE TABLE `gastos_viaje` (
   `tipo` enum('viaje','compra') NOT NULL DEFAULT 'viaje',
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha_salida` (`fecha_salida`),
   UNIQUE KEY `numero` (`numero`),
   KEY `empleado_id` (`empleado_id`),
   KEY `proyecto_id` (`proyecto_id`),
@@ -386,6 +378,8 @@ CREATE TABLE `liquidaciones` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha_salida` (`fecha_salida`),
   KEY `empleado_id` (`empleado_id`),
   CONSTRAINT `liquidaciones_ibfk_1` FOREIGN KEY (`empleado_id`) REFERENCES `empleados` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -404,23 +398,10 @@ CREATE TABLE `memorandos` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   KEY `de_empleado_id` (`de_empleado_id`),
   CONSTRAINT `memorandos_ibfk_1` FOREIGN KEY (`de_empleado_id`) REFERENCES `empleados` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE `movimientos_bancarios` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `fecha` date NOT NULL,
-  `cuenta_origen_id` int(11) NOT NULL,
-  `cuenta_destino_id` int(11) NOT NULL,
-  `monto` decimal(14,2) NOT NULL,
-  `comision_ach` decimal(14,2) DEFAULT 0.00,
-  `descripcion` varchar(255) DEFAULT NULL,
-  `estado` enum('simulado','ejecutado','anulado') DEFAULT 'simulado',
-  `usuario_id` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `idx_origen` (`cuenta_origen_id`),
-  KEY `idx_destino` (`cuenta_destino_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `notas_recepcion` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -436,6 +417,8 @@ CREATE TABLE `notas_recepcion` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `orden_compra_id` (`orden_compra_id`),
   KEY `proveedor_id` (`proveedor_id`),
@@ -497,6 +480,8 @@ CREATE TABLE `ordenes_compra` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `cotizacion_id` (`cotizacion_id`),
   KEY `solicitud_id` (`solicitud_id`),
@@ -556,6 +541,8 @@ CREATE TABLE `ordenes_pago` (
   `origen_tabla` varchar(40) DEFAULT NULL,
   `origen_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `proveedor_id` (`proveedor_id`),
   KEY `empleado_id` (`empleado_id`),
@@ -590,6 +577,8 @@ CREATE TABLE `permisos` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha_solicitud` (`fecha_solicitud`),
   UNIQUE KEY `numero` (`numero`),
   KEY `empleado_id` (`empleado_id`),
   KEY `aprobador_id` (`aprobador_id`),
@@ -608,6 +597,7 @@ CREATE TABLE `planilla_asignacion` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
   UNIQUE KEY `numero` (`numero`),
   KEY `proyecto_id` (`proyecto_id`),
   CONSTRAINT `planilla_asignacion_ibfk_1` FOREIGN KEY (`proyecto_id`) REFERENCES `proyectos` (`id`) ON DELETE SET NULL
@@ -638,6 +628,7 @@ CREATE TABLE `planilla_beneficios` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
   UNIQUE KEY `numero` (`numero`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 CREATE TABLE `planilla_beneficios_detalle` (
@@ -721,6 +712,7 @@ CREATE TABLE `planilla_periodos` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
   UNIQUE KEY `uk_periodo` (`anio`,`mes`,`quincena`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `prestamos` (
@@ -738,6 +730,8 @@ CREATE TABLE `prestamos` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `empleado_id` (`empleado_id`),
   KEY `aprobador_id` (`aprobador_id`),
@@ -862,6 +856,8 @@ CREATE TABLE `solicitud_compra` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `solicitante_id` (`solicitante_id`),
   KEY `proyecto_id` (`proyecto_id`),
@@ -900,6 +896,8 @@ CREATE TABLE `solicitud_gastos` (
   `proceso_id` int(11) DEFAULT NULL,
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha` (`fecha`),
   UNIQUE KEY `numero` (`numero`),
   KEY `empleado_id` (`empleado_id`),
   KEY `proyecto_id` (`proyecto_id`),
@@ -934,6 +932,7 @@ CREATE TABLE `usuarios` (
   `email` varchar(150) NOT NULL,
   `password` varchar(255) NOT NULL,
   `debe_cambiar_password` tinyint(1) NOT NULL DEFAULT 0,
+  `pendiente_activacion` tinyint(1) NOT NULL DEFAULT 0,
   `intentos_fallidos` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `bloqueado_en` datetime DEFAULT NULL,
   `rol` varchar(30) NOT NULL DEFAULT 'empleado',
@@ -962,6 +961,8 @@ CREATE TABLE `vacaciones` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
+  KEY `idx_estado` (`estado`),
+  KEY `idx_fecha_solicitud` (`fecha_solicitud`),
   UNIQUE KEY `numero` (`numero`),
   KEY `empleado_id` (`empleado_id`),
   KEY `aprobador_id` (`aprobador_id`),

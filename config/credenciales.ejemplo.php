@@ -35,6 +35,12 @@ return [
         'nombre'    => 'Proscala',
     ],
 
+    // Mantenimiento: clave para ejecutar actualizar_bd.php desde el navegador (mínimo 16
+    // caracteres; vacía = solo desde la terminal de cPanel)
+    'mantenimiento' => [
+        'clave' => '',
+    ],
+
     // Página principal (index.php): a dónde llegan las solicitudes de información y contratación,
     // y datos de contacto que se muestran (vacíos = no se muestran)
     'ventas' => [

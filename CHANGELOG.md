@@ -11,6 +11,22 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.8.0 — 2026-10-27
+**Seguridad, despliegue y base de datos**
+- **Zona horaria**: MySQL usa la misma hora que PHP (Honduras) en cada conexión. Fechas de creación, bitácora, notificaciones y vencimientos ya no dependen de la zona del servidor de base de datos.
+- **Despliegue que borra archivos viejos**: `.cpanel.yml` usa `rsync --delete`. El servidor queda igual al repositorio, incluido el borrado de los archivos eliminados en versiones anteriores. Los datos del servidor están protegidos en `.deployfilter`.
+- **`actualizar_bd.php`**: actualiza la base central y la de cada empresa sin borrar datos. Crea las tablas, columnas e índices que falten según los esquemas y aplica los pasos propios de cada versión. Primero muestra lo pendiente; se ejecuta desde el navegador (con clave de mantenimiento) o desde la terminal, y revisa los requisitos del servidor.
+- **Activación de cuentas por correo**: los usuarios nuevos (desde Empleados o Usuarios) reciben un enlace para crear su propia contraseña, válido 7 días. Ya no se usa el número de identidad como contraseña inicial; los usuarios existentes no cambian. En Usuarios se ve quién está **Sin activar** y se le puede reenviar la invitación.
+- **Bloqueo por IP**: 5 inicios de sesión fallidos en 15 minutos desde una misma conexión la bloquean 15 minutos. El inicio de sesión tiene además token CSRF.
+- **Respaldo semanal del super administrador**: al iniciar sesión se descarga un respaldo completo (base central, base de cada empresa y archivos subidos), uno cada 7 días. Un respaldo incompleto se entrega con aviso, pero no cuenta como el de la semana. La lógica de respaldo se comparte con el cron (`config/respaldo.php`).
+- **Orden de pago automática atómica**: si al autorizar no se puede generar la orden de pago, la autorización se revierte y el usuario ve el error. Antes quedaba autorizada sin OP. Las notificaciones de "autorizado" salen solo cuando la acción quedó completa.
+- **Índices** por estado y fecha en las tablas de procesos. El dashboard y los reportes filtran por rangos de fechas para usarlos (mismas cifras).
+- **Avisos emergentes como texto** (no HTML) y **política de seguridad de contenido (CSP)**: todo se carga desde el propio sistema.
+- **Código JavaScript normalizado** en 20 módulos: bloques sin escapes, con los valores de PHP insertados por nombre. El JS resultante es idéntico.
+- Eliminadas las tablas sin uso `cuentas_bancarias` y `movimientos_bancarios`, y `composer.phar`.
+- **`REQUISITOS.md`**: requisitos del servidor, configuración, instalación, despliegue y trabajos de cron.
+- Corregido: fechas en inglés en el dashboard ("27 de October") y en Mi Perfil.
+
 ## 1.7.0 — 2026-10-27
 **Adjuntar documentos al llenar el formulario**
 - Los formularios de los procesos tienen al final la sección **Documentos adjuntos**: liquidaciones / reembolsos, anticipos, solicitud de compra, cotizaciones, orden de compra, orden de pago, nota de recepción, caja chica, vacaciones, permisos, préstamos y liquidaciones laborales.

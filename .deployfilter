@@ -1,0 +1,25 @@
+# ── Proscala: reglas del despliegue (.cpanel.yml → rsync --delete) ──────────────
+# rsync deja el servidor igual al repositorio: copia lo nuevo y BORRA lo que ya no existe en el
+# repositorio (archivos eliminados o renombrados en versiones anteriores).
+#   "- ruta"  → no se copia al servidor
+#   "P ruta"  → existe solo en el servidor: nunca se borra
+# "***" = la carpeta y todo su contenido. Una ruta con "/" inicial es relativa a la raíz del sistema.
+
+# No se copian al servidor
+- /.git/
+- /.github/
+- /.claude/
+- /tests/
+- /.cpanel.yml
+- /.deployfilter
+- /.gitignore
+- /.gitattributes
+
+# Datos del servidor: nunca se borran
+P /assets/uploads/***
+P /storage/***
+P /.well-known/***
+P /cgi-bin/***
+P .user.ini
+P php.ini
+P error_log

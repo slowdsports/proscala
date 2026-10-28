@@ -93,7 +93,8 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = "bindAjaxForm('form-config');
+$extraJs = <<<'JS'
+bindAjaxForm('form-config');
 function mostrarLogo(url){
   const img=document.getElementById('logo-prev');
   img.src=url; img.style.display=url?'':'none';
@@ -113,6 +114,7 @@ function subirLogo(input){
 async function quitarLogo(){
   if(!await confirmar('¿Quitar el logo de la empresa?', { titulo: 'Quitar logo', aceptar: 'Quitar', peligro: true })) return;
   const fd=new FormData(); fd.append('_action','quitar_logo'); enviarLogo(fd);
-}";
+}
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

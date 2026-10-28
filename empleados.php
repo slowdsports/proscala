@@ -18,7 +18,8 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         try { $r = sincronizarUsuarioEmpleado($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], $empId); }
         catch (Throwable $ex) { $r = 'Error: ' . $ex->getMessage(); }
         return match ($r) {
-            'creado'                    => ' Se creó su usuario del sistema (contraseña inicial: número de identidad).',
+            'creado'                    => ' Se creó su usuario del sistema y se le envió por correo el enlace para activar su cuenta.',
+            'creado_sin_correo'         => ' Se creó su usuario del sistema, pero no se pudo enviar el correo de activación: reenvíelo desde Usuarios.',
             'vinculado'                 => ' Se vinculó con su usuario del sistema.',
             'actualizado', 'Sin correo' => '',
             default                     => " No se creó su usuario: {$r}.",
@@ -27,7 +28,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Convertir en usuarios a todos los empleados activos con correo ──
     if ($_act === 'crear_usuarios') {
-        $conteo = ['creado' => 0, 'vinculado' => 0, 'actualizado' => 0];
+        $conteo = ['creado' => 0, 'creado_sin_correo' => 0, 'vinculado' => 0, 'actualizado' => 0];
         $omitidos = [];
         $lista = $pdo->query("SELECT id, CONCAT(nombre,' ',apellidos) AS nombre FROM empleados
                               WHERE activo=1 AND email IS NOT NULL AND email<>'' ORDER BY apellidos, nombre")->fetchAll();
@@ -41,7 +42,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             "Usuarios desde Empleados: {$conteo['creado']} creados, {$conteo['vinculado']} vinculados, " . count($omitidos) . ' omitidos'
             . ($omitidos ? ' (' . implode('; ', array_map(fn($o) => "{$o['empleado']}: {$o['motivo']}", $omitidos)) . ')' : ''));
         jsonOk(['conteo' => $conteo, 'omitidos' => $omitidos],
-            "Usuarios creados: {$conteo['creado']}. Vinculados a usuarios existentes: {$conteo['vinculado']}. Ya tenían usuario: {$conteo['actualizado']}.");
+            'Usuarios creados: ' . ($conteo['creado'] + $conteo['creado_sin_correo']) . ' (cada uno recibe por correo su enlace de activación)'
+            . ($conteo['creado_sin_correo'] ? ", {$conteo['creado_sin_correo']} sin correo enviado: reenvíelo desde Usuarios" : '')
+            . ". Vinculados a usuarios existentes: {$conteo['vinculado']}. Ya tenían usuario: {$conteo['actualizado']}.");
     }
 
     // ── Employee: Save ─────────────────────────────────────────────
@@ -601,7 +604,7 @@ initDataTable('#tbl-empleados');
 
 // Convierte en usuarios (rol Empleado) a los empleados activos con correo
 async function crearUsuariosEmpleados() {
-    if (!await confirmar('Se creará un usuario del sistema, con rol Empleado, para cada empleado activo que tenga correo y aún no tenga usuario.\n\nSu contraseña inicial será su número de identidad (sin guiones) y deberán cambiarla al entrar por primera vez.', { titulo: 'Crear usuarios de empleados', aceptar: 'Crear usuarios' })) return;
+    if (!await confirmar('Se creará un usuario del sistema, con rol Empleado, para cada empleado activo que tenga correo y aún no tenga usuario.\n\nCada uno recibirá un correo con un enlace para crear su contraseña y activar su cuenta.', { titulo: 'Crear usuarios de empleados', aceptar: 'Crear usuarios' })) return;
     const fd = new FormData();
     fd.append('csrf_token', document.getElementById('g-csrf').value);
     fd.append('_action', 'crear_usuarios');

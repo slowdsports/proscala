@@ -130,7 +130,8 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 initDataTable('#tbl-act');
 function calcDepre(){
   const costo=parseFloat(document.getElementById('a-costo').value||0);
@@ -151,7 +152,8 @@ async function saveActivo(){
   if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1000);}
   else Toast.show(r.message,'error');
 }
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>
 

@@ -653,7 +653,8 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 async function guardarManuales(periodoId) {
   const byRow = {};
   document.querySelectorAll('.manual-input').forEach(inp => {
@@ -696,16 +697,17 @@ async function submitPlanilla() {
   const form = document.getElementById('form-planilla');
   const fd = new FormData(form);
   const btn = document.querySelector('.modal-footer .btn-proscala');
-  btn.disabled = true; btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Procesando...';
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
   try {
     const res = await post('planillas.php', fd);
     if (res.success) {
       Toast.show(res.message, 'success');
       setTimeout(() => Nav.ir('planillas.php?action=ver&id='+res.id), 1500);
-    } else { Toast.show(res.message,'error'); btn.disabled=false; btn.innerHTML='<i class=\"fas fa-cog\"></i> Generar Planilla'; }
-  } catch { Toast.show('Error de conexión','error'); btn.disabled=false; btn.innerHTML='<i class=\"fas fa-cog\"></i> Generar Planilla'; }
+    } else { Toast.show(res.message,'error'); btn.disabled=false; btn.innerHTML='<i class="fas fa-cog"></i> Generar Planilla'; }
+  } catch { Toast.show('Error de conexión','error'); btn.disabled=false; btn.innerHTML='<i class="fas fa-cog"></i> Generar Planilla'; }
 }
-";
+
+JS;
 
 if ($periodo) {
     $plFilas = [];
@@ -719,9 +721,16 @@ if ($periodo) {
         ];
     }
     $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
-    $extraJs .= 'const PL_PERIODO = ' . (int)$periodo['id'] . ";\n"
-              . 'const PROYECTOS = ' . json_encode(array_values($proyMap), $jsonFlags) . ";\n"
-              . 'const PL_FILAS = ' . json_encode($plFilas ?: new stdClass, $jsonFlags) . ";\n";
+    $extraJs .= strtr(<<<'JS'
+const PL_PERIODO = __PERIODO_ID__;
+const PROYECTOS = __PROYECTOS__;
+const PL_FILAS = __FILAS__;
+
+JS, [
+    '__PERIODO_ID__' => (int)$periodo['id'],
+    '__PROYECTOS__' => json_encode(array_values($proyMap), $jsonFlags),
+    '__FILAS__' => json_encode($plFilas ?: new stdClass, $jsonFlags),
+]);
     $extraJs .= <<<'JS'
 const fmtL = n => 'L. ' + n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const escH = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

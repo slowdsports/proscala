@@ -107,7 +107,8 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 function editProy(p){
   ['id','cod','nom','don','fi','ff','pre','resp','est','mon','desc'].forEach(k=>{
     const m={'id':'py-id','cod':'py-cod','nom':'py-nom','don':'py-don','fi':'py-fi','ff':'py-ff','pre':'py-pre','resp':'py-resp','est':'py-est','mon':'py-mon','desc':'py-desc'};
@@ -123,6 +124,7 @@ async function saveProy(){
   if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1000);}
   else Toast.show(r.message,'error');
 }
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

@@ -377,10 +377,11 @@ include __DIR__ . '/includes/header.php';
 
 <?php
 $cuentasJson = json_encode(array_map(fn($c)=>['id'=>$c['id'],'codigo'=>$c['codigo'],'nombre'=>$c['nombre']],$cuentas));
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-oc');
 // Al editar, descuento e impuestos guardados se respetan (no se recalculan desde el %)
-const taxDirty = {desc:" . ($action === 'editar' && $oc ? 'true' : 'false') . ", isv:" . ($action === 'editar' && $oc ? 'true' : 'false') . ", tur:" . ($action === 'editar' && $oc ? 'true' : 'false') . "};
+const taxDirty = {desc:__EDITANDO__, isv:__EDITANDO__, tur:__EDITANDO__};
 recalcTotals();
 updateTotal();
 
@@ -410,20 +411,20 @@ const origR = window.recalcTotals;
 window.recalcTotals = function(){ if(origR) origR(); updateTotal(); };
 
 function addOcRow(){
-  const opts = " . $cuentasJson . ".map(c=>`<option value=\"\${c.id}\">\${c.codigo} \${c.nombre}</option>`).join('');
+  const opts = __CUENTAS_JSON__.map(c=>`<option value="${c.id}">${c.codigo} ${c.nombre}</option>`).join('');
   const tr=document.createElement('tr'); tr.className='detail-row';
-  tr.innerHTML=`<td class=\"row-num\"></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"descripcion\" required></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"unidad\" placeholder=\"und\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-qty text-end\" step=\"0.01\" min=\"0\" data-field=\"cantidad\" value=\"1\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-price text-end\" step=\"0.01\" min=\"0\" data-field=\"precio\" value=\"0\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-total text-end font-mono\" readonly value=\"0\"></td>
-    <td><select class=\"form-select form-select-sm\" data-field=\"cuenta_id\"><option value=\"\">--</option>\${opts}</select></td>
-    <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this)\"><i class=\"fas fa-trash\"></i></button></td>`;
+  tr.innerHTML=`<td class="row-num"></td>
+    <td><input type="text" class="form-control form-control-sm" data-field="descripcion" required></td>
+    <td><input type="text" class="form-control form-control-sm" data-field="unidad" placeholder="und"></td>
+    <td><input type="number" class="form-control form-control-sm row-qty text-end" step="0.01" min="0" data-field="cantidad" value="1"></td>
+    <td><input type="number" class="form-control form-control-sm row-price text-end" step="0.01" min="0" data-field="precio" value="0"></td>
+    <td><input type="number" class="form-control form-control-sm row-total text-end font-mono" readonly value="0"></td>
+    <td><select class="form-select form-select-sm" data-field="cuenta_id"><option value="">--</option>${opts}</select></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this)"><i class="fas fa-trash"></i></button></td>`;
   document.getElementById('tbody-items').appendChild(tr);
   updateDetailRowNumbers('tbody-items');
 }
-function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
+function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function loadCo(coId){
   if(!coId){document.getElementById('hd-sc').value='';return;}
   fetch('compras_orden.php?_action=get_co_data&cotizacion_id='+coId)
@@ -432,19 +433,19 @@ function loadCo(coId){
       document.getElementById('hd-sc').value=data.sc_id||'';
       const sp=document.getElementById('sel-prov');if(sp&&data.prov_id)sp.value=data.prov_id;
       if(data.items&&data.items.length){
-        const lOpts=" . $cuentasJson . ".map(c=>`<option value=\"\${c.id}\">\${c.codigo} \${c.nombre}</option>`).join('');
+        const lOpts=__CUENTAS_JSON__.map(c=>`<option value="${c.id}">${c.codigo} ${c.nombre}</option>`).join('');
         const tb=document.getElementById('tbody-items');tb.innerHTML='';
         data.items.forEach((it,i)=>{
           const p=parseFloat(it.precio_estimado)||0,q=parseFloat(it.cantidad)||1;
           const tr=document.createElement('tr');tr.className='detail-row';
-          tr.innerHTML=`<td class=\"row-num\">\${i+1}</td>
-            <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"descripcion\" required value=\"\${escHtml(it.descripcion)}\"></td>
-            <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"unidad\" placeholder=\"und\" value=\"\${escHtml(it.unidad||'')}\"></td>
-            <td><input type=\"number\" class=\"form-control form-control-sm row-qty text-end\" step=\"0.01\" min=\"0\" data-field=\"cantidad\" value=\"\${q}\"></td>
-            <td><input type=\"number\" class=\"form-control form-control-sm row-price text-end\" step=\"0.01\" min=\"0\" data-field=\"precio\" value=\"\${p}\"></td>
-            <td><input type=\"number\" class=\"form-control form-control-sm row-total text-end font-mono\" readonly value=\"\${q*p}\"></td>
-            <td><select class=\"form-select form-select-sm\" data-field=\"cuenta_id\"><option value=\"\">--</option>\${lOpts}</select></td>
-            <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this)\"><i class=\"fas fa-trash\"></i></button></td>`;
+          tr.innerHTML=`<td class="row-num">${i+1}</td>
+            <td><input type="text" class="form-control form-control-sm" data-field="descripcion" required value="${escHtml(it.descripcion)}"></td>
+            <td><input type="text" class="form-control form-control-sm" data-field="unidad" placeholder="und" value="${escHtml(it.unidad||'')}"></td>
+            <td><input type="number" class="form-control form-control-sm row-qty text-end" step="0.01" min="0" data-field="cantidad" value="${q}"></td>
+            <td><input type="number" class="form-control form-control-sm row-price text-end" step="0.01" min="0" data-field="precio" value="${p}"></td>
+            <td><input type="number" class="form-control form-control-sm row-total text-end font-mono" readonly value="${q*p}"></td>
+            <td><select class="form-select form-select-sm" data-field="cuenta_id"><option value="">--</option>${lOpts}</select></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this)"><i class="fas fa-trash"></i></button></td>`;
           tb.appendChild(tr);
         });
         recalcTotals();updateTotal();
@@ -465,6 +466,10 @@ document.getElementById('form-oc')?.addEventListener('submit',function(e){
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error','error'));
 });
-";
+
+JS, [
+    '__EDITANDO__' => ($action === 'editar' && $oc ? 'true' : 'false'),
+    '__CUENTAS_JSON__' => $cuentasJson,
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

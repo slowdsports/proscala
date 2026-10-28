@@ -37,23 +37,42 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($uid) {
                 $pdo->prepare("UPDATE usuarios SET nombre=?,email=?,rol=?,activo=? WHERE id=?")->execute([...array_values($d), $uid]);
                 $pdoMaster->prepare("UPDATE accesos SET email=? WHERE email=? AND empresa_id=?")->execute([$d['email'], $actual['email'], $empresaId]);
+                // Una contraseña puesta por el Administrador: el usuario debe cambiarla al entrar
                 if ($_POST['new_password'] ?? '') {
-                    $pdo->prepare("UPDATE usuarios SET password=? WHERE id=?")->execute([password_hash($_POST['new_password'], PASSWORD_BCRYPT),$uid]);
+                    $pdo->prepare("UPDATE usuarios SET password=?, pendiente_activacion=0, debe_cambiar_password=1 WHERE id=?")
+                        ->execute([password_hash($_POST['new_password'], PASSWORD_BCRYPT), $uid]);
                 }
                 jsonOk([],'Usuario actualizado.');
             } else {
-                if (!$_POST['new_password']) jsonErr('La contraseña es requerida para nuevos usuarios.');
+                // Usuario nuevo: crea su propia contraseña con el enlace que recibe por correo
                 $pdoMaster->prepare("INSERT INTO accesos (email, empresa_id) VALUES (?,?)")->execute([$d['email'], $empresaId]);
                 try {
-                    $pdo->prepare("INSERT INTO usuarios (nombre,email,password,rol,activo) VALUES (?,?,?,?,?)")
-                        ->execute([$d['nombre'],$d['email'],password_hash($_POST['new_password'],PASSWORD_BCRYPT),$d['rol'],$d['activo']]);
+                    $pdo->prepare("INSERT INTO usuarios (nombre,email,password,pendiente_activacion,rol,activo) VALUES (?,?,?,1,?,?)")
+                        ->execute([$d['nombre'],$d['email'],claveSinActivar(),$d['rol'],$d['activo']]);
                 } catch (PDOException $e) {
                     $pdoMaster->prepare("DELETE FROM accesos WHERE email=? AND empresa_id=?")->execute([$d['email'], $empresaId]);
                     throw $e;
                 }
-                jsonOk(['id'=>$pdo->lastInsertId()],'Usuario creado.');
+                $nuevoId = (int)$pdo->lastInsertId();
+                if (!$d['activo']) jsonOk(['id' => $nuevoId], 'Usuario creado (inactivo). Al activarlo, envíele la invitación con el botón del sobre.');
+                $envio = enviarActivacion($pdo, $pdoMaster, (int)$empresaId, $nuevoId);
+                jsonOk(['id' => $nuevoId], $envio === true
+                    ? "Usuario creado. Se envió a {$d['email']} el enlace para activar su cuenta."
+                    : "Usuario creado, pero no se pudo enviar el correo de activación ($envio). Reenvíelo con el botón del sobre.");
             }
         } catch(PDOException $e){ jsonErr($e->getCode()==23000?'Ese correo ya está registrado en esta empresa.':$e->getMessage()); }
+    }
+    // Reenviar el enlace de activación a un usuario que aún no activa su cuenta
+    if ($_act === 'reenviar_activacion') {
+        $s = $pdo->prepare("SELECT id, nombre, email, pendiente_activacion FROM usuarios WHERE id = ?");
+        $s->execute([(int)($_POST['id'] ?? 0)]);
+        $u = $s->fetch();
+        if (!$u) jsonErr('Usuario no encontrado.');
+        if (!$u['pendiente_activacion']) jsonErr('Este usuario ya activó su cuenta.');
+        $GLOBALS['_bitacora_explicita'] = true;   // enviarActivacion ya lo registra
+        $envio = enviarActivacion($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], (int)$u['id']);
+        if ($envio !== true) jsonErr('No se pudo enviar el correo: ' . $envio);
+        jsonOk(['id' => $u['id']], "Se envió a {$u['email']} un nuevo enlace de activación (vence en " . DIAS_ACTIVACION . ' días).');
     }
     // Desbloquear a un usuario bloqueado por intentos fallidos (login.php)
     if ($_act === 'desbloquear') {
@@ -100,9 +119,13 @@ include __DIR__ . '/includes/header.php';
         <td><span class="badge bg-<?= $u['rol'] === 'admin' ? 'danger' : 'primary' ?>"><?= htmlspecialchars(rolLabel($u['rol'])) ?></span><?php if (in_array(strtolower($u['email']), $superadmins, true)): ?> <span class="badge bg-dark"><i class="fas fa-crown"></i> Super Admin</span><?php endif; ?></td>
         <td><?= $u['ultimo_acceso']?date('d/m/Y H:i',strtotime($u['ultimo_acceso'])):'—' ?></td>
         <td><?= $u['activo']?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-danger">Inactivo</span>' ?>
+          <?php if ($u['pendiente_activacion']): ?><span class="badge bg-warning text-dark" title="Aún no crea su contraseña con el enlace que recibió por correo"><i class="fas fa-envelope"></i> Sin activar</span><?php endif; ?>
           <?php if ($u['bloqueado_en']): ?><span class="badge bg-dark" title="Bloqueado el <?= date('d/m/Y H:i', strtotime($u['bloqueado_en'])) ?>"><i class="fas fa-lock"></i> Bloqueado</span>
           <?php elseif ($u['intentos_fallidos']): ?><span class="badge bg-warning text-dark" title="Contraseñas incorrectas seguidas"><?= (int)$u['intentos_fallidos'] ?>/<?= MAX_INTENTOS_LOGIN ?> intentos</span><?php endif; ?></td>
         <td style="white-space:nowrap"><a href="<?= BASE_URL ?>auditoria.php?usuario_id=<?= $u['id'] ?>" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Historial de actividad"><i class="fas fa-clock-rotate-left"></i></a>
+          <?php if ($u['pendiente_activacion'] && $u['activo']): ?>
+          <button class="btn btn-sm btn-outline-warning py-0 px-2" title="Reenviar enlace de activación" onclick='reenviarActivacion(<?= (int)$u['id'] ?>, <?= json_encode($u['email'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-envelope"></i></button>
+          <?php endif; ?>
           <?php if ($u['bloqueado_en']): ?>
           <button class="btn btn-sm btn-danger py-0 px-2" title="Desbloquear" onclick='desbloquearUsuario(<?= (int)$u['id'] ?>, <?= json_encode($u['nombre'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-lock-open"></i></button>
           <?php endif; ?>
@@ -133,7 +156,8 @@ include __DIR__ . '/includes/header.php';
             </select>
             <div class="form-text">Los módulos de cada puesto se definen en <a href="<?= BASE_URL ?>roles.php">Roles y Permisos</a>.</div>
           </div>
-          <div class="mb-3"><label class="form-label">Contraseña <small class="text-muted">(dejar vacío para no cambiar)</small></label><input type="password" name="new_password" id="u-pass" class="form-control" minlength="6"></div>
+          <div class="alert alert-info py-2 small" id="u-aviso-nuevo"><i class="fas fa-envelope"></i> El usuario recibirá un correo con un enlace para crear su contraseña y activar su cuenta.</div>
+          <div class="mb-3" id="u-pass-grupo" style="display:none"><label class="form-label">Nueva contraseña <small class="text-muted">(vacío para no cambiarla; el usuario deberá cambiarla al entrar)</small></label><input type="password" name="new_password" id="u-pass" class="form-control" minlength="8"></div>
           <div class="form-check"><input type="checkbox" name="activo" class="form-check-input" id="u-activo" checked><label class="form-check-label" for="u-activo">Activo</label></div>
         </form>
       </div>
@@ -145,8 +169,13 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
 initDataTable('#tbl-usr');
+// Nuevo: sin contraseña (la crea con el enlace del correo). Editar: se puede poner una nueva
+function modoFormUsuario(editando) {
+  document.getElementById('u-aviso-nuevo').style.display = editando ? 'none' : '';
+  document.getElementById('u-pass-grupo').style.display = editando ? '' : 'none';
+}
 function editUser(u){
   document.getElementById('u-id').value=u.id;
   document.getElementById('u-nombre').value=u.nombre;
@@ -156,23 +185,40 @@ function editUser(u){
   document.getElementById('u-activo').checked=u.activo==1;
   document.getElementById('u-pass').value='';
   document.getElementById('usr-title').textContent='Editar: '+u.nombre;
+  modoFormUsuario(true);
   new bootstrap.Modal(document.getElementById('modal-user')).show();
 }
-async function desbloquearUsuario(id, nombre){
-  if (!await confirmar(nombre + ' podrá volver a iniciar sesión.', { titulo: '¿Desbloquear usuario?', aceptar: 'Desbloquear' })) return;
+// Al cerrar vuelve a ser "Nuevo Usuario"
+document.getElementById('modal-user').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('form-user').reset();
+  document.getElementById('u-id').value = 0;
+  document.getElementById('usr-title').textContent = 'Nuevo Usuario';
+  modoFormUsuario(false);
+});
+async function accionUsuario(accion, id) {
   const fd = new FormData();
-  fd.append('_action', 'desbloquear');
+  fd.append('_action', accion);
   fd.append('id', id);
-  fd.append('csrf_token', document.querySelector('meta[name=\"csrf\"]')?.content || '');
+  fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
   try { const r = await post('usuarios.php', fd); Toast.show(r.message, 'success'); setTimeout(() => Nav.recargar(), 800); }
   catch (e) { Toast.show(e.message, 'error'); }
 }
-async function saveUser(){
-  const r=await post('usuarios.php',new FormData(document.getElementById('form-user')));
-  if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1000);}
-  else Toast.show(r.message,'error');
+async function desbloquearUsuario(id, nombre){
+  if (!await confirmar(nombre + ' podrá volver a iniciar sesión.', { titulo: '¿Desbloquear usuario?', aceptar: 'Desbloquear' })) return;
+  accionUsuario('desbloquear', id);
 }
-";
+async function reenviarActivacion(id, email){
+  if (!await confirmar('Se enviará a ' + email + ' un nuevo enlace para crear su contraseña. El enlace anterior dejará de servir.', { titulo: '¿Reenviar la invitación?', aceptar: 'Reenviar' })) return;
+  accionUsuario('reenviar_activacion', id);
+}
+async function saveUser(){
+  try {
+    const r = await post('usuarios.php', new FormData(document.getElementById('form-user')));
+    Toast.show(r.message, 'success', 6000);
+    setTimeout(() => Nav.recargar(), 1200);
+  } catch (e) { Toast.show(e.message, 'error'); }
+}
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>
 

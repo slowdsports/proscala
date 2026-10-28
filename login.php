@@ -12,8 +12,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rtn      = normalizarRtn($_POST['rtn'] ?? '');
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
+    $ip       = $_SERVER['REMOTE_ADDR'] ?? '';
+    $esperaIp = minutosBloqueoIp($pdoMaster, $ip);
 
-    if ($rtn && $email && $password) {
+    if (!hash_equals($_SESSION['csrf_token'] ?? '', (string)($_POST['csrf_token'] ?? ''))) {
+        $error = 'La página estuvo abierta mucho tiempo. Escriba de nuevo sus datos e ingrese.';
+    } elseif ($esperaIp) {
+        // IP bloqueada por inicios fallidos: ni siquiera se revisan las credenciales
+        $pdoMaster->prepare("INSERT INTO log_accesos (rtn, email, ip, motivo) VALUES (?,?,?,?)")
+            ->execute([mb_substr($rtn, 0, 30), mb_substr($email, 0, 150), $ip, 'IP bloqueada por intentos fallidos']);
+        $error = "Hubo demasiados intentos fallidos desde su conexión. Por seguridad, espere $esperaIp minuto" . ($esperaIp === 1 ? '' : 's') . ' e intente de nuevo.';
+    } elseif ($rtn && $email && $password) {
         // El RTN indica la empresa (y su base de datos); el correo debe estar asociado a ella
         $stmt = $pdoMaster->prepare("SELECT id AS empresa_id, nombre AS empresa, rtn, db_nombre, activo FROM empresas WHERE rtn = ?");
         $stmt->execute([$rtn]);
@@ -37,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($superadmin === false || !$u)                     $motivo = 'Correo no registrado en la empresa';
             elseif ($u['bloqueado_en'])                           $motivo = 'Usuario bloqueado';
+            elseif (!empty($u['pendiente_activacion']))           $motivo = 'Cuenta sin activar';
             elseif (!password_verify($password, $u['password'])) $motivo = 'Contraseña incorrecta';
             elseif (!$u['activo'])                                $motivo = 'Usuario inactivo';
             elseif (!$acc['activo'])                              $motivo = 'Empresa desactivada';
@@ -68,8 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'resultado' => 'error', 'detalle' => $motivo,
             ]);
         }
+        // Credenciales incorrectas (RTN, correo o contraseña) cuentan para el bloqueo de la IP
+        $falloCredenciales = !$acc || str_starts_with($motivo, 'Correo no registrado') || str_starts_with($motivo, 'Contraseña incorrecta');
+        if ($falloCredenciales) registrarFalloIp($pdoMaster, $ip);
 
         if ($acc && $motivo === '') {
+            limpiarFallosIp($pdoMaster, $ip);
             $pdo->prepare("UPDATE usuarios SET intentos_fallidos = 0 WHERE id = ?")->execute([$u['id']]);
             session_regenerate_id(true);
             $_SESSION['usuario_id']     = $u['id'];
@@ -84,6 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // includes/header.php guarda este RTN en el navegador para precargarlo la próxima vez
             $_SESSION['rtn_recordar']   = ['rtn' => $acc['rtn'], 'empresa' => $acc['empresa']];
             cargarPermisos($pdo, $u['rol']);
+            // Super administrador: respaldo completo del sistema si pasaron 7 días desde el último (respaldo.php)
+            if ($acc['superadmin'] && respaldoSemanalPendiente($pdoMaster)) $_SESSION['respaldo_semanal'] = true;
 
             $pdo->prepare("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = ?")->execute([$u['id']]);
             registrarEvento($pdo, 'LOGIN', ['modulo' => 'login.php', 'detalle' => 'Inicio de sesión']);
@@ -92,11 +108,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } elseif ($motivo === 'Empresa desactivada') {
             $error = 'La empresa de este usuario está desactivada. Contacte al administrador de Proscala.';
+        } elseif ($motivo === 'Cuenta sin activar') {
+            $error = 'Su cuenta aún no está activada. Use el enlace que le enviamos por correo para crear su contraseña; si no lo encuentra o venció, pida uno nuevo con "¿Olvidó su contraseña?".';
         } elseif ($motivo === 'Usuario bloqueado') {
             $error = 'Su usuario está bloqueado por ' . MAX_INTENTOS_LOGIN . ' intentos fallidos. Pida a un administrador de su empresa que lo desbloquee.';
         } else {
             $error = 'RTN, correo o contraseña incorrectos.'
                 . ($restantes !== null && $restantes <= 2 ? " Le queda" . ($restantes === 1 ? '' : 'n') . " $restantes intento" . ($restantes === 1 ? '' : 's') . ' antes de que su usuario se bloquee.' : '');
+        }
+        // Este fallo completó el límite de la IP: se avisa ya del bloqueo
+        if ($falloCredenciales && ($esperaIp = minutosBloqueoIp($pdoMaster, $ip))) {
+            $error = 'Hubo demasiados intentos fallidos desde su conexión. Por seguridad, espere ' . MINUTOS_BLOQUEO_IP . ' minutos e intente de nuevo.';
         }
     } else {
         $error = 'Ingrese el RTN de la empresa, su correo y contraseña.';
@@ -136,6 +158,7 @@ unset($_SESSION['aviso_login']);
     <?php endif; ?>
 
     <form method="POST" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
       <div class="mb-3 text-start">
         <label class="form-label"><i class="fas fa-building text-blue"></i> RTN de la empresa</label>
         <select id="rtn-select" class="form-select mb-2" style="display:none"></select>

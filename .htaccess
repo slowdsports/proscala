@@ -41,6 +41,10 @@ ServerSignature Off
     # La cámara la usan los adjuntos ("Tomar foto"); nada más
     Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=()"
     Header always set Strict-Transport-Security "max-age=31536000" "expr=%{HTTPS} == 'on'"
+    # Política de contenido: todo se sirve desde el propio sistema (sin CDN). Los scripts y estilos
+    # en línea siguen permitidos (las páginas los usan); las imágenes data:/blob: son el logo de los
+    # documentos, las vistas previas de fotos y la descarga en PDF desde el navegador.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     Header always unset X-Powered-By
     Header unset X-Powered-By
 </IfModule>

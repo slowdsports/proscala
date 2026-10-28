@@ -16,9 +16,15 @@ $stats['op_pendientes']     = $pdo->query("SELECT COUNT(*) FROM ordenes_pago WHE
 $stats['proyectos_activos'] = $pdo->query("SELECT COUNT(*) FROM proyectos WHERE estado='activo'")->fetchColumn();
 
 // ── Monetary stats (current month) ──────────────────────────────
-$mesHoy = date('Y-m');
-$stats['gastos_mes']  = (float)$pdo->query("SELECT COALESCE(SUM(monto_total),0) FROM solicitud_gastos  WHERE DATE_FORMAT(fecha,'%Y-%m')='$mesHoy' AND estado IN ('aprobada','pagada')")->fetchColumn();
-$stats['pagos_mes']   = (float)$pdo->query("SELECT COALESCE(SUM(monto),0)       FROM ordenes_pago       WHERE DATE_FORMAT(fecha,'%Y-%m')='$mesHoy' AND estado IN ('aprobada','pagada')")->fetchColumn();
+// Rangos de fechas (y no DATE_FORMAT/YEAR sobre la columna) para que se usen los índices por fecha
+$mesIni = date('Y-m-01');
+$mesFin = date('Y-m-01', strtotime('+1 month'));
+$s = $pdo->prepare("SELECT COALESCE(SUM(monto_total),0) FROM solicitud_gastos WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada')");
+$s->execute([$mesIni, $mesFin]);
+$stats['gastos_mes'] = (float)$s->fetchColumn();
+$s = $pdo->prepare("SELECT COALESCE(SUM(monto),0) FROM ordenes_pago WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada')");
+$s->execute([$mesIni, $mesFin]);
+$stats['pagos_mes'] = (float)$s->fetchColumn();
 $stats['prest_saldo'] = (float)$pdo->query("SELECT COALESCE(SUM(saldo),0)       FROM prestamos          WHERE estado='activo'")->fetchColumn();
 
 // ── Last payroll ─────────────────────────────────────────────────
@@ -35,7 +41,8 @@ foreach ($chartLabels as $lbl) {
     $chartGastos[] = (float)($gRaw[$lbl] ?? 0);
     $chartPagos[]  = (float)($pRaw[$lbl] ?? 0);
 }
-$prettyLabels = array_map(fn($m) => date('M Y', strtotime($m.'-01')), $chartLabels);
+$mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+$prettyLabels = array_map(fn($m) => $mesesCortos[(int)substr($m, 5, 2) - 1] . ' ' . substr($m, 0, 4), $chartLabels);
 
 // ── Top expense accounts this year ──────────────────────────────
 $topCuentas = $pdo->query("
@@ -43,7 +50,7 @@ $topCuentas = $pdo->query("
     FROM solicitud_gastos_detalle sgd
     JOIN cuentas_contables cc ON sgd.cuenta_id = cc.id
     JOIN solicitud_gastos sg  ON sgd.solicitud_id = sg.id
-    WHERE YEAR(sg.fecha) = YEAR(CURDATE()) AND sg.estado IN ('aprobada','pagada')
+    WHERE sg.fecha >= '" . date('Y') . "-01-01' AND sg.fecha < '" . (date('Y') + 1) . "-01-01' AND sg.estado IN ('aprobada','pagada')
     GROUP BY cc.id ORDER BY total DESC LIMIT 6")->fetchAll();
 $totTopCuentas = array_sum(array_column($topCuentas, 'total'));
 
@@ -67,7 +74,7 @@ include __DIR__ . '/includes/header.php';
 <div class="page-header">
   <h1><i class="fas fa-gauge-high"></i> Dashboard</h1>
   <span style="font-size:.8rem;color:var(--text-3)">
-    <i class="fas fa-calendar-day"></i> <?= date('d \d\e F, Y') ?>
+    <i class="fas fa-calendar-day"></i> <?= date('j') . ' de ' . mb_strtolower(nombreMes((int)date('n'))) . ' de ' . date('Y') ?>
   </span>
 </div>
 
@@ -253,7 +260,8 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <?php
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 (function(){
   const canvas = document.getElementById('chartGastos');
   if (!canvas) return;
@@ -272,10 +280,10 @@ $extraJs = "
     _chart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
       data: {
-        labels: {$labelsJson},
+        labels: __LABELS_JSON__,
         datasets: [
-          { label:'Gastos',  data:{$gastosJson}, backgroundColor:gBar, borderColor:gBord, borderWidth:1, borderRadius:4 },
-          { label:'Pagos',   data:{$pagosJson},  backgroundColor:pBar, borderColor:pBord, borderWidth:1, borderRadius:4 }
+          { label:'Gastos',  data:__GASTOS_JSON__, backgroundColor:gBar, borderColor:gBord, borderWidth:1, borderRadius:4 },
+          { label:'Pagos',   data:__PAGOS_JSON__,  backgroundColor:pBar, borderColor:pBord, borderWidth:1, borderRadius:4 }
         ]
       },
       options: {
@@ -294,6 +302,11 @@ $extraJs = "
   buildChart();
   document.addEventListener('proscala:themechange', buildChart);
 })();
-";
+
+JS, [
+    '__LABELS_JSON__' => $labelsJson,
+    '__GASTOS_JSON__' => $gastosJson,
+    '__PAGOS_JSON__' => $pagosJson,
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

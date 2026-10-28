@@ -217,14 +217,15 @@ include __DIR__ . '/includes/header.php';
 
 <?php
 $provJson = json_encode(array_map(fn($p)=>['id'=>$p['id'],'nombre'=>$p['nombre']],$proveedores));
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-co');
 
 function addProvRow(){
-  const opts = " . $provJson . ".map(p=>`<option value=\"\${p.id}\">\${p.nombre}</option>`).join('');
+  const opts = __PROV_JSON__.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
   const idx = document.querySelectorAll('#provs-container .prov-row').length+1;
   const d=document.createElement('div'); d.className='card mb-2 prov-row';
-  d.innerHTML=`<div class=\"card-body p-3\"><div class=\"d-flex justify-content-between align-items-center mb-2\"><strong style=\"font-size:.85rem;\">Proveedor \${idx}</strong><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"this.closest('.prov-row').remove()\"><i class=\"fas fa-trash\"></i></button></div><div class=\"row g-2\"><div class=\"col-md-4\"><select class=\"form-select form-select-sm prov-sel\" data-f=\"proveedor_id\"><option value=\"\">--</option>\${opts}</select></div><div class=\"col-md-2\"><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"num_cotizacion\"></div><div class=\"col-md-2\"><input type=\"text\" class=\"form-control form-control-sm date-input\" data-f=\"fecha\"></div><div class=\"col-md-2\"><input type=\"number\" class=\"form-control form-control-sm text-end\" step=\"0.01\" min=\"0\" data-f=\"total\" value=\"0\"></div><div class=\"col-md-2\"><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"tiempo_entrega\"></div><div class=\"col-md-4\"><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"condiciones\"></div><div class=\"col-md-8\"><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"notas\"></div></div></div>`;
+  d.innerHTML=`<div class="card-body p-3"><div class="d-flex justify-content-between align-items-center mb-2"><strong style="font-size:.85rem;">Proveedor ${idx}</strong><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="this.closest('.prov-row').remove()"><i class="fas fa-trash"></i></button></div><div class="row g-2"><div class="col-md-4"><select class="form-select form-select-sm prov-sel" data-f="proveedor_id"><option value="">--</option>${opts}</select></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="num_cotizacion"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm date-input" data-f="fecha"></div><div class="col-md-2"><input type="number" class="form-control form-control-sm text-end" step="0.01" min="0" data-f="total" value="0"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="tiempo_entrega"></div><div class="col-md-4"><input type="text" class="form-control form-control-sm" data-f="condiciones"></div><div class="col-md-8"><input type="text" class="form-control form-control-sm" data-f="notas"></div></div></div>`;
   document.getElementById('provs-container').appendChild(d);
   flatpickr(d.querySelectorAll('.date-input'),{locale:'es',dateFormat:'Y-m-d',allowInput:true});
 }
@@ -244,6 +245,9 @@ document.getElementById('form-co')?.addEventListener('submit',function(e){
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error','error'));
 });
-";
+
+JS, [
+    '__PROV_JSON__' => $provJson,
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

@@ -176,7 +176,7 @@ include __DIR__ . '/includes/header.php';
           <?php if ($me['ultimo_acceso']): ?>
           <div class="perfil-info-row"><i class="fas fa-clock"></i> Acceso: <?= date('d/m/Y H:i', strtotime($me['ultimo_acceso'])) ?></div>
           <?php endif; ?>
-          <div class="perfil-info-row"><i class="fas fa-calendar"></i> Miembro desde <?= date('M Y', strtotime($me['created_at'])) ?></div>
+          <div class="perfil-info-row"><i class="fas fa-calendar"></i> Miembro desde <?= mb_strtolower(nombreMes((int)date('n', strtotime($me['created_at'])))) . ' de ' . date('Y', strtotime($me['created_at'])) ?></div>
         </div>
 
         <button class="btn btn-outline-secondary btn-sm mt-3 w-100" onclick="document.getElementById('inp-foto').click()">
@@ -282,8 +282,9 @@ include __DIR__ . '/includes/header.php';
 
 <?php
 $csrfJs = json_encode($csrf);
-$extraJs = "
-const _csrfPerfil = {$csrfJs};
+$extraJs = strtr(<<<'JS'
+
+const _csrfPerfil = __CSRF_JS__;
 
 // La foto de la barra superior también cambia
 function fotoTopbar(src) {
@@ -296,7 +297,7 @@ document.getElementById('inp-foto').addEventListener('change', async function(){
   const file = this.files[0];
   this.value = '';
   if (!file) return;
-  if (!/^image\\/(jpeg|png|gif|webp)$/.test(file.type)) { Toast.show('Solo se permiten imágenes (JPG, PNG, GIF, WEBP).', 'error'); return; }
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { Toast.show('Solo se permiten imágenes (JPG, PNG, GIF, WEBP).', 'error'); return; }
   if (file.size > 5*1024*1024) { Toast.show('La imagen no debe superar 5 MB.', 'error'); return; }
 
   // Vista previa inmediata; si el servidor la rechaza se vuelve a la anterior
@@ -360,8 +361,12 @@ bindAjaxForm('form-datos', r => {
 });
 bindAjaxForm('form-pass', r => {
   Toast.show(r.message,'success'); document.getElementById('form-pass').reset();
-  " . ($me['debe_cambiar_password'] ? "setTimeout(()=>Nav.ir('" . BASE_URL . "'), 1200);" : '') . "
+  __TRAS_CAMBIAR_CLAVE__
 });
-";
+
+JS, [
+    '__CSRF_JS__' => $csrfJs,
+    '__TRAS_CAMBIAR_CLAVE__' => ($me['debe_cambiar_password'] ? "setTimeout(()=>Nav.ir('" . BASE_URL . "'), 1200);" : ''),
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

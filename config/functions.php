@@ -68,6 +68,11 @@ function fmtFecha(string $d): string {
     return date('d/m/Y', strtotime($d));
 }
 
+/** Nombre del mes en español (1 = Enero); date('F') daría el nombre en inglés. */
+function nombreMes(int $mes): string {
+    return ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][$mes - 1] ?? '';
+}
+
 // ── Cálculos de Planilla Honduras ─────────────────────────────────
 function calcularPlanilla(float $sueldoMensual, array $_config = []): array {
     // Todas las deducciones se ingresan manualmente en cada planilla

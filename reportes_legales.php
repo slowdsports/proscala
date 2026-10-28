@@ -424,6 +424,8 @@ $tituloReporte = match($tipo) {
 </div>
 
 <?php
-$extraJs = "initDataTable('#tbl-liq');";
+$extraJs = <<<'JS'
+initDataTable('#tbl-liq');
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

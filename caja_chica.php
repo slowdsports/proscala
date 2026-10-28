@@ -563,7 +563,8 @@ $cuentasJson = json_encode(array_map(fn($c) => [
     'id' => $c['id'], 'codigo' => $c['codigo'], 'nombre' => $c['nombre']
 ], $cuentas));
 
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-cc');
 calcCcTotal();
 
@@ -587,19 +588,19 @@ function recalcRow(inp) {
 }
 
 function addCcRow() {
-  const opts = " . $cuentasJson . ".map(c=>'<option value=\"'+c.id+'\">'+c.codigo+' — '+c.nombre+'</option>').join('');
+  const opts = __CUENTAS_JSON__.map(c=>'<option value="'+c.id+'">'+c.codigo+' — '+c.nombre+'</option>').join('');
   const today = new Date().toISOString().split('T')[0];
   const tr = document.createElement('tr');
   tr.className = 'detail-row';
   tr.innerHTML =
-    '<td class=\"row-num\"></td>' +
-    '<td><input type=\"text\" class=\"form-control form-control-sm date-input cc-fecha\" value=\"'+today+'\" data-field=\"fecha\"></td>' +
-    '<td><select class=\"form-select form-select-sm\" data-field=\"cuenta_id\"><option value=\"\">— Sin cuenta —</option>'+opts+'</select></td>' +
-    '<td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"descripcion\" placeholder=\"Descripción\" required></td>' +
-    '<td><input type=\"number\" class=\"form-control form-control-sm text-end cc-cant\" value=\"1\" min=\"0.001\" step=\"0.001\" data-field=\"cantidad\" oninput=\"recalcRow(this)\"></td>' +
-    '<td><input type=\"number\" class=\"form-control form-control-sm text-end cc-punit\" value=\"0\" min=\"0\" step=\"0.01\" data-field=\"precio_unitario\" oninput=\"recalcRow(this)\"></td>' +
-    '<td><input type=\"number\" class=\"form-control form-control-sm text-end cc-monto\" value=\"0\" min=\"0\" step=\"0.01\" data-field=\"monto\" oninput=\"calcCcTotal()\" style=\"background:#f0f4ff\"></td>' +
-    '<td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this);calcCcTotal()\"><i class=\"fas fa-trash\"></i></button></td>';
+    '<td class="row-num"></td>' +
+    '<td><input type="text" class="form-control form-control-sm date-input cc-fecha" value="'+today+'" data-field="fecha"></td>' +
+    '<td><select class="form-select form-select-sm" data-field="cuenta_id"><option value="">— Sin cuenta —</option>'+opts+'</select></td>' +
+    '<td><input type="text" class="form-control form-control-sm" data-field="descripcion" placeholder="Descripción" required></td>' +
+    '<td><input type="number" class="form-control form-control-sm text-end cc-cant" value="1" min="0.001" step="0.001" data-field="cantidad" oninput="recalcRow(this)"></td>' +
+    '<td><input type="number" class="form-control form-control-sm text-end cc-punit" value="0" min="0" step="0.01" data-field="precio_unitario" oninput="recalcRow(this)"></td>' +
+    '<td><input type="number" class="form-control form-control-sm text-end cc-monto" value="0" min="0" step="0.01" data-field="monto" oninput="calcCcTotal()" style="background:#f0f4ff"></td>' +
+    '<td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this);calcCcTotal()"><i class="fas fa-trash"></i></button></td>';
   document.getElementById('tbody-cc-items').appendChild(tr);
   updateDetailRowNumbers('tbody-cc-items');
   flatpickr(tr.querySelector('.date-input'), { locale:'es', dateFormat:'Y-m-d', allowInput:true });
@@ -637,7 +638,10 @@ async function liquidarCC(id) {
   if (r.success) { Toast.show(r.message, 'success'); setTimeout(() => Nav.recargar(), 800); }
   else Toast.show(r.message, 'error');
 }
-";
+
+JS, [
+    '__CUENTAS_JSON__' => $cuentasJson,
+]);
 
 include __DIR__ . '/includes/footer.php';
 ?>

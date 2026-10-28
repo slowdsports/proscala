@@ -136,7 +136,8 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 initDataTable('#tbl-prov');
 function editProv(p){
   document.getElementById('p-id').value=p.id;
@@ -170,6 +171,7 @@ async function saveProv(){
   if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1000);}
   else Toast.show(r.message,'error');
 }
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

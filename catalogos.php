@@ -263,7 +263,8 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 <?php
 if ($tab === 'cuentas') {
-    $extraJs = "
+    $extraJs = <<<'JS'
+
 initDataTable('#tbl-cuentas', {order:[[0,'asc']]});
 
 document.querySelectorAll('.filter-btn').forEach(b=>{
@@ -299,14 +300,16 @@ async function saveCuenta(){
     Toast.show(r.message,'success'); setTimeout(()=>Nav.recargar(),800);
   } catch(e){ Toast.show(e.message,'error'); }
 }
-";
+
+JS;
 } else {
     $label = json_encode($def['label'], JSON_UNESCAPED_UNICODE);
-    $extraJs = "
+    $extraJs = strtr(<<<'JS'
+
 function abrirCatalogo(c){
   document.getElementById('cat-id').value = c ? c.id : 0;
   document.getElementById('cat-nombre').value = c ? c.nombre : '';
-  document.getElementById('cat-titulo').textContent = (c ? 'Editar ' : 'Nuevo ') + $label;
+  document.getElementById('cat-titulo').textContent = (c ? 'Editar ' : 'Nuevo ') + __LABEL__;
   new bootstrap.Modal(document.getElementById('modal-catalogo')).show();
   setTimeout(()=>document.getElementById('cat-nombre').focus(), 350);
 }
@@ -317,14 +320,18 @@ async function guardarCatalogo(){
   } catch(e){ Toast.show(e.message,'error'); }
 }
 async function eliminarCatalogo(c){
-  if (!await confirmar('¿Eliminar \"' + c.nombre + '\"?', { titulo: 'Eliminar', aceptar: 'Eliminar', peligro: true })) return;
+  if (!await confirmar('¿Eliminar "' + c.nombre + '"?', { titulo: 'Eliminar', aceptar: 'Eliminar', peligro: true })) return;
   const fd = new FormData();
   fd.append('csrf_token', document.querySelector('meta[name=csrf]').content);
-  fd.append('_action','eliminar_catalogo'); fd.append('catalogo','$tab'); fd.append('id', c.id);
+  fd.append('_action','eliminar_catalogo'); fd.append('catalogo','__TAB__'); fd.append('id', c.id);
   try { const r = await post('catalogos.php', fd); Toast.show(r.message,'success'); setTimeout(()=>Nav.recargar(),700); }
   catch(e){ Toast.show(e.message,'error'); }
 }
-";
+
+JS, [
+    '__LABEL__' => $label,
+    '__TAB__' => $tab,
+]);
 }
 include __DIR__ . '/includes/footer.php';
 ?>

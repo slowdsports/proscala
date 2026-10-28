@@ -48,16 +48,36 @@ CREATE TABLE IF NOT EXISTS log_accesos (
   KEY idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Enlaces para restablecer la contraseña por correo (solo se guarda el hash del enlace)
+-- Enlaces por correo para restablecer la contraseña o activar una cuenta nueva (solo se guarda
+-- el hash del enlace). motivo: 'recuperar' (¿olvidó su contraseña?) o 'activar' (usuario nuevo)
 CREATE TABLE IF NOT EXISTS recuperaciones (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   empresa_id INT          NOT NULL,
   email      VARCHAR(150) NOT NULL,
   token_hash CHAR(64)     NOT NULL,
+  motivo     ENUM('recuperar','activar') NOT NULL DEFAULT 'recuperar',
   expira     DATETIME     NOT NULL,
   usado_en   DATETIME     NULL,
   ip         VARCHAR(45)  NULL,
   created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_recuperaciones_token (token_hash),
   KEY idx_recuperaciones_email (email, empresa_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Inicios de sesión fallidos por IP: 5 en 15 minutos bloquean la IP 15 minutos (login.php)
+CREATE TABLE IF NOT EXISTS intentos_login (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  ip         VARCHAR(45)  NOT NULL,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_intentos_ip (ip, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Respaldos completos descargados por el super administrador al iniciar sesión (uno cada 7 días)
+CREATE TABLE IF NOT EXISTS respaldos_descargas (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  email      VARCHAR(150) NOT NULL,
+  ip         VARCHAR(45)  NULL,
+  tamano     BIGINT       NOT NULL DEFAULT 0,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_respaldos_fecha (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

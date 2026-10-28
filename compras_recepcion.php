@@ -226,21 +226,22 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 initDataTable('#tbl-nr');
 function addNrRow(){
   const idx=document.querySelectorAll('#tbody-items .detail-row').length;
   const tr=document.createElement('tr'); tr.className='detail-row';
-  tr.innerHTML=`<td class=\"row-num\">\${idx+1}</td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"descripcion\" required></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"unidad\" style=\"width:70px\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm text-end\" data-f=\"cantidad_pedida\" step=\"0.01\" min=\"0\" value=\"1\" style=\"width:80px\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm text-end row-monto\" data-f=\"cantidad_recibida\" step=\"0.01\" min=\"0\" value=\"1\" style=\"width:80px\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm text-end\" data-f=\"precio\" step=\"0.01\" min=\"0\" value=\"0\" style=\"width:100px\"></td>
-    <td><span class=\"font-mono\" data-f=\"total\">L. 0.00</span></td>
-    <td><select class=\"form-select form-select-sm\" data-f=\"estado_item\" style=\"width:110px\"><option value=\"bueno\">Bueno</option><option value=\"danado\">Dañado</option><option value=\"incompleto\">Incompleto</option></select></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-f=\"observacion\"></td>
-    <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this)\"><i class=\"fas fa-trash\"></i></button></td>`;
+  tr.innerHTML=`<td class="row-num">${idx+1}</td>
+    <td><input type="text" class="form-control form-control-sm" data-f="descripcion" required></td>
+    <td><input type="text" class="form-control form-control-sm" data-f="unidad" style="width:70px"></td>
+    <td><input type="number" class="form-control form-control-sm text-end" data-f="cantidad_pedida" step="0.01" min="0" value="1" style="width:80px"></td>
+    <td><input type="number" class="form-control form-control-sm text-end row-monto" data-f="cantidad_recibida" step="0.01" min="0" value="1" style="width:80px"></td>
+    <td><input type="number" class="form-control form-control-sm text-end" data-f="precio" step="0.01" min="0" value="0" style="width:100px"></td>
+    <td><span class="font-mono" data-f="total">L. 0.00</span></td>
+    <td><select class="form-select form-select-sm" data-f="estado_item" style="width:110px"><option value="bueno">Bueno</option><option value="danado">Dañado</option><option value="incompleto">Incompleto</option></select></td>
+    <td><input type="text" class="form-control form-control-sm" data-f="observacion"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this)"><i class="fas fa-trash"></i></button></td>`;
   document.getElementById('tbody-items').appendChild(tr);
   updateDetailRowNumbers('tbody-items');
 }
@@ -256,6 +257,7 @@ document.getElementById('form-nr')?.addEventListener('submit',function(e){
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error','error'));
 });
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

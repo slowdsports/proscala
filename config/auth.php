@@ -15,6 +15,41 @@ const MAX_INTENTOS_LOGIN = 5;
 // Largo mínimo de una contraseña nueva (Mi Perfil y restablecer por correo)
 const MIN_PASSWORD = 8;
 
+// ── Bloqueo por IP del inicio de sesión (tabla intentos_login de la base central) ──
+// MAX_FALLOS_IP inicios fallidos en MINUTOS_BLOQUEO_IP minutos desde una misma IP la bloquean
+// durante MINUTOS_BLOQUEO_IP minutos contados desde el último fallo. Un ingreso correcto limpia
+// sus fallos. Es aparte del bloqueo del usuario (MAX_INTENTOS_LOGIN), que libera un Administrador.
+const MAX_FALLOS_IP      = 5;
+const MINUTOS_BLOQUEO_IP = 15;
+
+/** Minutos que le faltan a la IP para poder intentar de nuevo (0 = no está bloqueada). */
+function minutosBloqueoIp(PDO $pdoMaster, string $ip): int {
+    $s = $pdoMaster->prepare("SELECT TIMESTAMPDIFF(SECOND, created_at, NOW()) FROM intentos_login WHERE ip = ? ORDER BY id DESC LIMIT " . MAX_FALLOS_IP);
+    $s->execute([$ip]);
+    $hace = array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN));   // segundos desde cada fallo, el más reciente primero
+    if (count($hace) < MAX_FALLOS_IP || end($hace) > MINUTOS_BLOQUEO_IP * 60) return 0;
+    $resta = MINUTOS_BLOQUEO_IP * 60 - $hace[0];
+    return $resta > 0 ? (int)ceil($resta / 60) : 0;
+}
+
+function registrarFalloIp(PDO $pdoMaster, string $ip): void {
+    $pdoMaster->prepare("INSERT INTO intentos_login (ip) VALUES (?)")->execute([$ip]);
+    if (random_int(1, 20) === 1) $pdoMaster->exec("DELETE FROM intentos_login WHERE created_at < NOW() - INTERVAL 1 DAY");
+}
+
+function limpiarFallosIp(PDO $pdoMaster, string $ip): void {
+    $pdoMaster->prepare("DELETE FROM intentos_login WHERE ip = ?")->execute([$ip]);
+}
+
+// ── Respaldo semanal del super administrador (respaldo.php) ──────────
+// Al iniciar sesión, el super administrador descarga un respaldo completo del sistema si ya
+// pasaron DIAS_RESPALDO_SEMANAL días desde el último que se descargó (tabla respaldos_descargas).
+const DIAS_RESPALDO_SEMANAL = 7;
+
+function respaldoSemanalPendiente(PDO $pdoMaster): bool {
+    return !$pdoMaster->query("SELECT 1 FROM respaldos_descargas WHERE created_at > NOW() - INTERVAL " . DIAS_RESPALDO_SEMANAL . " DAY LIMIT 1")->fetchColumn();
+}
+
 /** Puestos de la empresa: clave => fila de la tabla roles, en el orden del organigrama. */
 function roles(bool $recargar = false): array {
     static $roles = null;
@@ -95,7 +130,8 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
-const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php'];
+// (respaldo.php valida que sea el super administrador)
+const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php', 'respaldo.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -118,7 +154,8 @@ function moduloLabel(?string $archivo): string {
         // index.php: inicio de sesión hasta la versión 1.5 (eventos anteriores de la bitácora)
         $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
-                 'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones'];
+                 'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
+                 'respaldo.php' => 'Respaldo del sistema'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
     return $mapa[$archivo] ?? (string)$archivo;
@@ -144,6 +181,8 @@ const ACCIONES_BITACORA = [
     'RECHAZAR'        => ['Rechazo',           'danger'],
     'ADJUNTAR'        => ['Documento adjuntado', 'success'],
     'QUITAR_ADJUNTO'  => ['Adjunto quitado',   'danger'],
+    'RESPALDO'        => ['Respaldo descargado', 'dark'],
+    'ACTIVACION'      => ['Enlace de activación', 'info'],
 ];
 
 // ── Solicitudes ────────────────────────────────────────────────────
@@ -389,6 +428,9 @@ function requireLogin() {
         if (isset(PROCESOS[$script])) marcarNotificacionesLeidas($GLOBALS['pdo'], PROCESOS[$script]['tabla'], (int)$_GET['id']);
     }
 
+    // Acción que genera orden de pago: se guarda el estado previo para revertir si la OP falla
+    // (config/correlativos.php). Antes del flujo: "autorizar" una OC termina en validarFlujoAprobacion
+    if ($esPost) prepararOrdenPago($GLOBALS['pdo'], $script);
     // Flujo Creado → Revisado → Autorizado (config/aprobaciones.php)
     if ($esPost && isset(PROCESOS[$script])) validarFlujoAprobacion($GLOBALS['pdo'], $script);
 
@@ -433,11 +475,56 @@ function emailEnUso(PDO $pdoMaster, string $email, int $empresaId, string $excep
     return (bool)$s->fetchColumn();
 }
 
+// ── Activación de cuentas nuevas por correo ─────────────────────────
+// Un usuario nuevo (desde Empleados o Usuarios) se crea sin contraseña conocida y con
+// pendiente_activacion = 1; recibe un enlace (tabla recuperaciones de la base central, motivo
+// 'activar', válido DIAS_ACTIVACION días) para crear su contraseña en recuperar.php. Los usuarios
+// creados antes de la versión 1.8 conservan su contraseña inicial (número de identidad).
+const DIAS_ACTIVACION = 7;
+
+/** Contraseña que nadie conoce, para un usuario que aún no activa su cuenta. */
+function claveSinActivar(): string {
+    return password_hash(bin2hex(random_bytes(24)), PASSWORD_BCRYPT);
+}
+
+/** Envía (o reenvía) el enlace de activación a un usuario. true o el motivo del fallo. */
+function enviarActivacion(PDO $pdo, PDO $pdoMaster, int $empresaId, int $usuarioId) {
+    require_once __DIR__ . '/correo.php';
+    $s = $pdo->prepare("SELECT id, nombre, email FROM usuarios WHERE id = ? AND activo = 1");
+    $s->execute([$usuarioId]);
+    if (!$u = $s->fetch()) return 'El usuario no existe o está inactivo.';
+    $s = $pdoMaster->prepare("SELECT nombre, rtn FROM empresas WHERE id = ?");
+    $s->execute([$empresaId]);
+    $emp = $s->fetch() ?: ['nombre' => '', 'rtn' => ''];
+
+    $token = bin2hex(random_bytes(32));
+    // Un solo enlace vigente por usuario: los anteriores (activación o recuperación) dejan de servir
+    $pdoMaster->prepare("UPDATE recuperaciones SET usado_en = NOW() WHERE email = ? AND empresa_id = ? AND usado_en IS NULL")
+        ->execute([$u['email'], $empresaId]);
+    $pdoMaster->prepare("INSERT INTO recuperaciones (empresa_id, email, token_hash, motivo, expira, ip)
+                         VALUES (?,?,?,'activar', NOW() + INTERVAL " . DIAS_ACTIVACION . " DAY, ?)")
+        ->execute([$empresaId, $u['email'], hash('sha256', $token), $_SERVER['REMOTE_ADDR'] ?? '']);
+    $h = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES, 'UTF-8');
+    $html = plantillaCorreo('Active su cuenta de Proscala',
+        '<p>Hola ' . $h($u['nombre']) . ',</p>'
+        . '<p>Se creó su usuario en el sistema de <strong>' . $h($emp['nombre']) . '</strong>. Para empezar, cree su contraseña con el botón de abajo.</p>'
+        . '<p>Después ingrese con estos datos:</p>'
+        . '<p style="margin:0 0 12px;padding:10px 14px;background:#f0f4f8;border-radius:8px">RTN de la empresa: <strong>' . $h($emp['rtn']) . '</strong><br>'
+        . 'Correo: <strong>' . $h($u['email']) . '</strong></p>'
+        . '<p>El enlace vence en ' . DIAS_ACTIVACION . ' días y sirve una sola vez. Si vence, pida uno nuevo con "¿Olvidó su contraseña?" en la pantalla de ingreso.</p>',
+        'Crear mi contraseña', urlAbsoluta('recuperar.php?token=' . $token));
+    $envio = enviarCorreo($u['email'], 'Proscala: active su cuenta', $html);
+    registrarEvento($pdo, 'ACTIVACION', ['tabla' => 'usuarios', 'registro_id' => $u['id'], 'resultado' => $envio === true ? 'ok' : 'error',
+        'detalle' => $envio === true ? "Enlace de activación enviado a {$u['email']}" : "No se pudo enviar el enlace de activación a {$u['email']}: $envio"]);
+    return $envio;
+}
+
 // ── Usuarios de empleados ──────────────────────────────────────────
 // Cada empleado con correo tiene un usuario vinculado (usuarios.empleado_id), con rol
-// Empleado y su número de identidad como contraseña inicial (debe cambiarla al entrar).
+// Empleado, que activa su cuenta con el enlace que recibe por correo (enviarActivacion).
 // Si el correo ya era de un usuario (p. ej. un administrador), solo se vincula.
-// Devuelve 'creado', 'vinculado', 'actualizado' o el motivo por el que no se pudo.
+// Devuelve 'creado', 'creado_sin_correo' (no se pudo enviar el enlace), 'vinculado',
+// 'actualizado' o el motivo por el que no se pudo.
 function sincronizarUsuarioEmpleado(PDO $pdo, PDO $pdoMaster, int $empresaId, int $empleadoId): string {
     $s = $pdo->prepare("SELECT id, nombre, apellidos, identidad, email, activo FROM empleados WHERE id=?");
     $s->execute([$empleadoId]);
@@ -470,20 +557,18 @@ function sincronizarUsuarioEmpleado(PDO $pdo, PDO $pdoMaster, int $empresaId, in
         return 'vinculado';
     }
     if (!$e['activo']) return 'Empleado inactivo';
-    $clave = preg_replace('/\D/', '', (string)$e['identidad']);
-    if ($clave === '') return 'Sin número de identidad (es la contraseña inicial)';
     if (emailEnUso($pdoMaster, $email, $empresaId)) return "El correo $email ya está registrado en la empresa";
 
     $pdoMaster->prepare("INSERT INTO accesos (email, empresa_id) VALUES (?,?)")->execute([$email, $empresaId]);
     try {
-        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, debe_cambiar_password, rol, empleado_id, activo)
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, pendiente_activacion, rol, empleado_id, activo)
                        VALUES (?,?,?,1,'empleado',?,1)")
-            ->execute([$nombre, $email, password_hash($clave, PASSWORD_BCRYPT), $empleadoId]);
+            ->execute([$nombre, $email, claveSinActivar(), $empleadoId]);
     } catch (PDOException $ex) {
         $pdoMaster->prepare("DELETE FROM accesos WHERE email=? AND empresa_id=?")->execute([$email, $empresaId]);
         return 'No se pudo crear: ' . $ex->getMessage();
     }
-    return 'creado';
+    return enviarActivacion($pdo, $pdoMaster, $empresaId, (int)$pdo->lastInsertId()) === true ? 'creado' : 'creado_sin_correo';
 }
 
 // RTN hondureño: 14 dígitos. Acepta guiones o espacios al escribirlo.
@@ -573,9 +658,6 @@ function registrarPeticion(): void {
             if (in_array($act, ['guardar', 'crear'], true)) registrarParticipacion($GLOBALS['pdo'], $script, $regId);
             anotarFlujoTrasPeticion($GLOBALS['pdo'], $script, $act, $regId);
         } catch (Throwable $e) {}
-        // Avisos (campana y correo) a quien le toca el siguiente paso o sigue el proceso
-        try { notificarFlujo($GLOBALS['pdo'], $script, $act, $regId); }
-        catch (Throwable $e) { error_log('Proscala: no se pudieron generar las notificaciones: ' . $e->getMessage()); }
     } elseif (!$error && isset(EDICION_PROCESOS[$script]) && in_array($act, ['guardar', 'crear', 'generar'], true)) {
         // Procesos sin flujo (planillas, préstamos…): quién los creó, para la regla de edición
         try { registrarParticipacion($GLOBALS['pdo'], $script, $postId ?: (int)($res[2] ?? 0)); } catch (Throwable $e) {}
@@ -594,14 +676,26 @@ function registrarPeticion(): void {
             if (!$s->fetchColumn()) eliminarAdjuntosDe($GLOBALS['pdo'], $tablaEl, $postId);
         } catch (Throwable $e) {}
     }
-    // Proceso autorizado: su Orden de Pago con el mismo correlativo (config/correlativos.php)
+    // Proceso autorizado: su Orden de Pago con el mismo correlativo (config/correlativos.php). Si no
+    // se puede generar, la autorización se revierte y la respuesta retenida se cambia por el error
+    $opFallo = false;
     if (!$error && isset(ORDEN_PAGO_AUTOMATICA[$script])) {
         try { ordenPagoTrasPeticion($GLOBALS['pdo'], $script, $act, $postId ?: (int)($res[2] ?? 0)); }
         catch (Throwable $e) {
+            $opFallo = true;
             registrarEvento($GLOBALS['pdo'], 'INSERT', ['modulo' => 'compras_pago.php', 'resultado' => 'error',
                 'detalle' => 'No se pudo generar la orden de pago automática: ' . $e->getMessage()]);
+            revertirSinOrdenPago($GLOBALS['pdo'], $script, $postId ?: (int)($res[2] ?? 0), $e);
+            $error = true;
         }
     }
+    // Avisos (campana y correo) a quien le toca el siguiente paso o sigue el proceso: solo si la
+    // acción quedó completa (con su orden de pago, si correspondía)
+    if (!$error && isset(PROCESOS[$script])) {
+        try { notificarFlujo($GLOBALS['pdo'], $script, $act, $postId ?: (int)($res[2] ?? 0)); }
+        catch (Throwable $e) { error_log('Proscala: no se pudieron generar las notificaciones: ' . $e->getMessage()); }
+    }
+    if ($opFallo) return;   // revertirSinOrdenPago ya dejó el evento en la bitácora
 
     if (!empty($GLOBALS['_bitacora_explicita'])) return;   // el módulo ya registró el evento
 

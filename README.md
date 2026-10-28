@@ -47,12 +47,17 @@ Proscala reúne en un solo sistema web la administración de su organización: c
 
 > **Consejo:** el navegador recuerda los RTN con los que ha ingresado. La próxima vez aparecerán en una lista para elegirlos sin escribirlos. Si trabaja con varias empresas, cada una tiene su RTN y usted puede tener el mismo correo en todas.
 
-### 2.2 Primer ingreso
+### 2.2 Primer ingreso: activar su cuenta
 
-Si su usuario se creó desde el módulo de Empleados:
+Cuando el administrador crea su usuario (o lo registra como empleado con su correo), usted recibe un correo **"Proscala: active su cuenta"**:
 
-- Su **contraseña inicial es su número de identidad, sin guiones**.
-- Al entrar, el sistema le pedirá **cambiarla** antes de continuar. La nueva contraseña debe tener al menos 8 caracteres.
+1. Pulse **Crear mi contraseña** en el correo.
+2. Escriba su contraseña dos veces (al menos 8 caracteres, con letras y números) y pulse **Crear contraseña y activar mi cuenta**.
+3. Ingrese con el **RTN de la empresa** (viene en el mismo correo), su correo y la contraseña que acaba de crear.
+
+El enlace vence en 7 días y sirve una sola vez. Si no lo encuentra (revise también el correo no deseado) o ya venció, use **¿Olvidó su contraseña?** en la pantalla de ingreso, o pida al administrador que le reenvíe la invitación.
+
+> Los usuarios creados antes de este cambio conservan su forma de ingreso: la contraseña inicial es su número de identidad, sin guiones, y el sistema pide cambiarla al entrar.
 
 ### 2.3 ¿Olvidó su contraseña?
 
@@ -63,6 +68,8 @@ Si su usuario se creó desde el módulo de Empleados:
 ### 2.4 Usuario bloqueado
 
 Por seguridad, después de **5 contraseñas incorrectas seguidas** el usuario se bloquea. Pida al administrador de su empresa que lo desbloquee (módulo **Usuarios**).
+
+Además, si desde una misma conexión se escriben datos incorrectos 5 veces en 15 minutos, esa conexión debe esperar **15 minutos** antes de volver a intentarlo. Este bloqueo se levanta solo.
 
 ### 2.5 Cierre de sesión automático
 
@@ -192,7 +199,7 @@ Resumen de la organización: empleados activos, gastos y anticipos pendientes, �
 
 ### Personal
 
-**Empleados.** El expediente de cada persona: datos personales, puesto, departamento, salario, banco y cuenta, y proyectos a los que se asigna. Si registra el **correo** del empleado, el sistema le crea su usuario automáticamente (contraseña inicial: su número de identidad). Al dar de baja a un empleado, su usuario se desactiva.
+**Empleados.** El expediente de cada persona: datos personales, puesto, departamento, salario, banco y cuenta, y proyectos a los que se asigna. Si registra el **correo** del empleado, el sistema le crea su usuario automáticamente y le envía por correo el enlace para activar su cuenta. Al dar de baja a un empleado, su usuario se desactiva.
 
 **Planillas Quincenales.** Cree el período (mes y quincena) y el sistema calcula salario, IHSS, RAP, ISR y demás deducciones de cada empleado. Puede registrar deducciones de Credimpulsa y distribuir el costo de cada empleado entre proyectos. Estados: *Borrador → Procesada → Aprobada → Pagada*. Al aprobarla se genera su orden de pago. Imprima la planilla general, la distribución por proyecto, el reporte Credimpulsa y los **recibos** individuales que firma cada empleado.
 
@@ -290,6 +297,8 @@ El **Administrador** tiene acceso total. Los módulos Usuarios y Roles y Permiso
 
 ### 10.4 Usuarios
 Cree usuarios, asígneles su puesto, actívelos o desactívelos y **desbloquee** a quien haya superado los intentos de contraseña. Los empleados con correo reciben su usuario automáticamente desde el módulo Empleados.
+
+Cada usuario nuevo recibe por correo un enlace para crear su propia contraseña; mientras no lo use, aparece como **Sin activar**. Con el botón del sobre se le reenvía la invitación (el enlace anterior deja de servir).
 
 ### 10.5 Bitácora de Actividad
 Registro de todo lo que ocurre en el sistema: ingresos (y los intentos fallidos), creaciones, cambios, eliminaciones, revisiones, autorizaciones, rechazos, impresiones y descargas, con usuario, fecha, hora y detalle. Puede buscar por texto (usuario, correo o detalle), filtrar por módulo, acción y fechas, y descargar el resultado en CSV.

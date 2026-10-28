@@ -185,13 +185,72 @@ function generarOrdenPago(PDO $pdo, string $tabla, int $id): ?string {
     return $num;
 }
 
+/** ¿Esta petición dispara la orden de pago automática del módulo? */
+function accionGeneraOrdenPago(string $modulo): bool {
+    $def = ORDEN_PAGO_AUTOMATICA[$modulo] ?? null;
+    $act = $_POST['_action'] ?? '';
+    if (!$def || $act !== $def['accion']) return false;
+    if ($def['estado'] !== null && ($_POST['estado'] ?? '') !== $def['estado']) return false;
+    return !($act === 'guardar' && (int)($_POST['id'] ?? 0));   // caja chica: solo al crearla
+}
+
+/**
+ * Se llama desde requireLogin() antes de que el módulo aplique la acción: si la acción genera la
+ * orden de pago, guarda el estado del proceso y retiene la respuesta (ob_start) hasta saber si la
+ * OP se generó. Así la autorización y su OP quedan juntas o ninguna (revertirSinOrdenPago).
+ */
+function prepararOrdenPago(PDO $pdo, string $modulo): void {
+    if (!accionGeneraOrdenPago($modulo)) return;
+    $id = (int)($_POST['id'] ?? 0);
+    $estado = null;
+    if ($id) {
+        $s = $pdo->prepare("SELECT estado FROM `" . ORDEN_PAGO_AUTOMATICA[$modulo]['tabla'] . "` WHERE id = ?");
+        $s->execute([$id]);
+        $estado = $s->fetchColumn() ?: null;
+    }
+    $GLOBALS['_op_previo'] = ['id' => $id, 'estado' => $estado];
+    ob_start();
+}
+
+/**
+ * La orden de pago no se pudo generar (registrarPeticion). Una autorización se revierte (estado
+ * anterior, sin el paso "autorizado") y la respuesta pasa a ser el error. Una creación (préstamo,
+ * caja chica) se conserva, con el aviso de que falta su orden de pago.
+ */
+function revertirSinOrdenPago(PDO $pdo, string $modulo, int $id, Throwable $e): void {
+    $def = ORDEN_PAGO_AUTOMATICA[$modulo];
+    $previo = $GLOBALS['_op_previo'] ?? ['id' => 0, 'estado' => null];
+    $esAutorizacion = $previo['id'] > 0;
+    if ($esAutorizacion) {
+        if ($def['estado'] !== null && $previo['estado'] !== null) {
+            $pdo->prepare("UPDATE `{$def['tabla']}` SET estado = ? WHERE id = ?")->execute([$previo['estado'], $id]);
+        }
+        $pdo->prepare("DELETE FROM aprobaciones WHERE tabla = ? AND registro_id = ? AND paso = 'autorizado'")->execute([$def['tabla'], $id]);
+    }
+    $motivo = $e instanceof RuntimeException ? $e->getMessage() : 'error en la base de datos';
+    $mensaje = $esAutorizacion
+        ? "No se pudo generar la orden de pago ($motivo), así que el proceso NO se autorizó. Intente de nuevo en unos momentos; si se repite, avise al administrador."
+        : "Se guardó, pero no se pudo generar su orden de pago ($motivo). Avise al administrador para generarla.";
+    registrarEvento($pdo, $esAutorizacion ? 'AUTORIZAR' : 'INSERT', ['tabla' => $def['tabla'], 'registro_id' => $id ?: null, 'resultado' => 'error',
+        'detalle' => ($esAutorizacion ? 'Autorización revertida: ' : 'Guardado sin orden de pago: ') . 'no se pudo generar la orden de pago automática: ' . $e->getMessage()]);
+
+    // La respuesta del módulo sigue retenida (prepararOrdenPago): se reemplaza
+    if (ob_get_level() && !headers_sent()) {
+        $original = json_decode((string)ob_get_clean(), true);
+        header('Content-Type: application/json');
+        if ($esAutorizacion) {
+            http_response_code(409);
+            echo json_encode(['success' => false, 'message' => $mensaje], JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode(['success' => true, 'message' => trim(($original['message'] ?? '') . ' ' . $mensaje)] + (array)$original, JSON_UNESCAPED_UNICODE);
+        }
+    }
+}
+
 /** Al terminar la petición (registrarPeticion): genera la OP si la acción autorizó el proceso. */
 function ordenPagoTrasPeticion(PDO $pdo, string $modulo, string $act, int $id): void {
-    $def = ORDEN_PAGO_AUTOMATICA[$modulo] ?? null;
-    if (!$def || !$id || $act !== $def['accion']) return;
-    if ($def['estado'] !== null && ($_POST['estado'] ?? '') !== $def['estado']) return;
-    if ($act === 'guardar' && (int)($_POST['id'] ?? 0)) return;   // caja chica: solo al crearla
-    generarOrdenPago($pdo, $def['tabla'], $id);
+    if (!$id || !accionGeneraOrdenPago($modulo)) return;
+    generarOrdenPago($pdo, ORDEN_PAGO_AUTOMATICA[$modulo]['tabla'], $id);
 }
 
 /**

@@ -194,11 +194,12 @@ $pct = $totPres > 0 ? min(100, round($totEjec / $totPres * 100, 1)) : 0;
 </div>
 
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 async function savePresupuesto(){
   const items=[];
   document.querySelectorAll('[data-cid]').forEach(inp=>{
-    const notes=document.querySelector('[data-notes=\"'+inp.dataset.cid+'\"]')?.value||'';
+    const notes=document.querySelector('[data-notes="'+inp.dataset.cid+'"]')?.value||'';
     items.push({anio:inp.dataset.anio,proyecto_id:inp.dataset.proy||null,cuenta_id:inp.dataset.cid,monto:inp.value,notas:notes});
   });
   document.getElementById('pres-items').value=JSON.stringify(items);
@@ -206,6 +207,7 @@ async function savePresupuesto(){
   if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1200);}
   else Toast.show(r.message,'error');
 }
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

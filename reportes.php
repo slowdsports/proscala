@@ -7,44 +7,45 @@ $pagina = 'Reportes Financieros';
 
 $anio = (int)($_GET['anio'] ?? date('Y'));
 $mes  = (int)($_GET['mes']  ?? 0);
+// Rango del año (y no YEAR(fecha)) para que las consultas usen el índice por fecha
+$rangoAnio = ["$anio-01-01", ($anio + 1) . '-01-01'];
 
 // Gastos por mes
-$gastosQ = $pdo->prepare("SELECT MONTH(fecha) as m, SUM(monto_total) as total FROM solicitud_gastos WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada') GROUP BY m ORDER BY m");
-$gastosQ->execute([$anio]); $gastosMes = $gastosQ->fetchAll();
+$gastosQ = $pdo->prepare("SELECT MONTH(fecha) as m, SUM(monto_total) as total FROM solicitud_gastos WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada') GROUP BY m ORDER BY m");
+$gastosQ->execute($rangoAnio); $gastosMes = $gastosQ->fetchAll();
 
 // Pagos por mes
-$pagosQ = $pdo->prepare("SELECT MONTH(fecha) as m, SUM(monto) as total FROM ordenes_pago WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada') GROUP BY m ORDER BY m");
-$pagosQ->execute([$anio]); $pagosMes = $pagosQ->fetchAll();
+$pagosQ = $pdo->prepare("SELECT MONTH(fecha) as m, SUM(monto) as total FROM ordenes_pago WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada') GROUP BY m ORDER BY m");
+$pagosQ->execute($rangoAnio); $pagosMes = $pagosQ->fetchAll();
 
 // Planillas por mes
 $plQ = $pdo->prepare("SELECT mes, SUM(total_neto) as neto, SUM(total_bruto) as bruto FROM planilla_periodos WHERE anio=? AND estado IN ('aprobada','pagada') GROUP BY mes ORDER BY mes");
 $plQ->execute([$anio]); $planillasMes = $plQ->fetchAll();
 
 // Resumen general del año
-$totGastos   = $pdo->prepare("SELECT SUM(monto_total) FROM solicitud_gastos WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada')")->execute([$anio]) ? 0 : 0;
-$stm=$pdo->prepare("SELECT SUM(monto_total) FROM solicitud_gastos WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada')");
-$stm->execute([$anio]); $totGastos = (float)$stm->fetchColumn();
+$stm=$pdo->prepare("SELECT SUM(monto_total) FROM solicitud_gastos WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada')");
+$stm->execute($rangoAnio); $totGastos = (float)$stm->fetchColumn();
 
-$stm=$pdo->prepare("SELECT SUM(monto) FROM ordenes_pago WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada')");
-$stm->execute([$anio]); $totPagos = (float)$stm->fetchColumn();
+$stm=$pdo->prepare("SELECT SUM(monto) FROM ordenes_pago WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada')");
+$stm->execute($rangoAnio); $totPagos = (float)$stm->fetchColumn();
 
 $stm=$pdo->prepare("SELECT SUM(total_neto) FROM planilla_periodos WHERE anio=? AND estado IN ('aprobada','pagada')");
 $stm->execute([$anio]); $totPlanillas = (float)$stm->fetchColumn();
 
-$stm=$pdo->prepare("SELECT SUM(monto) FROM ordenes_pago WHERE YEAR(fecha)=? AND estado IN ('aprobada','pagada') AND beneficiario_tipo='proveedor'");
-$stm->execute([$anio]); $totProveedores = (float)$stm->fetchColumn();
+$stm=$pdo->prepare("SELECT SUM(monto) FROM ordenes_pago WHERE fecha >= ? AND fecha < ? AND estado IN ('aprobada','pagada') AND beneficiario_tipo='proveedor'");
+$stm->execute($rangoAnio); $totProveedores = (float)$stm->fetchColumn();
 
 // Top proveedores
-$topProvQ=$pdo->prepare("SELECT p.nombre, SUM(op.monto) as total FROM ordenes_pago op JOIN proveedores p ON op.proveedor_id=p.id WHERE YEAR(op.fecha)=? AND op.estado IN ('aprobada','pagada') GROUP BY p.id ORDER BY total DESC LIMIT 8");
-$topProvQ->execute([$anio]); $topProv=$topProvQ->fetchAll();
+$topProvQ=$pdo->prepare("SELECT p.nombre, SUM(op.monto) as total FROM ordenes_pago op JOIN proveedores p ON op.proveedor_id=p.id WHERE op.fecha >= ? AND op.fecha < ? AND op.estado IN ('aprobada','pagada') GROUP BY p.id ORDER BY total DESC LIMIT 8");
+$topProvQ->execute($rangoAnio); $topProv=$topProvQ->fetchAll();
 
 // Gastos por cuenta
-$gastCtaQ=$pdo->prepare("SELECT cc.codigo,cc.nombre,SUM(sgd.monto) as total FROM solicitud_gastos_detalle sgd JOIN cuentas_contables cc ON sgd.cuenta_id=cc.id JOIN solicitud_gastos sg ON sgd.solicitud_id=sg.id WHERE YEAR(sg.fecha)=? AND sg.estado IN ('aprobada','pagada') GROUP BY cc.id ORDER BY total DESC LIMIT 10");
-$gastCtaQ->execute([$anio]); $gastCta=$gastCtaQ->fetchAll();
+$gastCtaQ=$pdo->prepare("SELECT cc.codigo,cc.nombre,SUM(sgd.monto) as total FROM solicitud_gastos_detalle sgd JOIN cuentas_contables cc ON sgd.cuenta_id=cc.id JOIN solicitud_gastos sg ON sgd.solicitud_id=sg.id WHERE sg.fecha >= ? AND sg.fecha < ? AND sg.estado IN ('aprobada','pagada') GROUP BY cc.id ORDER BY total DESC LIMIT 10");
+$gastCtaQ->execute($rangoAnio); $gastCta=$gastCtaQ->fetchAll();
 
 // Gastos por proyecto
-$gastProy=$pdo->prepare("SELECT p.nombre,SUM(sg.monto_total) as total FROM solicitud_gastos sg JOIN proyectos p ON sg.proyecto_id=p.id WHERE YEAR(sg.fecha)=? AND sg.estado IN ('aprobada','pagada') GROUP BY p.id ORDER BY total DESC");
-$gastProy->execute([$anio]); $gastProy=$gastProy->fetchAll();
+$gastProy=$pdo->prepare("SELECT p.nombre,SUM(sg.monto_total) as total FROM solicitud_gastos sg JOIN proyectos p ON sg.proyecto_id=p.id WHERE sg.fecha >= ? AND sg.fecha < ? AND sg.estado IN ('aprobada','pagada') GROUP BY p.id ORDER BY total DESC");
+$gastProy->execute($rangoAnio); $gastProy=$gastProy->fetchAll();
 
 $meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 $gMesArr = array_fill(1, 12, 0);
@@ -167,19 +168,26 @@ $labelsJson = json_encode(array_values($meses));
 $gJson  = json_encode(array_values($gMesArr));
 $pJson  = json_encode(array_values($pMesArr));
 $plJson = json_encode(array_values($plMesArr));
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 new Chart(document.getElementById('chartMensual').getContext('2d'), {
   type:'bar',
   data:{
-    labels:{$labelsJson},
+    labels:__LABELS_JSON__,
     datasets:[
-      {label:'Gastos Reembolsados',data:{$gJson},backgroundColor:'rgba(229,57,53,.65)',borderColor:'#E53935',borderWidth:1,borderRadius:3},
-      {label:'Órdenes de Pago',data:{$pJson},backgroundColor:'rgba(27,107,168,.65)',borderColor:'#1B6BA8',borderWidth:1,borderRadius:3},
-      {label:'Planillas Neto',data:{$plJson},backgroundColor:'rgba(67,160,71,.65)',borderColor:'#43A047',borderWidth:1,borderRadius:3},
+      {label:'Gastos Reembolsados',data:__G_JSON__,backgroundColor:'rgba(229,57,53,.65)',borderColor:'#E53935',borderWidth:1,borderRadius:3},
+      {label:'Órdenes de Pago',data:__P_JSON__,backgroundColor:'rgba(27,107,168,.65)',borderColor:'#1B6BA8',borderWidth:1,borderRadius:3},
+      {label:'Planillas Neto',data:__PL_JSON__,backgroundColor:'rgba(67,160,71,.65)',borderColor:'#43A047',borderWidth:1,borderRadius:3},
     ]
   },
   options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'L. '+v.toLocaleString()}}}}
 });
-";
+
+JS, [
+    '__LABELS_JSON__' => $labelsJson,
+    '__G_JSON__' => $gJson,
+    '__P_JSON__' => $pJson,
+    '__PL_JSON__' => $plJson,
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

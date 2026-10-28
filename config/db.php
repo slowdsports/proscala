@@ -38,7 +38,10 @@ define('DB_USER', credenciales()['db']['usuario']);
 define('DB_PASS', credenciales()['db']['clave']);
 define('DB_CHARSET', 'utf8mb4');
 
-// Conexión a una base de datos ('' = sin base seleccionada)
+// Conexión a una base de datos ('' = sin base seleccionada). La sesión de MySQL usa la misma
+// zona horaria que PHP (config/base.php): NOW(), CURDATE() y los created_at quedan en hora de
+// Honduras aunque el servidor de base de datos esté en otra zona (los TIMESTAMP se guardan en
+// UTC y MySQL los convierte a la zona de la sesión).
 function conectarBD(string $db): PDO {
     return new PDO(
         "mysql:host=".DB_HOST.($db !== '' ? ";dbname=$db" : '').";charset=".DB_CHARSET,
@@ -47,6 +50,7 @@ function conectarBD(string $db): PDO {
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '" . date('P') . "'",
         ]
     );
 }

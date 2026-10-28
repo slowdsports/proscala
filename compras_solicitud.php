@@ -281,19 +281,20 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 initDataTable('#tbl-sc');
 recalcTotals();
 function addScRow(){
   const idx=document.querySelectorAll('#tbody-items .detail-row').length;
   const tr=document.createElement('tr'); tr.className='detail-row';
-  tr.innerHTML=`<td class=\"row-num\">\${idx+1}</td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"descripcion\" required></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"unidad\" placeholder=\"und\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-qty text-end\" step=\"0.01\" min=\"1\" data-field=\"cantidad\" value=\"1\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-price text-end\" step=\"0.01\" min=\"0\" data-field=\"precio_estimado\" value=\"0\"></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-total text-end font-mono\" readonly value=\"0\"></td>
-    <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this)\"><i class=\"fas fa-trash\"></i></button></td>`;
+  tr.innerHTML=`<td class="row-num">${idx+1}</td>
+    <td><input type="text" class="form-control form-control-sm" data-field="descripcion" required></td>
+    <td><input type="text" class="form-control form-control-sm" data-field="unidad" placeholder="und"></td>
+    <td><input type="number" class="form-control form-control-sm row-qty text-end" step="0.01" min="1" data-field="cantidad" value="1"></td>
+    <td><input type="number" class="form-control form-control-sm row-price text-end" step="0.01" min="0" data-field="precio_estimado" value="0"></td>
+    <td><input type="number" class="form-control form-control-sm row-total text-end font-mono" readonly value="0"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this)"><i class="fas fa-trash"></i></button></td>`;
   document.getElementById('tbody-items').appendChild(tr);
   updateDetailRowNumbers('tbody-items');
 }
@@ -311,7 +312,8 @@ document.getElementById('form-sc')?.addEventListener('submit',function(e){
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error','error'));
 });
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>
 

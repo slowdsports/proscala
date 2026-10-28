@@ -318,7 +318,8 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = "
+$extraJs = <<<'JS'
+
 async function enviar(formId){
   // post() lanza una excepción cuando el servidor responde con error (jsonErr → HTTP 400)
   try {
@@ -350,6 +351,7 @@ function abrirAdmin(empresaId, adminId, titulo, conDatos){
 }
 function nuevoAdmin(e){ abrirAdmin(e.empresa_id, 0, 'Nuevo administrador: '+e.nombre, true); }
 function resetAdmin(a){ abrirAdmin(a.empresa_id, a.id, 'Contraseña de '+a.nombre, false); }
-";
+
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

@@ -3,6 +3,8 @@
 //   1. El usuario indica el RTN de su empresa y su correo → se envía un enlace de un solo uso
 //      (válido RECUPERACION_MINUTOS). La respuesta es la misma exista o no el usuario.
 //   2. El enlace abre esta página con ?token= → define la nueva contraseña.
+// También activa las cuentas nuevas: el enlace de activación (enviarActivacion en config/auth.php,
+// motivo 'activar', válido DIAS_ACTIVACION días) abre el paso 2 para crear la primera contraseña.
 // Los enlaces viven en la base central (recuperaciones) y solo se guarda su hash.
 // Restablecer NO desbloquea a un usuario bloqueado por intentos fallidos (lo hace un
 // Administrador), salvo al super administrador, que no tendría quién lo desbloquee.
@@ -88,8 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'soli
 
 // ── Paso 2: nueva contraseña con el enlace ──────────────────────────
 $enlace = $token !== '' ? enlaceVigente($pdoMaster, $token) : null;
+$activar = ($enlace['motivo'] ?? '') === 'activar';
 if ($token !== '' && !$enlace && !$exito) {
-    $error = 'El enlace no es válido o ya venció (dura ' . RECUPERACION_MINUTOS . ' minutos y sirve una sola vez). Solicite uno nuevo.';
+    $error = 'El enlace no es válido, ya se usó o venció. Pida uno nuevo aquí abajo (también sirve para activar una cuenta nueva).';
     $token = '';
 }
 if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'restablecer') {
@@ -114,19 +117,21 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
             $s = $pdoMaster->prepare("SELECT superadmin FROM accesos WHERE email = ? AND empresa_id = ?");
             $s->execute([$enlace['email'], $enlace['empresa_id']]);
             $esSuper = (bool)$s->fetchColumn();
-            $pdoEmp->prepare("UPDATE usuarios SET password = ?, debe_cambiar_password = 0, intentos_fallidos = 0"
+            $pdoEmp->prepare("UPDATE usuarios SET password = ?, debe_cambiar_password = 0, pendiente_activacion = 0, intentos_fallidos = 0"
                 . ($esSuper ? ', bloqueado_en = NULL' : '') . " WHERE id = ?")
                 ->execute([password_hash($nueva, PASSWORD_BCRYPT), $u['id']]);
             $pdoMaster->prepare("UPDATE recuperaciones SET usado_en = NOW() WHERE email = ? AND empresa_id = ? AND usado_en IS NULL")
                 ->execute([$enlace['email'], $enlace['empresa_id']]);
             $sigueBloqueado = $u['bloqueado_en'] && !$esSuper;
-            registrarEvento($pdoEmp, 'RECUPERAR', ['usuario_id' => $u['id'], 'email' => $enlace['email'], 'modulo' => 'recuperar.php',
+            registrarEvento($pdoEmp, $activar ? 'ACTIVACION' : 'RECUPERAR', ['usuario_id' => $u['id'], 'email' => $enlace['email'], 'modulo' => 'recuperar.php',
                 'tabla' => 'usuarios', 'registro_id' => $u['id'],
-                'detalle' => 'Contraseña restablecida con el enlace enviado por correo' . ($sigueBloqueado ? ' (el usuario sigue bloqueado)' : '') . '. IP ' . $ip]);
+                'detalle' => ($activar ? 'Cuenta activada: creó su contraseña con el enlace de activación' : 'Contraseña restablecida con el enlace enviado por correo')
+                    . ($sigueBloqueado ? ' (el usuario sigue bloqueado)' : '') . '. IP ' . $ip]);
             session_regenerate_id(true);
             $_SESSION['aviso_login'] = $sigueBloqueado
                 ? 'Su contraseña se cambió, pero su usuario sigue bloqueado por intentos fallidos: pida a un administrador de su empresa que lo desbloquee.'
-                : 'Su contraseña se cambió. Ingrese con la nueva contraseña.';
+                : ($activar ? 'Su cuenta está activa. Ingrese con el RTN de su empresa, su correo y la contraseña que acaba de crear.'
+                            : 'Su contraseña se cambió. Ingrese con la nueva contraseña.');
             header('Location: ' . BASE_URL . 'login.php');
             exit;
         }
@@ -139,7 +144,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
-  <title>Proscala - Restablecer contraseña</title>
+  <title>Proscala - <?= $activar ? 'Activar su cuenta' : 'Restablecer contraseña' ?></title>
   <link rel="stylesheet" href="<?= recurso('assets/vendor/fontawesome/css/all.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/vendor/bootstrap/bootstrap.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">
@@ -148,7 +153,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
 <div class="login-wrapper">
   <div class="login-card">
     <img src="<?= BASE_URL ?>assets/images/proscala.png" alt="Proscala" class="logo mb-2" style="height:70px;">
-    <p class="org-name">Restablecer contraseña</p>
+    <p class="org-name"><?= $activar ? 'Active su cuenta' : 'Restablecer contraseña' ?></p>
 
     <?php if ($error): ?>
       <div class="alert alert-danger py-2 text-start" style="font-size:.85rem;"><i class="fas fa-circle-exclamation"></i> <?= htmlspecialchars($error) ?></div>
@@ -160,7 +165,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
 
     <?php elseif ($enlace): ?>
       <p class="text-muted" style="font-size:.82rem;">
-        Cree una nueva contraseña para <strong><?= htmlspecialchars($enlace['email']) ?></strong> en <strong><?= htmlspecialchars($enlace['empresa']) ?></strong>.
+        <?= $activar ? 'Cree su contraseña' : 'Cree una nueva contraseña' ?> para <strong><?= htmlspecialchars($enlace['email']) ?></strong> en <strong><?= htmlspecialchars($enlace['empresa']) ?></strong>.
       </p>
       <form method="POST" autocomplete="off">
         <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
@@ -175,7 +180,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
           <label class="form-label"><i class="fas fa-lock text-blue"></i> Repita la contraseña</label>
           <input type="password" name="password_conf" class="form-control" required minlength="<?= MIN_PASSWORD ?>" autocomplete="new-password">
         </div>
-        <button type="submit" class="btn-login"><i class="fas fa-check"></i> Guardar nueva contraseña</button>
+        <button type="submit" class="btn-login"><i class="fas fa-check"></i> <?= $activar ? 'Crear contraseña y activar mi cuenta' : 'Guardar nueva contraseña' ?></button>
       </form>
 
     <?php else: ?>

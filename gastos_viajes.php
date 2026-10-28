@@ -346,7 +346,8 @@ include __DIR__ . '/includes/header.php';
 
 <?php
 $cuentasJson = json_encode(array_map(fn($c) => ['id' => $c['id'], 'codigo' => $c['codigo'], 'nombre' => $c['nombre']], $cuentas));
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-gv');
 calcGvTotal();
 toggleTipoAnticipo();
@@ -375,14 +376,14 @@ function calcGvTotal() {
 }
 
 function addGvRow() {
-  const opts = " . $cuentasJson . ".map(c=>`<option value=\"\${c.id}\">\${c.codigo} - \${c.nombre}</option>`).join('');
+  const opts = __CUENTAS_JSON__.map(c=>`<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
   const tr = document.createElement('tr');
   tr.className = 'detail-row';
-  tr.innerHTML = `<td class=\"row-num\"></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" data-field=\"descripcion\" required></td>
-    <td><select class=\"form-select form-select-sm\" data-field=\"cuenta_id\"><option value=\"\">-- Cuenta --</option>\${opts}</select></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm gv-monto text-end\" step=\"0.01\" min=\"0\" value=\"0\" data-field=\"monto\" oninput=\"calcGvTotal()\"></td>
-    <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this);calcGvTotal()\"><i class=\"fas fa-trash\"></i></button></td>`;
+  tr.innerHTML = `<td class="row-num"></td>
+    <td><input type="text" class="form-control form-control-sm" data-field="descripcion" required></td>
+    <td><select class="form-select form-select-sm" data-field="cuenta_id"><option value="">-- Cuenta --</option>${opts}</select></td>
+    <td><input type="number" class="form-control form-control-sm gv-monto text-end" step="0.01" min="0" value="0" data-field="monto" oninput="calcGvTotal()"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this);calcGvTotal()"><i class="fas fa-trash"></i></button></td>`;
   document.getElementById('tbody-gv-items').appendChild(tr);
   updateDetailRowNumbers('tbody-gv-items');
 }
@@ -403,6 +404,9 @@ document.getElementById('form-gv')?.addEventListener('submit', function(e) {
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error','error'));
 });
-";
+
+JS, [
+    '__CUENTAS_JSON__' => $cuentasJson,
+]);
 include __DIR__ . '/includes/footer.php';
 ?>

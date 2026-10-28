@@ -489,10 +489,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });";
 }
 
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-op');
-const provBancos=" . $provBancosJson . ";
-const empBancos=" . $empBancosJson . ";
+const provBancos=__PROV_BANCOS_JSON__;
+const empBancos=__EMP_BANCOS_JSON__;
 function toggleCheque(){
   const v=document.getElementById('sel-forma')?.value;
   document.getElementById('cheque-wrap').style.display=v==='cheque'?'':'none';
@@ -522,7 +523,7 @@ function setSgData(sel) {
   updateBenType();
   if (proceso) {
     document.getElementById('sg-proceso-badge').innerHTML =
-      '<span class=\"badge bg-primary font-mono\">Proceso ' + proceso + ' será asignado a esta OP</span>';
+      '<span class="badge bg-primary font-mono">Proceso ' + proceso + ' será asignado a esta OP</span>';
   }
 }
 function setBenef(sel){
@@ -543,8 +544,13 @@ function setBenef(sel){
   }
 }
 bindAjaxForm('form-op',r=>{ Toast.show(r.message,'success'); setTimeout(()=>Nav.ir('compras_pago.php'), 1200); });
-" . $sgPrefill . "
-";
+__SG_PREFILL__
+
+JS, [
+    '__PROV_BANCOS_JSON__' => $provBancosJson,
+    '__EMP_BANCOS_JSON__' => $empBancosJson,
+    '__SG_PREFILL__' => $sgPrefill,
+]);
 // Edición (rangos superiores): el formulario se llena con la OP guardada
 if ($action === 'editar' && $op) {
     $opEdit = array_intersect_key($op, array_flip(['id','numero','fecha','beneficiario_tipo','proveedor_id','empleado_id','beneficiario','monto',
@@ -552,7 +558,12 @@ if ($action === 'editar' && $op) {
         'proyecto_id','cuenta_id','concepto','notas']));
     $opEdit['oc_numero'] = numeroDe($pdo, 'ordenes_compra', $op['orden_compra_id']);
     $opEdit['sg_numero'] = numeroDe($pdo, 'solicitud_gastos', $op['solicitud_gastos_id']);
-    $extraJs .= 'const OP_EDITAR = ' . json_encode($opEdit, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n" . <<<'ENDJS'
+    $extraJs .= strtr(<<<'JS'
+const OP_EDITAR = __OP_EDITAR__;
+__JS_EDICION__
+JS, [
+    '__OP_EDITAR__' => json_encode($opEdit, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+    '__JS_EDICION__' => <<<'ENDJS'
 (function () {
   const f = document.getElementById('form-op');
   const v = OP_EDITAR;
@@ -573,7 +584,8 @@ if ($action === 'editar' && $op) {
   document.querySelector('#form-op').closest('.card').querySelector('.card-header').innerHTML = '<i class="fas fa-edit"></i> Editar orden de pago ' + v.numero;
   f.querySelector('[type=submit]').innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
 })();
-ENDJS;
+ENDJS,
+]);
 }
 include __DIR__ . '/includes/footer.php';
 ?>

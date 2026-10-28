@@ -352,22 +352,23 @@ include __DIR__ . '/includes/header.php';
 
 <?php
 $cuentasJson = json_encode(array_map(fn($c)=>['id'=>$c['id'],'codigo'=>$c['codigo'],'nombre'=>$c['nombre']],$cuentas));
-$extraJs = "
+$extraJs = strtr(<<<'JS'
+
 initDataTable('#tbl-sg');
 recalcTotals();
 
 function addGastoRow() {
   const idx = document.querySelectorAll('#tbody-items .detail-row').length;
-  const cuentaOpts = " . $cuentasJson . ".map(c=>`<option value=\"\${c.id}\">\${c.codigo} - \${c.nombre}</option>`).join('');
+  const cuentaOpts = __CUENTAS_JSON__.map(c=>`<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
   const tr = document.createElement('tr');
   tr.className='detail-row';
   tr.innerHTML = `
-    <td class=\"row-num\">\${idx+1}</td>
-    <td><input type=\"text\" class=\"form-control form-control-sm date-input\" placeholder=\"Fecha\" value=\"".date('Y-m-d')."\" data-field=\"fecha\"></td>
-    <td><input type=\"text\" class=\"form-control form-control-sm\" placeholder=\"Descripción\" data-field=\"descripcion\" required></td>
-    <td><select class=\"form-select form-select-sm\" data-field=\"cuenta_id\"><option value=\"\">-- Cuenta --</option>\${cuentaOpts}</select></td>
-    <td><input type=\"number\" class=\"form-control form-control-sm row-monto text-end\" step=\"0.01\" min=\"0\" placeholder=\"0.00\" value=\"0\" data-field=\"monto\"></td>
-    <td><button type=\"button\" class=\"btn btn-sm btn-outline-danger py-0 px-1\" onclick=\"removeDetailRow(this)\"><i class=\"fas fa-trash\"></i></button></td>`;
+    <td class="row-num">${idx+1}</td>
+    <td><input type="text" class="form-control form-control-sm date-input" placeholder="Fecha" value="__DATE__" data-field="fecha"></td>
+    <td><input type="text" class="form-control form-control-sm" placeholder="Descripción" data-field="descripcion" required></td>
+    <td><select class="form-select form-select-sm" data-field="cuenta_id"><option value="">-- Cuenta --</option>${cuentaOpts}</select></td>
+    <td><input type="number" class="form-control form-control-sm row-monto text-end" step="0.01" min="0" placeholder="0.00" value="0" data-field="monto"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeDetailRow(this)"><i class="fas fa-trash"></i></button></td>`;
   document.getElementById('tbody-items').appendChild(tr);
   flatpickr(tr.querySelector('.date-input'), {locale:'es',dateFormat:'Y-m-d',allowInput:true});
   updateDetailRowNumbers('tbody-items');
@@ -393,10 +394,20 @@ document.getElementById('form-sg')?.addEventListener('submit', function(e) {
     else Toast.show(r.message,'error');
   }).catch(()=>Toast.show('Error de conexión','error'));
 });
-";
+
+JS, [
+    '__CUENTAS_JSON__' => $cuentasJson,
+    '__DATE__' => date('Y-m-d'),
+]);
 if ($action !== 'list' && $action !== 'ver') {
-    $extraJs .= 'const ANTICIPOS_PENDIENTES = ' . json_encode($anticiposPendientes, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n"
-              . 'const SG_NUEVA = ' . ($sg ? 'false' : 'true') . ";\n";
+    $extraJs .= strtr(<<<'JS'
+const ANTICIPOS_PENDIENTES = __ANTICIPOS_PENDIENTES__;
+const SG_NUEVA = __SG_NUEVA__;
+
+JS, [
+    '__ANTICIPOS_PENDIENTES__' => json_encode($anticiposPendientes, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+    '__SG_NUEVA__' => ($sg ? 'false' : 'true'),
+]);
     $extraJs .= <<<'ENDJS'
 // Ligada a un anticipo es una liquidación de gastos; si no, una solicitud de gastos
 function actualizarTipoSG() {

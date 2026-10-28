@@ -2,15 +2,21 @@
 'use strict';
 
 // ── Toast notifications ──────────────────────────────────────────
+// El mensaje se muestra como texto (los mensajes del servidor pueden traer nombres de archivo u
+// otros datos escritos por usuarios); { html: true } solo para HTML armado y escapado aquí mismo.
 const Toast = {
-  show(msg, type = 'info', duration = 4000) {
+  show(msg, type = 'info', duration = 4000, { html = false } = {}) {
     let c = document.getElementById('toast-container');
     if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
     const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     if (type === 'danger') type = 'error';   // nombre de Bootstrap
     const el = document.createElement('div');
     el.className = `toast-msg ${type}`;
-    el.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> ${msg}`;
+    const icono = document.createElement('i');
+    icono.className = `fas ${icons[type] || icons.info}`;
+    const texto = document.createElement('span');
+    if (html) texto.innerHTML = msg; else texto.textContent = String(msg ?? '');
+    el.append(icono, texto);
     c.appendChild(el);
     setTimeout(() => { el.style.animation = 'fadeOut .4s forwards'; setTimeout(() => el.remove(), 400); }, duration);
   }
@@ -141,7 +147,7 @@ const Notificaciones = {
     if (!d?.success) return;
     const nuevos = this.ultimoId === null ? [] : d.avisos.filter(a => !a.leida && a.id > this.ultimoId);
     this.ultimoId = Math.max(this.ultimoId ?? 0, ...d.avisos.map(a => a.id));
-    if (nuevos.length === 1) Toast.show(`<strong>${this.esc(nuevos[0].titulo)}</strong><br>${this.esc(nuevos[0].mensaje)}`, 'info', 6000);
+    if (nuevos.length === 1) Toast.show(`<strong>${this.esc(nuevos[0].titulo)}</strong><br>${this.esc(nuevos[0].mensaje)}`, 'info', 6000, { html: true });
     else if (nuevos.length > 1) Toast.show(`Tiene ${nuevos.length} notificaciones nuevas.`, 'info', 6000);
     this.datos = d;
     this.pintar();
@@ -852,8 +858,7 @@ const Adjuntos = {
   },
   avisar({ subidos, errores }) {
     if (subidos.length) Toast.show(subidos.length === 1 ? 'Documento adjuntado.' : `${subidos.length} documentos adjuntados.`, 'success');
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    if (errores.length) Toast.show('No se adjuntó: ' + esc(errores.join('; ')) + '.', 'error', 8000);
+    if (errores.length) Toast.show('No se adjuntó: ' + errores.join('; ') + '.', 'error', 8000);
   },
   async enviar(panel, files, deCamara = false) {
     if (!files.length) return;
@@ -910,7 +915,7 @@ const AdjuntosForm = {
       if (file.size > maxMb * 1048576 && !/^image\/(jpeg|png|webp)$/.test(file.type)) grandes.push(file.name);
       else this.lista(bloque).push({ file, camara });
     });
-    if (grandes.length) Toast.show(`Supera ${maxMb} MB y no se adjuntará: ${grandes.join(', ')}`.replace(/[<>&]/g, ''), 'error', 7000);
+    if (grandes.length) Toast.show(`Supera ${maxMb} MB y no se adjuntará: ${grandes.join(', ')}`, 'error', 7000);
     this.pintar(bloque);
   },
   pintar(bloque) {
