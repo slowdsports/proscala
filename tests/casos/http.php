@@ -128,6 +128,62 @@ try {
         iguales('tokenprueba', json_decode($json, true)['csrf'] ?? null, 'token vigente de sesion.php');
     });
 
+    prueba('Cotizaciones: precios por artículo, cuadro comparativo, PDF y orden de compra con los precios cotizados', function () use ($baseUrl, $sesAdmin, $pdo) {
+        $sc = $pdo->query("SELECT sc.id, sc.estado FROM solicitud_compra sc WHERE (SELECT COUNT(*) FROM solicitud_compra_detalle d WHERE d.solicitud_id = sc.id) >= 2 ORDER BY sc.id DESC LIMIT 1")->fetch();
+        $provs = $pdo->query("SELECT id FROM proveedores WHERE activo = 1 ORDER BY id LIMIT 3")->fetchAll(PDO::FETCH_COLUMN);
+        if (!$sc || count($provs) < 3) throw new Omitir('se necesita una solicitud con 2 artículos y 3 proveedores');
+        $det = $pdo->query("SELECT id, descripcion, unidad, cantidad FROM solicitud_compra_detalle WHERE solicitud_id = {$sc['id']} ORDER BY id LIMIT 2")->fetchAll();
+        $items = array_map(fn($d) => ['sd_id' => $d['id'], 'descripcion' => $d['descripcion'], 'unidad' => $d['unidad'], 'cantidad' => 2], $det);
+        $of = fn($p, array $precios) => ['proveedor_id' => $p, 'num_cotizacion' => "Z-$p", 'precios' => $precios, 'total_global' => ''];
+        $ofertas = [$of($provs[0], [100, 50]), $of($provs[1], [90, 40]), $of($provs[2], [70, ''])];   // único: el 2.º; artículo 1: el 3.º
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true,
+            'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+            'content' => http_build_query(['csrf_token' => 'tokenprueba', '_action' => 'guardar', 'id' => 0, 'solicitud_id' => $sc['id'], 'fecha' => date('Y-m-d'),
+                'proveedor_seleccionado_id' => $provs[1], 'items_data' => json_encode($items), 'proveedores_data' => json_encode($ofertas)])]]);
+        $r = json_decode((string)@file_get_contents("$baseUrl/compras_cotizaciones.php", false, $ctx), true) ?: [];
+        $coId = (int)($r['id'] ?? 0);
+        try {
+            afirmar(!empty($r['success']) && $coId, 'no se guardó la cotización: ' . ($r['message'] ?? 'sin respuesta'));
+            iguales(5, (int)$pdo->query("SELECT COUNT(*) FROM cotizaciones_precios pr JOIN cotizaciones_items i ON i.id = pr.item_id WHERE i.cotizacion_id = $coId")->fetchColumn(), 'precios guardados (el vacío no cuenta)');
+            iguales(260.0, (float)$pdo->query("SELECT total FROM cotizaciones_proveedores WHERE cotizacion_id = $coId AND proveedor_id = {$provs[1]}")->fetchColumn(), 'total calculado de la oferta');
+            [$cod, $html] = pedir("$baseUrl/compras_cotizaciones.php?action=ver&id=$coId", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Recomendación del sistema') && str_contains($html, 'cot-min') && !erroresPhp($html), "vista de la cotización (HTTP $cod)");
+            [$cod, $html] = pedir("$baseUrl/print.php?tipo=co&id=$coId", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Compra por artículo') && !erroresPhp($html), "PDF del resumen (HTTP $cod)");
+            pedir("$baseUrl/compras_cotizaciones.php?action=editar&id=$coId", $sesAdmin);   // el formulario de edición carga
+            [$cod, $html] = pedir("$baseUrl/compras_orden.php?action=nuevo&co_id=$coId&prov_id={$provs[2]}&plan=articulo", $sesAdmin);
+            preg_match('#<tbody id="tbody-items">(.*?)</tbody>#s', $html, $tb);
+            preg_match_all('/data-field="precio" value="([^"]*)"/', $tb[1] ?? '', $pm);
+            iguales(['70'], $pm[1], "precios de la OC por artículo al 3.er proveedor (HTTP $cod)");
+        } finally {
+            if ($coId) {
+                $pdo->exec("DELETE FROM cotizaciones WHERE id = $coId");
+                $pdo->exec("DELETE FROM registro_usuarios WHERE tabla = 'cotizaciones' AND registro_id = $coId");
+            }
+            $pdo->prepare("UPDATE solicitud_compra SET estado = ? WHERE id = ?")->execute([$sc['estado'], $sc['id']]);
+            $pdo->exec("DELETE FROM auditoria WHERE modulo = 'compras_cotizaciones.php' AND ip IN ('127.0.0.1', '::1') AND detalle LIKE '%Z-{$provs[0]}%'");
+        }
+    });
+
+    prueba('Formularios: el JavaScript de las páginas no tiene errores de sintaxis (node --check)', function () use ($baseUrl, $sesAdmin) {
+        exec('node --version 2>&1', $v, $c);
+        if ($c !== 0) throw new Omitir('Node.js no está instalado');
+        $fallas = [];
+        foreach (['compras_cotizaciones.php?action=nuevo', 'compras_solicitud.php?action=nuevo', 'compras_orden.php?action=nuevo', 'compras_pago.php?action=nuevo',
+                  'gastos_viajes.php?action=nuevo', 'gastos_solicitud.php?action=nuevo', 'catalogos.php', 'planillas.php', 'empleados.php?action=nuevo'] as $p) {
+            [, $html] = pedir("$baseUrl/$p", $sesAdmin);
+            preg_match_all('#<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>#si', $html, $m);
+            foreach ($m[1] as $k => $js) {
+                $tmp = tempnam(sys_get_temp_dir(), 'js') . '.js';
+                file_put_contents($tmp, "{\n$js\n}");   // como la navegación sin recarga: dentro de un bloque
+                exec('node --check ' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+                if ($code !== 0) $fallas[] = "$p (script $k): " . trim(implode(' ', array_slice($out, 0, 4)));
+                @unlink($tmp); $out = [];
+            }
+        }
+        afirmar(!$fallas, implode(' | ', $fallas));
+    });
+
     prueba('Catálogo de cuentas: se descargan la plantilla y el catálogo actual en Excel', function () use ($baseUrl, $sesAdmin) {
         foreach (['plantilla', 'catalogo'] as $tipo) {
             [$cod, $xlsx] = pedir("$baseUrl/catalogos.php?export=$tipo", $sesAdmin);

@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.12.0 — 2026-10-28
+**Cuadro comparativo de cotizaciones por artículo y recomendación de compra**
+- **Cuadro comparativo de cotizaciones por artículo**: las cotizaciones ya no se registran con un monto global por proveedor sino como se ve cada cotización: una fila por artículo (cargados de la solicitud de compra, editables, se pueden agregar más) y una columna por proveedor con el precio unitario de cada uno; vacío = no lo cotizó. El total de cada proveedor se calcula solo y el menor precio de cada artículo se marca en verde mientras se escribe. Las cotizaciones anteriores se siguen viendo con su monto global; al editarlas se cargan los artículos de su solicitud.
+- **Recomendación del sistema**: el **proveedor único** más barato entre los que cotizaron todos los artículos (o, si ninguno, el que más cubre) y la **compra por artículo**, cada artículo al mejor precio, con el ahorro y los proveedores que requiere. Avisa si el proveedor seleccionado no es el recomendado.
+- **Orden de compra desde la cotización con los precios cotizados** (antes, los estimados de la solicitud): botón por cada proveedor de la recomendación; en la compra por artículo, la orden lleva solo los artículos que le tocan a ese proveedor.
+- El **PDF del resumen** muestra el cuadro artículo × proveedor (precio unitario y total de cada línea), los totales, la cobertura, las condiciones y la recomendación.
+- Pruebas automáticas: 33 (3 nuevas): la recomendación, la cotización por artículo de punta a punta (guardar, ver, PDF y orden de compra) y la sintaxis del JavaScript de los formularios (`node --check`).
+- Base de datos (`actualizar_bd.php`): tablas `cotizaciones_items` y `cotizaciones_precios`.
+
 ## 1.11.0 — 2026-10-28
 **Resumen de cotizaciones en PDF, edición por el creador y correcciones de guardado**
 - **Resumen de Cotizaciones en PDF** (botón **PDF Resumen** al ver una cotización): la solicitud de compra de referencia y lo que se pidió, el cuadro comparativo de las ofertas de la menor a la mayor (condiciones, tiempo de entrega y diferencia con la menor), el proveedor seleccionado (con aviso si no es la menor oferta), la justificación y las firmas Elaborado por / Aprobado por. Reemplaza el botón que imprimía la pantalla.

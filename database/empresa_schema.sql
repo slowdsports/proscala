@@ -200,6 +200,29 @@ CREATE TABLE `cotizaciones` (
   CONSTRAINT `cotizaciones_ibfk_3` FOREIGN KEY (`proveedor_seleccionado_id`) REFERENCES `proveedores` (`id`) ON DELETE SET NULL,
   CONSTRAINT `cotizaciones_ibfk_4` FOREIGN KEY (`aprobador_id`) REFERENCES `empleados` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `cotizaciones_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cotizacion_id` int(11) NOT NULL,
+  `solicitud_detalle_id` int(11) DEFAULT NULL,
+  `orden` int(11) NOT NULL DEFAULT 0,
+  `descripcion` varchar(300) NOT NULL,
+  `unidad` varchar(50) DEFAULT NULL,
+  `cantidad` decimal(10,2) NOT NULL DEFAULT 1.00,
+  PRIMARY KEY (`id`),
+  KEY `cotizacion_id` (`cotizacion_id`),
+  CONSTRAINT `cotizaciones_items_ibfk_1` FOREIGN KEY (`cotizacion_id`) REFERENCES `cotizaciones` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `cotizaciones_precios` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `item_id` int(11) NOT NULL,
+  `cotizacion_proveedor_id` int(11) NOT NULL,
+  `precio_unitario` decimal(12,2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_item_oferta` (`item_id`,`cotizacion_proveedor_id`),
+  KEY `cotizacion_proveedor_id` (`cotizacion_proveedor_id`),
+  CONSTRAINT `cotizaciones_precios_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `cotizaciones_items` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `cotizaciones_precios_ibfk_2` FOREIGN KEY (`cotizacion_proveedor_id`) REFERENCES `cotizaciones_proveedores` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `cotizaciones_proveedores` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `cotizacion_id` int(11) NOT NULL,

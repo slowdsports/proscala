@@ -2,19 +2,27 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/functions.php';
+require_once __DIR__ . '/config/cotizaciones.php';
 requireLogin();
 
-// ── Data endpoint: SC items for a given cotización (GET, no CSRF) ──
+/** Artículos de la orden desde una cotización: precios cotizados por el proveedor o, si la cotización no los detalla, los de la solicitud. */
+function itemsOrden(PDO $pdo, int $coId, int $scId, int $provId, bool $soloAsignados = false): array {
+    if ($provId && ($det = itemsOrdenDesdeCotizacion($pdo, $coId, $provId, $soloAsignados)) !== null) return $det;
+    $s = $pdo->prepare("SELECT descripcion,unidad,cantidad,precio_estimado FROM solicitud_compra_detalle WHERE solicitud_id=?");
+    $s->execute([$scId]);
+    return $s->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// ── Data endpoint: artículos de una cotización (GET, no CSRF) ──
 if (($_GET['_action'] ?? '') === 'get_co_data' && isset($_GET['cotizacion_id'])) {
     $cqId = (int)$_GET['cotizacion_id'];
     $cq = $pdo->prepare("SELECT co.proveedor_seleccionado_id as prov_id, sc.id as sc_id
         FROM cotizaciones co JOIN solicitud_compra sc ON co.solicitud_id=sc.id WHERE co.id=?");
     $cq->execute([$cqId]); $cqRow = $cq->fetch();
     if (!$cqRow) { header('Content-Type:application/json'); echo json_encode(['success'=>false]); exit; }
-    $cqItems = $pdo->prepare("SELECT descripcion,unidad,cantidad,precio_estimado FROM solicitud_compra_detalle WHERE solicitud_id=?");
-    $cqItems->execute([$cqRow['sc_id']]);
     header('Content-Type:application/json');
-    echo json_encode(['success'=>true,'prov_id'=>$cqRow['prov_id'],'sc_id'=>$cqRow['sc_id'],'items'=>$cqItems->fetchAll(PDO::FETCH_ASSOC)]);
+    echo json_encode(['success'=>true,'prov_id'=>$cqRow['prov_id'],'sc_id'=>$cqRow['sc_id'],
+        'items'=>itemsOrden($pdo, $cqId, (int)$cqRow['sc_id'], (int)$cqRow['prov_id'])]);
     exit;
 }
 
@@ -71,14 +79,16 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     jsonErr('Acción desconocida.');
 }
 
-// Load data for pre-filling from cotización
+// Nueva orden desde una cotización (?co_id=): al proveedor seleccionado o al de ?prov_id= (botones de
+// la recomendación), con sus precios cotizados; ?plan=articulo, solo los artículos que la compra
+// por artículo le asigna
 $coData = null; $scItems = [];
 if ($coId) {
     $s=$pdo->prepare("SELECT co.*,p.id as prov_id,p.nombre as prov_nombre,sc.id as sc_id,sc.numero as sc_num FROM cotizaciones co LEFT JOIN proveedores p ON co.proveedor_seleccionado_id=p.id JOIN solicitud_compra sc ON co.solicitud_id=sc.id WHERE co.id=?");
     $s->execute([$coId]); $coData=$s->fetch();
     if ($coData) {
-        $si=$pdo->prepare("SELECT descripcion,unidad,cantidad,precio_estimado FROM solicitud_compra_detalle WHERE solicitud_id=?");
-        $si->execute([$coData['sc_id']]); $scItems=$si->fetchAll();
+        if ((int)($_GET['prov_id'] ?? 0)) $coData['prov_id'] = (int)$_GET['prov_id'];
+        $scItems = itemsOrden($pdo, $coId, (int)$coData['sc_id'], (int)$coData['prov_id'], ($_GET['plan'] ?? '') === 'articulo');
     }
 }
 

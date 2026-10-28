@@ -267,3 +267,29 @@ prueba('Edición: quien creó el proceso lo edita hasta que alguien lo revisa; d
         comoUsuario($pdo, $u['jefe']);      iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'revisado: el superior aún lo corrige');
     });
 });
+require_once RAIZ . '/config/cotizaciones.php';
+prueba('Cotizaciones: recomienda el proveedor único y la compra por artículo según los precios', function () {
+    $items = [['id' => 1, 'cantidad' => 2], ['id' => 2, 'cantidad' => 10], ['id' => 3, 'cantidad' => 1]];
+    $of = [
+        ['id' => 10, 'total' => 0, 'precios' => [1 => 100, 2 => 5, 3 => 50]],   // completo: 200 + 50 + 50 = 300
+        ['id' => 20, 'total' => 0, 'precios' => [1 => 90,  2 => 6, 3 => 40]],   // completo: 180 + 60 + 40 = 280
+        ['id' => 30, 'total' => 0, 'precios' => [2 => 4]],                       // solo el artículo 2: 40
+    ];
+    $a = analizarCotizacion($items, $of);
+    iguales(true, $a['con_detalle'], 'hay precios por artículo');
+    iguales(['oferta_id' => 20, 'total' => 280.0, 'completo' => true, 'faltan' => 0], $a['unico'], 'proveedor único: el más barato entre los que cotizaron todo');
+    iguales([1 => 20, 2 => 30, 3 => 20], $a['por_articulo']['asignacion'], 'cada artículo al menor precio');
+    iguales(260.0, $a['por_articulo']['total'], 'total comprando por artículo');
+    iguales(20.0, $a['ahorro'], 'ahorro frente al proveedor único');
+    iguales(1, $a['ofertas'][30]['cubre'], 'artículos que cotizó el proveedor parcial');
+    // Empate de precio en un artículo (no en el total): va al proveedor único recomendado (menos órdenes de compra)
+    $of[0]['precios'][1] = 90; $of[0]['precios'][3] = 60;   // el 10 queda en 290; el único sigue siendo el 20 (280)
+    iguales(20, analizarCotizacion($items, $of)['por_articulo']['asignacion'][1], 'el empate va al proveedor único');
+    // Nadie cotizó todo: el que más cubre
+    $parcial = analizarCotizacion($items, [['id' => 1, 'total' => 0, 'precios' => [1 => 1]], ['id' => 2, 'total' => 0, 'precios' => [1 => 5, 2 => 5]]]);
+    iguales([2, false, 1], [$parcial['unico']['oferta_id'], $parcial['unico']['completo'], $parcial['unico']['faltan']], 'sin oferta completa: el que más cubre');
+    iguales([3], $parcial['por_articulo']['sin_oferta'], 'artículo sin ninguna oferta');
+    // Cotización anterior con montos globales
+    $g = analizarCotizacion([], [['id' => 1, 'total' => 500, 'precios' => []], ['id' => 2, 'total' => 450, 'precios' => []]]);
+    iguales([false, 2, null], [$g['con_detalle'], $g['unico']['oferta_id'], $g['por_articulo']], 'montos globales: la oferta más baja');
+});

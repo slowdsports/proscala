@@ -1,9 +1,13 @@
 <?php
 // ── Resumen de Cotizaciones (cuadro comparativo) ────────────────
-// Plantilla de impresión (print.php): la solicitud de compra de referencia, lo que se pidió,
-// las ofertas de cada proveedor de la menor a la mayor, el proveedor seleccionado con su
-// justificación y las firmas. Cotizaciones no tiene flujo de revisión: firman quien elaboró
-// el resumen y quien lo aprobó (o los firmantes 'co' configurados, si los hay).
+// Plantilla de impresión (print.php): la solicitud de compra de referencia, el cuadro artículo ×
+// proveedor con el precio unitario y el total de cada línea (el menor de cada artículo resaltado),
+// los totales, la recomendación (config/cotizaciones.php: proveedor único y compra por artículo),
+// el proveedor seleccionado con su justificación y las firmas. Las cotizaciones registradas con un
+// monto global (sin precios por artículo) se comparan por ese monto.
+// Cotizaciones no tiene flujo de revisión: firman quien elaboró el resumen y quien lo aprobó (o
+// los firmantes 'co' configurados, si los hay).
+require_once dirname(__DIR__, 2) . '/config/cotizaciones.php';
 
 $s = $pdo->prepare("SELECT co.*, sc.numero AS sc_numero, sc.descripcion AS sc_desc, sc.presupuesto_estimado,
     CONCAT(sol.nombre,' ',sol.apellidos) AS sol_nombre, p.codigo AS proy_nombre,
@@ -17,18 +21,21 @@ $s = $pdo->prepare("SELECT co.*, sc.numero AS sc_numero, sc.descripcion AS sc_de
     WHERE co.id = ?");
 $s->execute([$id]); $doc = $s->fetch();
 if (!$doc) die('Cotización no encontrada.');
-$s2 = $pdo->prepare("SELECT cp.*, p.nombre AS prov_nombre, p.rtn AS prov_rtn
-    FROM cotizaciones_proveedores cp JOIN proveedores p ON cp.proveedor_id = p.id
-    WHERE cp.cotizacion_id = ? ORDER BY cp.total, p.nombre");
-$s2->execute([$id]); $ofertas = $s2->fetchAll();
-$s3 = $pdo->prepare("SELECT * FROM solicitud_compra_detalle WHERE solicitud_id = ? ORDER BY id");
-$s3->execute([$doc['solicitud_id']]); $detalle = $s3->fetchAll();
+$cot = cargarCotizacion($pdo, $id);
+$items = $cot['items'];
+$ofertas = $cot['ofertas'];
+$an = analizarCotizacion($items, $ofertas);
 $title  = 'RESUMEN DE COTIZACIONES';
 $docNum = $doc['numero'];
 
-$menor = $ofertas ? min(array_map(fn($o) => (float)$o['total'], $ofertas)) : 0;
+$porId = array_column($ofertas, null, 'id');
+$nombreOf = fn($oid) => $porId[$oid]['prov_nombre'] ?? '—';
 $sel = null;
 foreach ($ofertas as $o) if ((int)$o['proveedor_id'] === (int)$doc['proveedor_seleccionado_id']) $sel = $o;
+$totalSel = $sel ? $an['ofertas'][(int)$sel['id']]['total'] : 0;
+$recoId = $an['unico']['oferta_id'] ?? null;
+$cant = fn($q) => rtrim(rtrim(number_format((float)$q, 2), '0'), '.');
+$angosto = count($ofertas) >= 4;   // con muchos proveedores, letra más chica para que quepa
 
 // Firmas: las configuradas para 'co' o, si no hay, Elaborado por / Aprobado por del documento
 $fCO = loadFirmantes($pdo, 'co') ?: [['posicion' => 1, 'etiqueta' => 'Elaborado por', 'emp_nombre' => ''],
@@ -37,8 +44,30 @@ if ($doc['elab_nombre']) $fCO[0]['emp_nombre'] = $doc['elab_nombre'];
 if ($doc['aprobador_nombre'] && count($fCO) > 1) $fCO[count($fCO) - 1]['emp_nombre'] = $doc['aprobador_nombre'];
 
 require __DIR__ . '/_inicio.php';
-require __DIR__ . '/_pagina_inicio.php';
 ?>
+<style>
+  table.cmp { width: 100%; border-collapse: collapse; font-size: <?= $angosto ? '7pt' : '8pt' ?>; }
+  table.cmp th { background: #0D3F6A; color: #fff; padding: 6px 6px; font-weight: 600; font-size: <?= $angosto ? '6.5pt' : '7pt' ?>; text-align: left; vertical-align: bottom; }
+  table.cmp th.r, table.cmp td.r { text-align: right; }
+  table.cmp td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.cmp td.p { text-align: right; font-family: 'Courier New', monospace; white-space: nowrap; }
+  table.cmp td.p .l { display: block; color: #64748b; font-size: 6.5pt; }
+  table.cmp td.min { background: #dcfce7; color: #15803d; font-weight: 700; }
+  table.cmp td.na { color: #94a3b8; text-align: center; }
+  table.cmp tfoot td { font-weight: 700; color: #0D3F6A; border-top: 2px solid #1B6BA8; border-bottom: none; }
+  table.cmp tfoot tr.sub td { font-weight: 400; color: #64748b; border-top: none; font-size: 6.8pt; }
+  table.cmp th .sel { color: #86efac; }
+  .reco { margin: 12px 28px 0; display: grid; grid-template-columns: <?= $an['por_articulo'] ? '1fr 1.3fr' : '1fr' ?>; gap: 12px; }
+  .reco > div { border: 1px solid #dbeafe; border-radius: 8px; padding: 10px 12px; background: #f8fbff; }
+  .reco .t { font-size: 6.8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1B6BA8; }
+  .reco .n { font-size: 10.5pt; font-weight: 800; color: #0D3F6A; margin-top: 2px; }
+  .reco .m { font-family: 'Courier New', monospace; font-size: 12pt; font-weight: 800; color: #0D3F6A; }
+  .reco .x { font-size: 7pt; color: #64748b; margin-top: 3px; }
+  .reco table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 5px; }
+  .reco table td { padding: 3px 0; border-bottom: 1px dashed #dbeafe; vertical-align: top; }
+  .ahorro { display: inline-block; font-size: 7pt; font-weight: 700; color: #15803d; background: #dcfce7; border-radius: 10px; padding: 1px 7px; margin-left: 4px; font-family: inherit; }
+</style>
+<?php require __DIR__ . '/_pagina_inicio.php'; ?>
 
   <div class="ref-chain">
     <span class="ref-pill">📋 <?= htmlspecialchars($doc['sc_numero']) ?></span>
@@ -48,100 +77,114 @@ require __DIR__ . '/_pagina_inicio.php';
 
   <div class="meta-section">
     <div class="meta-grid cols-4">
-      <div class="meta-item">
-        <div class="meta-label">Fecha</div>
-        <div class="meta-value"><?= fmtFecha($doc['fecha']) ?></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Solicitud de Compra</div>
-        <div class="meta-value mono"><?= htmlspecialchars($doc['sc_numero']) ?></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Solicitante</div>
-        <div class="meta-value"><?= htmlspecialchars($doc['sol_nombre'] ?? '—') ?></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Proyecto</div>
-        <div class="meta-value"><?= htmlspecialchars($doc['proy_nombre'] ?? 'General') ?></div>
-      </div>
-      <div class="meta-item meta-full">
-        <div class="meta-label">Descripción de la compra</div>
-        <div class="meta-value"><?= htmlspecialchars($doc['sc_desc']) ?></div>
-      </div>
+      <div class="meta-item"><div class="meta-label">Fecha</div><div class="meta-value"><?= fmtFecha($doc['fecha']) ?></div></div>
+      <div class="meta-item"><div class="meta-label">Solicitud de Compra</div><div class="meta-value mono"><?= htmlspecialchars($doc['sc_numero']) ?></div></div>
+      <div class="meta-item"><div class="meta-label">Solicitante</div><div class="meta-value"><?= htmlspecialchars($doc['sol_nombre'] ?? '—') ?></div></div>
+      <div class="meta-item"><div class="meta-label">Proyecto</div><div class="meta-value"><?= htmlspecialchars($doc['proy_nombre'] ?? 'General') ?></div></div>
+      <div class="meta-item meta-full"><div class="meta-label">Descripción de la compra</div><div class="meta-value"><?= htmlspecialchars($doc['sc_desc']) ?></div></div>
     </div>
   </div>
 
-  <?php if ($detalle): ?>
-  <div class="section-head">Artículos / Servicios Solicitados</div>
+  <div class="section-head">Cuadro Comparativo<?= $an['con_detalle'] ? ' · ' . count($items) . ' artículo(s)' : '' ?> · <?= count($ofertas) ?> proveedor<?= count($ofertas) === 1 ? '' : 'es' ?></div>
   <div class="items-wrap">
-    <table class="items">
+    <?php if ($an['con_detalle']): ?>
+    <table class="cmp">
       <thead>
-        <tr><th style="width:2.5em">#</th><th>Descripción</th><th>Unidad</th><th class="r">Cantidad</th><th class="r">Precio Est.</th><th class="r">Total Est.</th></tr>
+        <tr>
+          <th style="width:2em">#</th><th>Artículo</th><th class="r" style="width:3.5em">Cant.</th>
+          <?php foreach ($ofertas as $o): ?>
+          <th class="r"><?= htmlspecialchars($o['prov_nombre']) ?><?= $sel && (int)$o['id'] === (int)$sel['id'] ? ' <span class="sel">✔</span>' : '' ?>
+            <?php if ($o['num_cotizacion']): ?><div style="font-weight:400;opacity:.8">Cot. <?= htmlspecialchars($o['num_cotizacion']) ?></div><?php endif; ?></th>
+          <?php endforeach; ?>
+        </tr>
       </thead>
       <tbody>
-        <?php $i = 1; foreach ($detalle as $d): $sub = ($d['cantidad'] ?? 1) * ($d['precio_estimado'] ?? 0); ?>
+        <?php foreach ($items as $i => $it): $iid = (int)$it['id']; $min = $an['minimos'][$iid] ?? null; ?>
         <tr>
-          <td class="c"><?= $i++ ?></td>
-          <td><?= htmlspecialchars($d['descripcion']) ?></td>
-          <td class="c"><?= htmlspecialchars($d['unidad'] ?? '') ?></td>
-          <td class="r"><?= number_format($d['cantidad'] ?? 1, 2) ?></td>
-          <td class="r"><?= lps($d['precio_estimado'] ?? 0) ?></td>
-          <td class="r"><?= lps($sub) ?></td>
+          <td><?= $i + 1 ?></td>
+          <td><?= htmlspecialchars($it['descripcion']) ?><?= $it['unidad'] ? ' <span style="color:#64748b">(' . htmlspecialchars($it['unidad']) . ')</span>' : '' ?></td>
+          <td class="r"><?= $cant($it['cantidad']) ?></td>
+          <?php foreach ($ofertas as $o): $p = $o['precios'][$iid] ?? null; ?>
+            <?php if ($p === null): ?><td class="na" title="No lo cotizó">—</td>
+            <?php else: ?><td class="p<?= $min && in_array((int)$o['id'], $min['ofertas'], true) ? ' min' : '' ?>"><?= lps($p) ?><span class="l"><?= lps($p * (float)$it['cantidad']) ?></span></td><?php endif; ?>
+          <?php endforeach; ?>
         </tr>
         <?php endforeach; ?>
       </tbody>
       <tfoot>
-        <tr><td colspan="5" style="text-align:right;padding-right:12px;color:#64748b;font-size:8pt;">PRESUPUESTO ESTIMADO</td>
-          <td class="r"><?= lps($doc['presupuesto_estimado'] ?? 0) ?></td></tr>
+        <tr><td colspan="3" style="text-align:right">TOTAL OFERTADO</td>
+          <?php foreach ($ofertas as $o): ?><td class="p"><?= lps($an['ofertas'][(int)$o['id']]['total']) ?></td><?php endforeach; ?></tr>
+        <tr class="sub"><td colspan="3" style="text-align:right">Artículos cotizados</td>
+          <?php foreach ($ofertas as $o): $c = $an['ofertas'][(int)$o['id']]['cubre']; ?><td class="r"<?= $c < count($items) ? ' style="color:#b45309"' : '' ?>><?= $c ?> de <?= count($items) ?></td><?php endforeach; ?></tr>
+        <tr class="sub"><td colspan="3" style="text-align:right">Condiciones de pago</td>
+          <?php foreach ($ofertas as $o): ?><td class="r"><?= htmlspecialchars($o['condiciones'] ?: '—') ?></td><?php endforeach; ?></tr>
+        <tr class="sub"><td colspan="3" style="text-align:right">Tiempo de entrega</td>
+          <?php foreach ($ofertas as $o): ?><td class="r"><?= htmlspecialchars($o['tiempo_entrega'] ?: '—') ?></td><?php endforeach; ?></tr>
       </tfoot>
     </table>
-  </div>
-  <?php endif; ?>
-
-  <div class="section-head">Cuadro Comparativo de Ofertas (<?= count($ofertas) ?> proveedor<?= count($ofertas) === 1 ? '' : 'es' ?>)</div>
-  <div class="items-wrap">
-    <table class="items">
-      <thead>
-        <tr><th style="width:2.5em">#</th><th>Proveedor</th><th>No. Cotización</th><th>Fecha</th><th>Condiciones de Pago</th><th>T. Entrega</th>
-            <th class="r">Total Ofertado</th><th class="r">Dif. vs. menor</th></tr>
-      </thead>
+    <div style="padding:4px 28px 0;font-size:6.8pt;color:#64748b">Precio unitario y, debajo, total de la línea. En verde, el menor precio de cada artículo. «—»: no lo cotizó.</div>
+    <?php else: ?>
+    <table class="cmp">
+      <thead><tr><th style="width:2em">#</th><th>Proveedor</th><th>No. Cotización</th><th>Fecha</th><th>Condiciones de Pago</th><th>T. Entrega</th><th class="r">Total Ofertado</th></tr></thead>
       <tbody>
-        <?php $i = 1; foreach ($ofertas as $o):
-          $esSel = $sel && (int)$o['id'] === (int)$sel['id'];
-          $dif = (float)$o['total'] - $menor; ?>
-        <tr<?= $esSel ? ' style="background:#ecfdf5"' : '' ?>>
-          <td class="c"><?= $i++ ?></td>
-          <td>
-            <strong><?= htmlspecialchars($o['prov_nombre']) ?></strong><?= $esSel ? ' <span style="color:#15803d;font-weight:700">✔ Seleccionado</span>' : '' ?>
-            <?php if ($o['prov_rtn']): ?><div style="font-size:7pt;color:#64748b">RTN <?= htmlspecialchars($o['prov_rtn']) ?></div><?php endif; ?>
-            <?php if ($o['notas']): ?><div style="font-size:7pt;color:#64748b"><?= htmlspecialchars($o['notas']) ?></div><?php endif; ?>
-          </td>
+        <?php $i = 1; foreach ($ofertas as $o): $t = $an['ofertas'][(int)$o['id']]['total']; ?>
+        <tr<?= $sel && (int)$o['id'] === (int)$sel['id'] ? ' style="background:#ecfdf5"' : '' ?>>
+          <td><?= $i++ ?></td>
+          <td><strong><?= htmlspecialchars($o['prov_nombre']) ?></strong><?= $sel && (int)$o['id'] === (int)$sel['id'] ? ' <span style="color:#15803d;font-weight:700">✔</span>' : '' ?></td>
           <td><?= htmlspecialchars($o['num_cotizacion'] ?: '—') ?></td>
           <td><?= fmtFecha((string)($o['fecha_cotizacion'] ?? '')) ?></td>
           <td><?= htmlspecialchars($o['condiciones'] ?: '—') ?></td>
           <td><?= htmlspecialchars($o['tiempo_entrega'] ?: '—') ?></td>
-          <td class="r"<?= $dif == 0 ? ' style="font-weight:700"' : '' ?>><?= lps((float)$o['total']) ?></td>
-          <td class="r" style="color:<?= $dif == 0 ? '#15803d' : '#64748b' ?>"><?= $dif == 0 ? 'Menor oferta' : '+ ' . lps($dif) ?></td>
+          <td class="p<?= (int)$o['id'] === $recoId ? ' min' : '' ?>"><?= lps($t) ?></td>
         </tr>
         <?php endforeach; ?>
-        <?php if (!$ofertas): ?><tr><td colspan="8" class="c" style="color:#64748b;padding:14px">No hay ofertas registradas.</td></tr><?php endif; ?>
+        <?php if (!$ofertas): ?><tr><td colspan="7" class="na" style="padding:14px">No hay ofertas registradas.</td></tr><?php endif; ?>
       </tbody>
     </table>
+    <div style="padding:4px 28px 0;font-size:6.8pt;color:#64748b">Cotización registrada con montos globales (sin precio por artículo).</div>
+    <?php endif; ?>
   </div>
+
+  <?php if ($an['unico']): $u = $an['unico']; $pa = $an['por_articulo']; ?>
+  <div class="section-head" style="margin-top:12px">Recomendación del sistema</div>
+  <div class="reco">
+    <div>
+      <div class="t">Un solo proveedor</div>
+      <div class="n"><?= htmlspecialchars($nombreOf($u['oferta_id'])) ?></div>
+      <div class="m"><?= lps($u['total']) ?></div>
+      <div class="x"><?= $u['completo'] ? ($an['con_detalle'] ? 'La oferta más baja entre los que cotizaron todos los artículos.' : 'La oferta más baja.')
+                     : "Ningún proveedor cotizó todo: es el que más cubre (le faltan {$u['faltan']} artículo(s))." ?></div>
+    </div>
+    <?php if ($pa): ?>
+    <div>
+      <div class="t">Compra por artículo (mejor precio de cada uno)</div>
+      <div class="m"><?= lps($pa['total']) ?><?php if ($an['ahorro'] > 0): ?><span class="ahorro">ahorra <?= lps($an['ahorro']) ?></span><?php endif; ?></div>
+      <table>
+        <?php foreach ($pa['grupos'] as $oid => $g): ?>
+        <tr><td><strong><?= htmlspecialchars($nombreOf($oid)) ?></strong> — <?= count($g['items']) ?> artículo(s)</td>
+            <td style="text-align:right;font-family:'Courier New',monospace;white-space:nowrap"><?= lps($g['total']) ?></td></tr>
+        <?php endforeach; ?>
+      </table>
+      <div class="x"><?= count($pa['grupos']) > 1 ? 'Requiere ' . count($pa['grupos']) . ' órdenes de compra, una por proveedor.' : 'Coincide con un solo proveedor.' ?>
+        <?= $pa['sin_oferta'] ? ' ' . count($pa['sin_oferta']) . ' artículo(s) sin ninguna oferta.' : '' ?></div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 
   <div class="amount-block">
     <div style="flex:1">
       <div class="amount-label">Proveedor seleccionado</div>
       <?php if ($sel): ?>
       <div style="font-size:13pt;font-weight:800;color:#0D3F6A;margin-top:2px"><?= htmlspecialchars($sel['prov_nombre']) ?></div>
-      <?php if ((float)$sel['total'] > $menor): ?>
-      <div style="font-size:8pt;color:#b45309;margin-top:3px">No es la menor oferta: <?= lps((float)$sel['total'] - $menor) ?> sobre la más baja.</div>
+      <?php if ($recoId !== null && (int)$sel['id'] !== (int)$recoId): ?>
+      <div style="font-size:8pt;color:#b45309;margin-top:3px">No es el proveedor único recomendado<?= $totalSel > $an['unico']['total'] ? ' (' . lps($totalSel - $an['unico']['total']) . ' más)' : '' ?>: ver la justificación.</div>
       <?php endif; ?>
       <?php else: ?>
       <div style="font-size:10pt;color:#64748b;margin-top:2px">Pendiente de selección</div>
       <?php endif; ?>
     </div>
-    <?php if ($sel): ?><div class="amount-value"><?= lps((float)$sel['total']) ?></div><?php endif; ?>
+    <?php if ($sel): ?><div class="amount-value"><?= lps($totalSel) ?></div><?php endif; ?>
   </div>
 
   <?php if ($doc['justificacion']): ?>

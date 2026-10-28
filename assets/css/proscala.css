@@ -1467,6 +1467,23 @@ a.kpi-card:hover .kpi-icon,
 }
 .alta-rapida-pie span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .alta-rapida-pie:hover, .alta-rapida-pie:focus-visible { background: rgba(var(--primary-rgb), .1); outline: none; }
+/* Cuadro comparativo de cotizaciones (compras_cotizaciones.php) */
+.cot-matriz { min-width: 100%; }
+.cot-matriz th.cot-prov { min-width: 200px; vertical-align: top; font-weight: 400; }
+.cot-matriz .cot-precio { min-width: 96px; }
+.cot-matriz .cot-linea { min-height: 1em; font-size: .7rem; }
+.cot-matriz input.cot-min, .cot-matriz-ver td.cot-min {
+  background: rgba(67, 160, 71, .16) !important; color: var(--success); font-weight: 700;
+}
+.cot-reco { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 14px; height: 100%; background: var(--surface-2); }
+.cot-reco-titulo { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
+.cot-reco-prov { font-weight: 700; font-size: 1rem; margin-top: 2px; }
+.cot-reco-monto { font-family: var(--font-mono, 'Courier New', monospace); font-size: 1.25rem; font-weight: 800; color: var(--primary); }
+.cot-ahorro { font-family: inherit; font-size: .75rem; font-weight: 700; background: rgba(67, 160, 71, .16); color: var(--success);
+  border-radius: 20px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; }
+.cot-reco-vivo { font-size: .85rem; padding: 8px 12px; border-radius: var(--r-sm); background: rgba(var(--primary-rgb), .07); }
+.cot-reco-vivo:empty { display: none; }
+
 /* Abierto desde una lista que está dentro de otro modal: va encima de ese */
 .modal.alta-rapida.sobre-modal { z-index: 1070; }
 .modal-backdrop.alta-rapida-backdrop { z-index: 1065; }
