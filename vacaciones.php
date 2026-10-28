@@ -276,6 +276,7 @@ include __DIR__ . '/includes/header.php';
               <textarea name="notas" id="vac-notas" class="form-control" rows="2" placeholder="Observaciones adicionales…"></textarea>
             </div>
           </div>
+          <?php $adjModulo = 'vacaciones.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
         </form>
       </div>
       <div class="modal-footer">
@@ -309,7 +310,9 @@ document.getElementById('vac-fin')?.addEventListener('change', calcDiasHabiles);
 
 async function crearVac() {
   try {
-    const r = await post('vacaciones.php', new FormData(document.getElementById('form-vac')));
+    const form = document.getElementById('form-vac');
+    AdjuntosForm.anotar(form);   // documentos elegidos en el formulario
+    const r = await post('vacaciones.php', new FormData(form));
     Toast.show(r.message,'success'); setTimeout(()=>Nav.ir('vacaciones.php?action=ver&id='+r.id), 800);
   } catch (e) { Toast.show(e.message,'error'); }
 }

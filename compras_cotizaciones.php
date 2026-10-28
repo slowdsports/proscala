@@ -205,6 +205,7 @@ include __DIR__ . '/includes/header.php';
         <?php endfor; ?>
       </div>
       <button type="button" class="btn btn-sm btn-outline-success" onclick="addProvRow()"><i class="fas fa-plus"></i> Agregar Proveedor</button>
+      <?php $adjModulo = 'compras_cotizaciones.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Guardar</button>
         <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>

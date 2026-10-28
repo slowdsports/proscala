@@ -462,6 +462,7 @@ include __DIR__ . '/includes/header.php';
       <div class="col-12"><label class="form-label">Concepto / Descripción *</label><textarea name="concepto" class="form-control" rows="2" required><?= $ocData?htmlspecialchars($ocData['sc_descripcion'] ?: ('Pago OC '.$ocData['numero'].' - '.$ocData['prov_nombre'])):'' ?></textarea></div>
       <div class="col-12"><label class="form-label">Notas</label><input type="text" name="notas" class="form-control"></div>
     </div>
+    <?php $adjModulo = 'compras_pago.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
     <div class="mt-4 d-flex gap-2">
       <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Crear Orden de Pago</button>
       <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>

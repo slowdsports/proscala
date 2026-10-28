@@ -529,6 +529,7 @@ include __DIR__ . '/includes/header.php';
             </div>
 
           </div>
+          <?php $adjModulo = 'liquidaciones.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
         </form>
       </div>
       <div class="modal-footer">
@@ -624,7 +625,9 @@ document.getElementById('liq-diasvac')?.addEventListener('input', function() {
 });
 
 async function guardarLiq() {
-  const fd = new FormData(document.getElementById('form-liq'));
+  const form = document.getElementById('form-liq');
+  AdjuntosForm.anotar(form);   // carta de renuncia, finiquito… elegidos en el formulario
+  const fd = new FormData(form);
   const r  = await post('liquidaciones.php', fd);
   if (r.success) {
     Toast.show(r.message,'success');

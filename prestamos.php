@@ -337,6 +337,7 @@ include __DIR__ . '/includes/header.php';
               <input type="text" name="descripcion" id="pres-desc" class="form-control" required placeholder="Ej: Préstamo personal para gastos médicos">
             </div>
           </div>
+          <?php $adjModulo = 'prestamos.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
         </form>
       </div>
       <div class="modal-footer">
@@ -360,7 +361,9 @@ function calcCuota() {
 
 async function crearPrestamo() {
   try {
-    const r = await post('prestamos.php', new FormData(document.getElementById('form-nuevo-pres')));
+    const form = document.getElementById('form-nuevo-pres');
+    AdjuntosForm.anotar(form);   // pagaré, solicitud firmada… elegidos en el formulario
+    const r = await post('prestamos.php', new FormData(form));
     Toast.show(r.message,'success'); setTimeout(()=>Nav.ir('prestamos.php?action=ver&id='+r.id), 800);
   } catch (e) { Toast.show(e.message,'error'); }
 }

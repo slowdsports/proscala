@@ -246,6 +246,14 @@ body.nav-cargando::before {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none;
 }
 .adj-soltar { margin-top: .6rem; }
+/* Adjuntos elegidos al llenar un formulario (includes/adjuntos_form.php) */
+.adjuntos-form { padding: .2rem 0 .1rem; border-radius: var(--r-sm); transition: box-shadow var(--transition), background-color var(--transition); }
+.adjuntos-form.arrastrando { box-shadow: 0 0 0 2px var(--primary); background: rgba(var(--primary-rgb), .04); }
+.adjf-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .4rem; }
+.adjf-item {
+  display: flex; align-items: center; gap: .5rem; min-width: 0; font-size: .82rem;
+  padding: .4rem .6rem; border: 1px solid var(--border); border-radius: var(--r-xs); background: var(--surface-2);
+}
 @media (hover: none) { .adj-soltar { display: none; } }   /* celulares: no hay arrastrar y soltar */
 
 /* Empresa activa en la barra superior */

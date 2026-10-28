@@ -334,6 +334,7 @@ include __DIR__ . '/includes/header.php';
       </div>
       <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="addGvRow()"><i class="fas fa-plus"></i> Agregar Línea</button>
 
+      <?php $adjModulo = 'gastos_viajes.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Guardar</button>
         <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>

@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.7.0 — 2026-10-27
+**Adjuntar documentos al llenar el formulario**
+- Los formularios de los procesos tienen al final la sección **Documentos adjuntos**: liquidaciones / reembolsos, anticipos, solicitud de compra, cotizaciones, orden de compra, orden de pago, nota de recepción, caja chica, vacaciones, permisos, préstamos y liquidaciones laborales.
+- Las facturas, cotizaciones o fotos se eligen mientras se llena el formulario (también con la cámara del celular o arrastrándolas). Se ven en una lista donde se pueden quitar y se suben solas al guardar. Ya no hace falta guardar primero y adjuntar después.
+- Se suben una por una con las mismas validaciones del panel de adjuntos (tipo de archivo, tamaño máximo, permisos). Las fotos grandes se reducen antes de subirlas. Si algún archivo no se puede adjuntar, el proceso queda guardado igual y el aviso dice cuál faltó, para agregarlo desde el panel.
+- En los formularios que se abren en una ventana (vacaciones, permisos, préstamos, liquidaciones), al cancelar se descartan los archivos elegidos.
+
 ## 1.6.0 — 2026-10-27
 **Página principal y manual de uso**
 - **Página principal** (`index.php`, la portada del dominio). Presenta el sistema a quien quiera contratarlo, con el mismo diseño del panel, en modo claro y oscuro y adaptada al celular. Incluye:

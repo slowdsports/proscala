@@ -281,6 +281,7 @@ include __DIR__ . '/includes/header.php';
               <input type="text" name="notas" id="per-notas" class="form-control" placeholder="Observaciones adicionales (solo uso interno)">
             </div>
           </div>
+          <?php $adjModulo = 'permisos.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
         </form>
       </div>
       <div class="modal-footer">
@@ -308,7 +309,9 @@ document.getElementById('per-fin')?.addEventListener('change', calcDiasPer);
 
 async function crearPermiso() {
   try {
-    const r = await post('permisos.php', new FormData(document.getElementById('form-per')));
+    const form = document.getElementById('form-per');
+    AdjuntosForm.anotar(form);   // constancias, incapacidades… elegidas en el formulario
+    const r = await post('permisos.php', new FormData(form));
     Toast.show(r.message,'success'); setTimeout(()=>Nav.ir('permisos.php?action=ver&id='+r.id), 800);
   } catch (e) { Toast.show(e.message,'error'); }
 }

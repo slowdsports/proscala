@@ -340,6 +340,7 @@ include __DIR__ . '/includes/header.php';
         <i class="fas fa-plus"></i> Agregar Línea
       </button>
 
+      <?php $adjModulo = 'gastos_solicitud.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Guardar <span id="boton-sg"><?= $sg && $sg['viaje_id'] || $prefill_viaje_id ? 'liquidación' : 'solicitud' ?></span></button>
         <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>

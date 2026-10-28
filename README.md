@@ -161,6 +161,10 @@ Pulse un aviso para abrir el proceso; al abrirlo, sus avisos quedan como leídos
 
 Todos los procesos tienen un panel de **Documentos adjuntos** para guardar facturas, cotizaciones, recibos, fotos o cualquier respaldo.
 
+**Al llenar el formulario.** Las liquidaciones, anticipos, compras, órdenes de pago, cajas chicas, vacaciones, permisos, préstamos y liquidaciones laborales tienen, al final del formulario, la sección **Documentos adjuntos**. Elija los archivos (o tome las fotos) mientras llena el formulario. Aparecen en una lista donde puede quitar los que no quiera, y se suben solos al pulsar **Guardar**.
+
+**Después de guardar.** En el detalle del proceso, el panel **Documentos adjuntos** permite agregar más:
+
 - Pulse **Subir archivos** y elija uno o varios (facturas, recibos, PDF, Word, Excel o XML), o **arrástrelos** sobre el panel.
 - En el celular, **Tomar foto** abre la cámara para fotografiar una factura.
 - Pulse el nombre de un archivo para verlo o descargarlo.

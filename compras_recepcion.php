@@ -216,6 +216,7 @@ include __DIR__ . '/includes/header.php';
       </table>
     </div>
     <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="addNrRow()"><i class="fas fa-plus"></i> Agregar Ítem</button>
+    <?php $adjModulo = 'compras_recepcion.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
     <div class="mt-4 d-flex gap-2">
       <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> <?= $nrE ? 'Guardar cambios' : 'Registrar Recepción' ?></button>
       <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>

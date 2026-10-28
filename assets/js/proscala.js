@@ -40,7 +40,10 @@ async function ajax(url, data = null, method = 'GET') {
   }
   // Una acción (revisar, autorizar, crear…) puede cambiar lo pendiente de la campana
   if (method === 'POST' && !/notificaciones\.php/.test(url)) Notificaciones.programar();
-  return res.json();
+  const json = await res.json();
+  // Formulario guardado con documentos elegidos al llenarlo: se suben antes de seguir (AdjuntosForm)
+  if (method === 'POST' && json?.success && !/adjuntos\.php/.test(url)) await AdjuntosForm.alGuardar(data, json);
+  return json;
 }
 
 // ── Sesión ─────────────────────────────────────────────────────────
@@ -825,38 +828,47 @@ const Adjuntos = {
     panel.querySelector('.adj-lista').innerHTML = r.html;
     panel.querySelector('.adj-total').textContent = r.total;
   },
-  // Un archivo por envío: el límite del servidor aplica a cada uno y no a la suma
+  // Sube archivos ([{file, camara}]) a un proceso: uno por envío, así el límite del servidor
+  // aplica a cada uno y no a la suma. alSubir(r) recibe cada respuesta (lista actualizada).
+  async subirA(modulo, id, archivos, maxMb, alSubir) {
+    const subidos = [], errores = [];
+    for (const { file: original, camara } of archivos) {
+      const f = await this.comprimir(original, camara);
+      if (f.size > maxMb * 1048576) { errores.push(`${original.name}: supera ${maxMb} MB`); continue; }
+      const fd = new FormData();
+      fd.append('_action', 'subir');
+      fd.append('modulo', modulo);
+      fd.append('registro_id', id);
+      fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+      fd.append('archivos[]', f);
+      try {
+        const r = await post('adjuntos.php', fd);
+        alSubir?.(r);
+        if (r.parcial) errores.push(r.message.replace(/^.*No se adjuntaron: /, '').replace(/\.$/, ''));
+        else subidos.push(f.name);
+      } catch (e) { errores.push(e.message === 'HTTP 413' ? `${f.name}: demasiado grande para el servidor` : e.message.replace(/\.$/, '')); }
+    }
+    return { subidos, errores };
+  },
+  avisar({ subidos, errores }) {
+    if (subidos.length) Toast.show(subidos.length === 1 ? 'Documento adjuntado.' : `${subidos.length} documentos adjuntados.`, 'success');
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    if (errores.length) Toast.show('No se adjuntó: ' + esc(errores.join('; ')) + '.', 'error', 8000);
+  },
   async enviar(panel, files, deCamara = false) {
     if (!files.length) return;
     const botones = panel.querySelectorAll('.card-header label');
-    const maxMb = parseFloat(panel.dataset.maxMb) || 10;
-    const subidos = [], errores = [];
     panel.classList.add('subiendo');
     botones.forEach(b => b.classList.add('disabled'));
+    let res;
     try {
-      for (const original of files) {
-        const f = await this.comprimir(original, deCamara);
-        if (f.size > maxMb * 1048576) { errores.push(`${original.name}: supera ${maxMb} MB`); continue; }
-        const fd = new FormData();
-        fd.append('_action', 'subir');
-        fd.append('modulo', panel.dataset.modulo);
-        fd.append('registro_id', panel.dataset.id);
-        fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
-        fd.append('archivos[]', f);
-        try {
-          const r = await post('adjuntos.php', fd);
-          this.pintar(panel, r);
-          if (r.parcial) errores.push(r.message.replace(/^.*No se adjuntaron: /, '').replace(/\.$/, ''));
-          else subidos.push(f.name);
-        } catch (e) { errores.push(e.message === 'HTTP 413' ? `${f.name}: demasiado grande para el servidor` : e.message.replace(/\.$/, '')); }
-      }
+      res = await this.subirA(panel.dataset.modulo, panel.dataset.id, files.map(file => ({ file, camara: deCamara })),
+        parseFloat(panel.dataset.maxMb) || 10, r => this.pintar(panel, r));
     } finally {
       panel.classList.remove('subiendo');
       botones.forEach(b => b.classList.remove('disabled'));
     }
-    if (subidos.length) Toast.show(subidos.length === 1 ? 'Documento adjuntado.' : `${subidos.length} documentos adjuntados.`, 'success');
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    if (errores.length) Toast.show('No se adjuntó: ' + esc(errores.join('; ')) + '.', 'error', 8000);
+    this.avisar(res);
   },
   subir(input) {
     const panel = input.closest('.adjuntos-panel');
@@ -877,17 +889,87 @@ const Adjuntos = {
     } catch (e) { Toast.show(e.message, 'error'); }
   },
 };
-// Arrastrar y soltar archivos sobre el panel (escritorio)
+// ── Adjuntos al llenar un formulario (includes/adjuntos_form.php) ──
+// Los archivos quedan en el navegador hasta guardar. Cada módulo envía su formulario con
+// post(); al detectar que el envío viene de un formulario con adjuntos pendientes y que se
+// guardó bien, post() los sube al proceso (id de la respuesta o del formulario) antes de
+// devolver la respuesta, así el módulo navega cuando ya están arriba.
+const AdjuntosForm = {
+  archivos: new WeakMap(),          // bloque .adjuntos-form → [{file, camara}]
+  envio: null,                      // formulario que se está enviando: {form, bloque, accion, t}
+  lista(bloque) { if (!this.archivos.has(bloque)) this.archivos.set(bloque, []); return this.archivos.get(bloque); },
+  agregar(input) {
+    this.sumar(input.closest('.adjuntos-form'), [...input.files], input.hasAttribute('capture'));
+    input.value = '';
+  },
+  sumar(bloque, files, camara = false) {
+    const maxMb = parseFloat(bloque.dataset.maxMb) || 10;
+    const grandes = [];
+    files.forEach(file => {
+      // Las fotos se reducen al subirlas: solo se descarta lo que ni así cabría
+      if (file.size > maxMb * 1048576 && !/^image\/(jpeg|png|webp)$/.test(file.type)) grandes.push(file.name);
+      else this.lista(bloque).push({ file, camara });
+    });
+    if (grandes.length) Toast.show(`Supera ${maxMb} MB y no se adjuntará: ${grandes.join(', ')}`.replace(/[<>&]/g, ''), 'error', 7000);
+    this.pintar(bloque);
+  },
+  pintar(bloque) {
+    const ul = bloque.querySelector('.adjf-lista');
+    ul.innerHTML = '';
+    this.lista(bloque).forEach(({ file }, i) => {
+      const li = document.createElement('li');
+      li.className = 'adjf-item';
+      const icono = /^image\//.test(file.type) ? 'fa-file-image text-info' : /pdf/.test(file.type) ? 'fa-file-pdf text-danger' : 'fa-file text-muted';
+      li.innerHTML = `<i class="fas ${icono}"></i><span class="text-truncate flex-grow-1"></span>`
+        + `<small class="text-muted">${file.size >= 1048576 ? (file.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(file.size / 1024)) + ' KB'}</small>`
+        + '<button type="button" class="btn btn-sm btn-link text-danger p-0" title="Quitar"><i class="fas fa-xmark"></i></button>';
+      li.querySelector('span').textContent = file.name;
+      li.querySelector('button').onclick = () => { this.lista(bloque).splice(i, 1); this.pintar(bloque); };
+      ul.appendChild(li);
+    });
+  },
+  // Llamado por ajax() tras un POST correcto: ¿viene del formulario con adjuntos pendientes?
+  async alGuardar(data, res) {
+    const e = this.envio;
+    if (!e || !(data instanceof FormData) || Date.now() - e.t > 5000) return;
+    if (e.accion !== null && data.get('_action') !== e.accion) return;
+    this.envio = null;
+    const pendientes = this.lista(e.bloque);
+    const id = parseInt(res.id || e.form.querySelector('[name=id]')?.value || 0, 10);
+    if (!pendientes.length || !id) return;
+    Toast.show(`Guardado. Subiendo ${pendientes.length === 1 ? 'el documento adjunto' : pendientes.length + ' documentos adjuntos'}…`, 'info', 3000);
+    const r = await Adjuntos.subirA(e.bloque.dataset.adjuntosForm, id, pendientes.splice(0), parseFloat(e.bloque.dataset.maxMb) || 10);
+    this.pintar(e.bloque);
+    Adjuntos.avisar(r);
+  },
+};
+// Anota el formulario que se va a enviar. Los formularios con evento submit se anotan solos (antes
+// que el código del módulo); los de un modal que se guardan con un botón llaman a anotar(form).
+AdjuntosForm.anotar = function (form) {
+  const bloque = form?.querySelector?.('.adjuntos-form');
+  if (bloque) this.envio = { form, bloque, accion: form.querySelector('[name=_action]')?.value ?? null, t: Date.now() };
+};
+document.addEventListener('submit', e => AdjuntosForm.anotar(e.target), true);
+// Al cerrar un modal (cancelar, o abrirlo luego para otro registro) se descartan sus pendientes
+document.addEventListener('hidden.bs.modal', e => e.target.querySelectorAll?.('.adjuntos-form').forEach(b => {
+  AdjuntosForm.lista(b).length = 0;
+  AdjuntosForm.pintar(b);
+}));
+
+// Arrastrar y soltar archivos sobre el panel o el bloque del formulario (escritorio)
 ['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => {
-  const p = e.target.closest?.('.adjuntos-panel');
+  const p = e.target.closest?.('.adjuntos-panel, .adjuntos-form');
   if (p && e.dataTransfer?.types.includes('Files')) { e.preventDefault(); p.classList.add('arrastrando'); }
 }));
 ['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
-  const p = e.target.closest?.('.adjuntos-panel');
+  const p = e.target.closest?.('.adjuntos-panel, .adjuntos-form');
   if (!p) return;
   if (ev === 'dragleave' && p.contains(e.relatedTarget)) return;
   p.classList.remove('arrastrando');
-  if (ev === 'drop' && e.dataTransfer?.files.length) { e.preventDefault(); Adjuntos.enviar(p, [...e.dataTransfer.files]); }
+  if (ev !== 'drop' || !e.dataTransfer?.files.length) return;
+  e.preventDefault();
+  if (p.matches('.adjuntos-form')) AdjuntosForm.sumar(p, [...e.dataTransfer.files]);
+  else Adjuntos.enviar(p, [...e.dataTransfer.files]);
 }));
 
 async function cambiarEstado(url, id, estado, tabla, onDone) {
