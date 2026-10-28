@@ -420,6 +420,7 @@ function initSelect2(context) {
       allowClear: $el.hasClass('allow-clear'),
       dropdownParent: $el.closest('.modal').length ? $el.closest('.modal') : $(document.body)
     });
+    if ($el.is('[data-alta]')) AltaRapida.preparar($el);
   });
   initSelect2.observar();
 }
@@ -679,6 +680,130 @@ const Dialogo = {
 function confirmar(mensaje, opciones = {}) { return Dialogo.abrir({ mensaje, ...opciones }); }
 /** Aviso con el diseño del sistema (solo botón Aceptar). Promesa que se cumple al cerrarlo. */
 function alerta(mensaje, opciones = {}) { return Dialogo.abrir({ mensaje, tipo: 'aviso', aceptar: 'Entendido', soloAceptar: true, ...opciones }); }
+
+// ── Alta rápida desde una lista desplegable (alta_rapida.php) ─────
+// <select data-alta="proveedor|banco|cargo|departamento">: al pie de la lista aparece "Agregar…",
+// que abre un modal con lo esencial (lo escrito en la búsqueda pasa al nombre). Se guarda sin
+// salir del formulario y queda elegido; la opción nueva llega también a las demás listas del
+// mismo tipo en la página. Funciona aunque la lista esté dentro de otro modal.
+const AltaRapida = {
+  TIPOS: {
+    proveedor: { label: 'proveedor', icono: 'fa-truck', campos: [
+      ['nombre', 'Nombre *', 'col-12'], ['rtn', 'RTN', 'col-md-6'], ['telefono', 'Teléfono', 'col-md-6'],
+      ['contacto', 'Contacto', 'col-md-6'], ['email', 'Email', 'col-md-6', 'email'],
+      ['categoria', 'Categoría', 'col-md-6', { ambos: 'Bienes y servicios', bienes: 'Bienes', servicios: 'Servicios' }]] },
+    banco:        { label: 'banco',        icono: 'fa-building-columns', campos: [['nombre', 'Nombre *', 'col-12']] },
+    cargo:        { label: 'cargo',        icono: 'fa-briefcase',        campos: [['nombre', 'Nombre *', 'col-12']] },
+    departamento: { label: 'departamento', icono: 'fa-sitemap',          campos: [['nombre', 'Nombre *', 'col-12']] },
+  },
+  modal: null,
+
+  // Pie de la lista de Select2 con el botón "Agregar…" (el dropdown se reutiliza entre aperturas)
+  preparar($el) {
+    const t = this.TIPOS[$el.data('alta')];
+    if (!t) return;
+    $el.off('select2:open.alta').on('select2:open.alta', () => {
+      const $dd = $el.data('select2').$dropdown.find('.select2-dropdown');
+      const $busca = $dd.find('.select2-search__field');
+      let $pie = $dd.children('.alta-rapida-pie');
+      const rotular = () => {
+        const q = ($busca.val() || '').trim();
+        $pie.find('span').text(q ? `Agregar «${q}» como ${t.label} nuevo` : `Agregar ${t.label} nuevo`);
+      };
+      if (!$pie.length) {
+        $pie = $('<button type="button" class="alta-rapida-pie"><i class="fas fa-plus"></i> <span></span></button>').appendTo($dd);
+        $pie.on('mousedown', e => e.preventDefault());   // no quitar el foco a la búsqueda
+        $pie.on('click', () => {
+          const q = ($busca.val() || '').trim();
+          $el.select2('close');
+          this.abrir($el[0], q);
+        });
+        $busca.on('input.alta', rotular);
+      }
+      rotular();
+    });
+  },
+
+  crear() {
+    const el = document.createElement('div');
+    el.className = 'modal fade alta-rapida';
+    el.tabIndex = -1;
+    el.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <form method="post" novalidate>
+            <div class="modal-header"><h5 class="modal-title"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><div class="row g-3"></div></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Guardar y seleccionar</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+    document.body.appendChild(el);   // fuera de <main>: sobrevive a la navegación sin recarga
+    return el;
+  },
+
+  abrir(select, texto = '') {
+    const tipo = select.dataset.alta, t = this.TIPOS[tipo];
+    const esc = Notificaciones.esc;
+    const el = this.modal || (this.modal = this.crear());
+    const form = el.querySelector('form');
+    el.querySelector('.modal-title').innerHTML = `<i class="fas ${t.icono}"></i> Nuevo ${t.label}`;
+    el.querySelector('.row').innerHTML = t.campos.map(([campo, etiqueta, col, extra]) => {
+      const control = typeof extra === 'object'
+        ? `<select name="${campo}" class="form-select no-search">${Object.entries(extra).map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select>`
+        : `<input type="${extra || 'text'}" name="${campo}" class="form-control" maxlength="150">`
+          + (campo === 'nombre' ? `<div class="invalid-feedback">Escriba el nombre del ${t.label}.</div>` : '');
+      return `<div class="${col}"><label class="form-label">${esc(etiqueta)}</label>${control}</div>`;
+    }).join('') + (tipo === 'proveedor'
+      ? '<div class="col-12 small text-muted"><i class="fas fa-circle-info"></i> Los datos bancarios y demás detalles se completan después en Proveedores.</div>' : '');
+    const nombre = form.elements.nombre;
+    nombre.value = texto;
+
+    // Si la lista está dentro de otro modal: este va encima y el otro suelta el foco mientras tanto
+    const exterior = select.closest('.modal');
+    const instExterior = exterior ? bootstrap.Modal.getInstance(exterior) : null;
+    const bs = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static' });
+    const btn = form.querySelector('[type=submit]');
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (!nombre.value.trim()) { nombre.classList.add('is-invalid'); nombre.focus(); return; }
+      btn.disabled = true;
+      const fd = new FormData(form);
+      fd.append('tipo', tipo);
+      fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+      try {
+        const r = await post('alta_rapida.php', fd);
+        this.seleccionar(select, tipo, r);
+        bs.hide();
+        Toast.show(r.message, 'success', 6000);
+      } catch (err) { Toast.show(err.message, 'error'); }
+      finally { btn.disabled = false; }
+    };
+    nombre.oninput = () => nombre.classList.remove('is-invalid');
+    el.addEventListener('shown.bs.modal', () => { nombre.focus(); nombre.select(); }, { once: true });
+    el.addEventListener('hidden.bs.modal', () => {
+      instExterior?._focustrap?.activate();
+      if (exterior?.classList.contains('show')) document.body.classList.add('modal-open');
+      select.nextElementSibling?.querySelector('.select2-selection')?.focus();
+    }, { once: true });
+    el.classList.toggle('sobre-modal', !!exterior);
+    instExterior?._focustrap?.deactivate();
+    bs.show();
+    if (exterior) [...document.querySelectorAll('.modal-backdrop')].pop()?.classList.add('alta-rapida-backdrop');   // Bootstrap lo agrega al abrir
+  },
+
+  // Agrega la opción a todas las listas del tipo y la deja elegida en la que la pidió
+  seleccionar(select, tipo, r) {
+    document.querySelectorAll(`select[data-alta="${tipo}"]`).forEach(s => {
+      if (![...s.options].some(o => o.value === String(r.valor))) s.add(new Option(r.nombre, r.valor));
+    });
+    select.value = String(r.valor);
+    select.dispatchEvent(new Event('change', { bubbles: true }));   // Select2 y los onchange del módulo
+  },
+};
 
 function confirmAction(msg, callback) {
   confirmar(msg).then(ok => { if (ok) callback(); });

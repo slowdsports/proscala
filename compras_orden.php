@@ -295,7 +295,7 @@ include __DIR__ . '/includes/header.php';
       </div>
       <div class="col-md-3">
         <label class="form-label">Proveedor *</label>
-        <select name="proveedor_id" class="form-select" required id="sel-prov">
+        <select name="proveedor_id" class="form-select" required id="sel-prov" data-alta="proveedor">
           <option value="">--</option>
           <?php foreach($proveedores as $p): ?>
           <option value="<?= $p['id'] ?>" <?= (($ocE['proveedor_id'] ?? ($coData['prov_id'] ?? 0))==$p['id'])?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option>

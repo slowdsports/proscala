@@ -106,7 +106,7 @@ include __DIR__ . '/includes/header.php';
             <div class="col-12"><hr style="border-color:var(--border);margin:.25rem 0"><div style="font-size:.78rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Cuenta Bancaria</div></div>
             <div class="col-md-4">
               <label class="form-label">Banco</label>
-              <select name="banco" id="p-banco" class="form-select">
+              <select name="banco" id="p-banco" class="form-select" data-alta="banco">
                 <option value="">— Sin especificar —</option>
                 <?php
                 $bancosLista = $pdo->query("SELECT nombre FROM cat_bancos ORDER BY nombre")->fetchAll(PDO::FETCH_COLUMN);

@@ -178,3 +178,81 @@ prueba('Búsqueda: catálogo de procesos coherente con los módulos del sistema'
     $todos = []; foreach (MODULOS as $items) $todos += $items;
     foreach ($m as [, $modulo]) afirmar(isset($todos[$modulo]), "$modulo no es un módulo del menú");
 });
+
+require_once RAIZ . '/config/catalogo_cuentas.php';
+prueba('Catálogo de cuentas en Excel: la plantilla con el catálogo actual se vuelve a importar sin errores', function () use ($pdo) {
+    $tmp = tempnam(sys_get_temp_dir(), 'x');
+    try {
+        file_put_contents($tmp, plantillaCatalogo($pdo));
+        $filas = leerXlsx($tmp);
+        iguales(CATALOGO_COLUMNAS, array_values($filas[1]), 'encabezados de la plantilla');
+        $v = validarCatalogo($pdo, $filas, false);
+        iguales([], array_slice($v['errores'], 0, 3), 'errores al releer el catálogo actual');
+        iguales(0, $v['resumen']['nuevas'] ?? -1, 'cuentas nuevas al releer el catálogo actual');
+        iguales((int)$pdo->query("SELECT COUNT(*) FROM cuentas_contables")->fetchColumn(), $v['resumen']['total'], 'cuentas leídas');
+        // Plantilla vacía: solo encabezados → no hay nada que importar
+        file_put_contents($tmp, plantillaCatalogo());
+        afirmar(validarCatalogo($pdo, leerXlsx($tmp), false)['errores'], 'una plantilla vacía no debe importarse');
+    } finally { @unlink($tmp); }
+});
+
+prueba('Catálogo de cuentas en Excel: rechaza archivos que no son la plantilla', function () {
+    $tmp = tempnam(sys_get_temp_dir(), 'x');
+    $rechaza = function (string $que) use ($tmp) {
+        try { leerXlsx($tmp); } catch (RuntimeException $e) { return; }
+        throw new AssertionError("aceptó $que");
+    };
+    try {
+        file_put_contents($tmp, "Código,Nombre,Tipo\n1,Caja,activo");          $rechaza('un CSV renombrado');
+        $z = new ZipArchive(); $z->open($tmp, ZipArchive::OVERWRITE);
+        $z->addFromString('word/document.xml', '<w/>'); $z->addFromString('[Content_Types].xml', '<Types/>'); $z->close();
+        $rechaza('un ZIP que no es libro de Excel');
+        file_put_contents($tmp, generarXlsx('H', ['a'], [['b']]));
+        $z->open($tmp); $z->addFromString('xl/worksheets/sheet1.xml', '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><worksheet>&e;</worksheet>'); $z->close();
+        $rechaza('un XML con entidades externas');
+    } finally { @unlink($tmp); }
+});
+
+prueba('Catálogo de cuentas en Excel: valida cada celda y aplica todo o nada', function () use ($pdo) {
+    $enc = [1 => array_values(CATALOGO_COLUMNAS)];
+    $errores = fn(array $filas, bool $desactivar = false) => validarCatalogo($pdo, $enc + $filas, $desactivar)['errores'];
+    afirmar(validarCatalogo($pdo, [1 => ['Codigo', 'Nombre', 'Tipo']] + [2 => ['1', 'Caja', 'Activo']], false)['errores'], 'aceptó encabezados distintos');
+    $e = $errores([2 => ['ZZ1', 'Caja', 'Activo'], 3 => ['ZZ1', 'Otra', 'Gasto'], 4 => ['ZZ 2', '', 'Gastos'], 5 => ['ZZ3', 'X', 'Gasto', '', 'NOEXISTE'],
+                   6 => ['ZZ4', 'X', 'Gasto', '', '', '0', '', 'Tal vez'], 7 => ['ZZ5', 'X', 'Gasto', '', '', '', '', '', 'extra']]);
+    foreach (['ya aparece en la fila 2', '«ZZ 2» no es válido', 'columna «Nombre»: es obligatorio', '«Gastos» no es un tipo válido',
+              'cuenta padre NOEXISTE no está', 'columna «Nivel»', 'debe ser «Sí» o «No»', 'fuera de las columnas'] as $esperado) {
+        afirmar((bool)array_filter($e, fn($x) => str_contains($x, $esperado)), "falta el error: $esperado");
+    }
+    afirmar((bool)array_filter($errores([2 => ['ZZA', 'A', 'Gasto', '', 'ZZB'], 3 => ['ZZB', 'B', 'Gasto', '', 'ZZA']]), fn($x) => str_contains($x, 'ciclo')), 'no detectó el ciclo');
+
+    $pdo->beginTransaction();
+    try {
+        $existente = $pdo->query("SELECT codigo FROM cuentas_contables ORDER BY id LIMIT 1")->fetchColumn();
+        $filas = $enc + [2 => ['ZZP', 'Grupo de prueba', 'Gasto'], 3 => ['zzh', 'Hija de prueba', 'otro gasto', 'Sub', 'ZZP', '', 'Desc', 'No']];
+        if ($existente) $filas[4] = [$existente, 'Renombrada por la prueba', 'Activo'];
+        $v = validarCatalogo($pdo, $filas, true);
+        iguales([], $v['errores'], 'errores de un archivo correcto');
+        aplicarCatalogo($pdo, $v['cuentas'], true);
+        $h = $pdo->query("SELECT c.*, p.codigo AS padre FROM cuentas_contables c LEFT JOIN cuentas_contables p ON p.id = c.cuenta_padre_id WHERE c.codigo = 'zzh'")->fetch();
+        afirmar($h && $h['padre'] === 'ZZP' && (int)$h['nivel'] === 2 && $h['tipo'] === 'otro_gasto' && !$h['activa'], 'la cuenta hija no quedó como en el archivo');
+        if ($existente) iguales('Renombrada por la prueba', $pdo->query("SELECT nombre FROM cuentas_contables WHERE codigo = " . $pdo->quote($existente))->fetchColumn(), 'cuenta existente actualizada por código');
+        iguales(0, (int)$pdo->query("SELECT COUNT(*) FROM cuentas_contables WHERE activa = 1 AND codigo NOT IN ('ZZP', " . $pdo->quote((string)$existente) . ")")->fetchColumn(), 'las que no venían quedaron inactivas');
+    } finally { $pdo->rollBack(); }
+});
+
+prueba('Planillas quincenales y mensuales: días trabajados, deducciones y nombre del período', function () {
+    $q1 = ['tipo' => 'quincenal', 'quincena' => 'primera', 'anio' => 2026, 'mes' => 2, 'fecha_inicio' => '2026-02-01', 'fecha_fin' => '2026-02-15'];
+    $q2 = ['tipo' => 'quincenal', 'quincena' => 'segunda', 'anio' => 2026, 'mes' => 2, 'fecha_inicio' => '2026-02-16', 'fecha_fin' => '2026-02-28'];
+    $m  = ['tipo' => 'mensual',   'quincena' => 'segunda', 'anio' => 2026, 'mes' => 2, 'fecha_inicio' => '2026-02-01', 'fecha_fin' => '2026-02-28'];
+    iguales([15, 15, 30], [diasPeriodoPlanilla($q1), diasPeriodoPlanilla($q2), diasPeriodoPlanilla($m)], 'días de un período completo');
+    iguales([1, 1, 2], [factorDeduccionesPlanilla($q1), factorDeduccionesPlanilla($q2), factorDeduccionesPlanilla($m)], 'factor de deducciones');
+    iguales(15, diasTrabajadosPlanilla($q1, '2020-05-10'), 'empleado antiguo: quincena completa');
+    iguales(30, diasTrabajadosPlanilla($m, null), 'sin fecha de ingreso: mes completo');
+    iguales(11, diasTrabajadosPlanilla($q1, '2026-02-05'), 'ingresó el 5: del 5 al 15');
+    iguales(11, diasTrabajadosPlanilla($q2, '2026-02-20'), 'ingresó el 20: del 20 al 30 (comercial)');
+    iguales(21, diasTrabajadosPlanilla($m, '2026-02-10'), 'mensual, ingresó el 10: del 10 al 30');
+    iguales(0, diasTrabajadosPlanilla($q1, '2026-02-20'), 'ingresó después del período: no entra');
+    iguales('Mensual (1-28)', nombrePeriodoPlanilla($m), 'nombre de la mensual de febrero');
+    iguales('2ª Quincena (16-31)', nombrePeriodoPlanilla($q2), 'nombre de la segunda quincena');
+    iguales('Mensual', nombrePeriodoPlanilla($m, true), 'nombre corto');
+});

@@ -176,7 +176,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">Proveedor Seleccionado</label>
-          <select name="proveedor_seleccionado_id" class="form-select" id="sel-prov-rec"><option value="">-- Al finalizar --</option><?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= ($co['proveedor_seleccionado_id'] ?? 0)==$p['id'] ? 'selected' : '' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select>
+          <select name="proveedor_seleccionado_id" class="form-select" id="sel-prov-rec" data-alta="proveedor"><option value="">-- Al finalizar --</option><?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= ($co['proveedor_seleccionado_id'] ?? 0)==$p['id'] ? 'selected' : '' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select>
         </div>
         <div class="col-12"><label class="form-label">Justificación de Selección</label><textarea name="justificacion" class="form-control" rows="2" placeholder="Indique por qué se eligió el proveedor recomendado..."><?= htmlspecialchars($co['justificacion'] ?? '') ?></textarea></div>
       </div>
@@ -192,7 +192,7 @@ include __DIR__ . '/includes/header.php';
               <?php if($pi>0): ?><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="this.closest('.prov-row').remove()"><i class="fas fa-trash"></i></button><?php endif; ?>
             </div>
             <div class="row g-2">
-              <div class="col-md-4"><label class="form-label">Proveedor *</label><select class="form-select form-select-sm prov-sel" data-f="proveedor_id"><option value="">--</option><?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= ($cp['proveedor_id'] ?? 0)==$p['id'] ? 'selected' : '' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select></div>
+              <div class="col-md-4"><label class="form-label">Proveedor *</label><select class="form-select form-select-sm prov-sel" data-f="proveedor_id" data-alta="proveedor"><option value="">--</option><?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= ($cp['proveedor_id'] ?? 0)==$p['id'] ? 'selected' : '' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select></div>
               <div class="col-md-2"><label class="form-label">No. Cotización</label><input type="text" class="form-control form-control-sm" data-f="num_cotizacion" placeholder="Ref. proveedor" value="<?= htmlspecialchars($cp['num_cotizacion'] ?? '') ?>"></div>
               <div class="col-md-2"><label class="form-label">Fecha</label><input type="text" class="form-control form-control-sm date-input" data-f="fecha" value="<?= $cp['fecha_cotizacion'] ?? '' ?>"></div>
               <div class="col-md-2"><label class="form-label">Total (L.) *</label><input type="number" class="form-control form-control-sm text-end" step="0.01" min="0" data-f="total" value="<?= $cp['total'] ?? 0 ?>"></div>
@@ -216,16 +216,17 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <?php
-$provJson = json_encode(array_map(fn($p)=>['id'=>$p['id'],'nombre'=>$p['nombre']],$proveedores));
-$extraJs = strtr(<<<'JS'
+$extraJs = <<<'JS'
 
 initDataTable('#tbl-co');
 
 function addProvRow(){
-  const opts = __PROV_JSON__.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+  // Las opciones de la primera fila (incluye los proveedores agregados desde la lista)
+  const opts = [...document.querySelector('#provs-container .prov-sel').options].filter(o=>o.value)
+    .map(o=>`<option value="${o.value}">${Notificaciones.esc(o.text)}</option>`).join('');
   const idx = document.querySelectorAll('#provs-container .prov-row').length+1;
   const d=document.createElement('div'); d.className='card mb-2 prov-row';
-  d.innerHTML=`<div class="card-body p-3"><div class="d-flex justify-content-between align-items-center mb-2"><strong style="font-size:.85rem;">Proveedor ${idx}</strong><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="this.closest('.prov-row').remove()"><i class="fas fa-trash"></i></button></div><div class="row g-2"><div class="col-md-4"><select class="form-select form-select-sm prov-sel" data-f="proveedor_id"><option value="">--</option>${opts}</select></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="num_cotizacion"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm date-input" data-f="fecha"></div><div class="col-md-2"><input type="number" class="form-control form-control-sm text-end" step="0.01" min="0" data-f="total" value="0"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="tiempo_entrega"></div><div class="col-md-4"><input type="text" class="form-control form-control-sm" data-f="condiciones"></div><div class="col-md-8"><input type="text" class="form-control form-control-sm" data-f="notas"></div></div></div>`;
+  d.innerHTML=`<div class="card-body p-3"><div class="d-flex justify-content-between align-items-center mb-2"><strong style="font-size:.85rem;">Proveedor ${idx}</strong><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="this.closest('.prov-row').remove()"><i class="fas fa-trash"></i></button></div><div class="row g-2"><div class="col-md-4"><select class="form-select form-select-sm prov-sel" data-f="proveedor_id" data-alta="proveedor"><option value="">--</option>${opts}</select></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="num_cotizacion"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm date-input" data-f="fecha"></div><div class="col-md-2"><input type="number" class="form-control form-control-sm text-end" step="0.01" min="0" data-f="total" value="0"></div><div class="col-md-2"><input type="text" class="form-control form-control-sm" data-f="tiempo_entrega"></div><div class="col-md-4"><input type="text" class="form-control form-control-sm" data-f="condiciones"></div><div class="col-md-8"><input type="text" class="form-control form-control-sm" data-f="notas"></div></div></div>`;
   document.getElementById('provs-container').appendChild(d);
   flatpickr(d.querySelectorAll('.date-input'),{locale:'es',dateFormat:'Y-m-d',allowInput:true});
 }
@@ -246,8 +247,6 @@ document.getElementById('form-co')?.addEventListener('submit',function(e){
   }).catch(()=>Toast.show('Error','error'));
 });
 
-JS, [
-    '__PROV_JSON__' => $provJson,
-]);
+JS;
 include __DIR__ . '/includes/footer.php';
 ?>

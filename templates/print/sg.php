@@ -227,8 +227,7 @@ require __DIR__ . '/_pagina_inicio.php';
       </div>
     </div>
   </div>
-
-  <?= sigBlock($fSG, 'cols-3', 'margin-top:28px') ?>
+  <!-- Solo lo firma el empleado que recibió el viático (arriba): sin las firmas del flujo -->
 
   <div class="spacer"></div>
   <div class="doc-footer">

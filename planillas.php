@@ -6,7 +6,7 @@ requireLogin();
 
 $action = $_GET['action'] ?? 'list';
 $id     = (int)($_GET['id'] ?? 0);
-$pagina = 'Planillas Quincenales';
+$pagina = 'Planillas de Sueldos';
 
 // ── CSV Credimpulsa export ─────────────────────────────────────────
 if ($action === 'export_credimpulsa' && $id) {
@@ -15,7 +15,7 @@ if ($action === 'export_credimpulsa' && $id) {
     $per->execute([$id]); $per = $per->fetch();
     if (!$per) { http_response_code(404); die('Período no encontrado.'); }
     $mesNom  = $mesesExport[$per['mes'] - 1];
-    $quinNom = $per['quincena'] === 'primera' ? '1ra_Quincena' : '2da_Quincena';
+    $quinNom = esPlanillaMensual($per) ? 'Mensual' : ($per['quincena'] === 'primera' ? '1ra_Quincena' : '2da_Quincena');
     $filename = "Credimpulsa_{$mesNom}_{$per['anio']}_{$quinNom}.csv";
 
     $rows = $pdo->prepare("SELECT CONCAT(e.nombre,' ',e.apellidos) AS empleado_nombre,
@@ -114,43 +114,56 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'generar') {
         $anio      = (int)$_POST['anio'];
         $mes       = (int)$_POST['mes'];
-        $quincena  = $_POST['quincena'];
+        $tipo      = ($_POST['tipo'] ?? '') === 'mensual' ? 'mensual' : 'quincenal';
+        // La mensual ocupa la 'segunda' (índice único año + mes + quincena; ver config/functions.php)
+        $quincena  = $tipo === 'mensual' ? 'segunda' : (($_POST['quincena'] ?? '') === 'segunda' ? 'segunda' : 'primera');
         $fInicio   = $_POST['fecha_inicio'];
         $fFin      = $_POST['fecha_fin'];
         $fPago     = $_POST['fecha_pago'] ?: null;
+        if ($mes < 1 || $mes > 12 || !strtotime($fInicio) || !strtotime($fFin) || $fFin < $fInicio) jsonErr('Revise el mes y las fechas del período.');
 
-        // Check duplicate
-        $chk = $pdo->prepare("SELECT id FROM planilla_periodos WHERE anio=? AND mes=? AND quincena=?");
-        $chk->execute([$anio, $mes, $quincena]);
-        if ($chk->fetch()) jsonErr('Ya existe una planilla para ese período.');
+        // Un mes tiene una planilla mensual o sus dos quincenas, no ambas
+        $chk = $pdo->prepare("SELECT tipo, quincena FROM planilla_periodos WHERE anio=? AND mes=?");
+        $chk->execute([$anio, $mes]);
+        foreach ($chk->fetchAll() as $ya) {
+            if ($tipo === 'mensual' || $ya['tipo'] === 'mensual') {
+                jsonErr('Ese mes ya tiene ' . (esPlanillaMensual($ya) ? 'una planilla mensual' : 'planilla quincenal') . ': un mes se paga con una planilla mensual o con sus dos quincenas, no ambas.');
+            }
+            if ($ya['quincena'] === $quincena) jsonErr('Ya existe una planilla para ese período.');
+        }
+        $periodo = ['tipo' => $tipo, 'quincena' => $quincena, 'anio' => $anio, 'mes' => $mes, 'fecha_inicio' => $fInicio, 'fecha_fin' => $fFin];
+        $factor  = factorDeduccionesPlanilla($periodo);
 
         $pdo->beginTransaction();
         try {
             $numero = numeroProceso($pdo, 'planilla_periodos', getConfig($pdo, 'prefijo_pl', 'PL'), null, $anio);
-            $pdo->prepare("INSERT INTO planilla_periodos (numero,anio,mes,quincena,fecha_inicio,fecha_fin,fecha_pago,estado)
-                VALUES (?,?,?,?,?,?,?,'borrador')")->execute([$numero,$anio,$mes,$quincena,$fInicio,$fFin,$fPago]);
+            $pdo->prepare("INSERT INTO planilla_periodos (numero,anio,mes,quincena,tipo,fecha_inicio,fecha_fin,fecha_pago,estado)
+                VALUES (?,?,?,?,?,?,?,?,'borrador')")->execute([$numero,$anio,$mes,$quincena,$tipo,$fInicio,$fFin,$fPago]);
             $periodoId = $pdo->lastInsertId();
 
             $empleados = $pdo->query("SELECT * FROM empleados WHERE activo=1 AND tipo_contrato != 'servicio'")->fetchAll();
             $totalBruto = $totalDed = $totalNeto = 0;
 
             foreach ($empleados as $e) {
-                $bruto = round($e['sueldo_mensual'] / 2, 2);
-                $ihssE = $e['aplica_ihss']        ? (float)($e['ded_ihss_empleado'] ?? 0) : 0;
-                $ihssP = $e['aplica_ihss']        ? (float)($e['ded_ihss_patronal'] ?? 0) : 0;
-                $rapE  = $e['aplica_rap']          ? (float)($e['ded_rap']           ?? 0) : 0;
+                // Días del período (15 o 30), o desde su ingreso si entró durante el período
+                $dias = diasTrabajadosPlanilla($periodo, $e['fecha_ingreso'] ?? null);
+                if (!$dias) continue;   // ingresa después del período
+                $bruto = round($e['sueldo_mensual'] / 30 * $dias, 2);
+                $ihssE = $e['aplica_ihss']        ? (float)($e['ded_ihss_empleado'] ?? 0) * $factor : 0;
+                $ihssP = $e['aplica_ihss']        ? (float)($e['ded_ihss_patronal'] ?? 0) * $factor : 0;
+                $rapE  = $e['aplica_rap']          ? (float)($e['ded_rap']           ?? 0) * $factor : 0;
                 $rapP  = $rapE;
-                $isr   = $e['aplica_isr']          ? (float)($e['ded_isr']           ?? 0) : 0;
-                $cred  = $e['aplica_credimpulsa']  ? (float)($e['ded_credimpulsa']   ?? 0) : 0;
+                $isr   = $e['aplica_isr']          ? (float)($e['ded_isr']           ?? 0) * $factor : 0;
+                $cred  = $e['aplica_credimpulsa']  ? (float)($e['ded_credimpulsa']   ?? 0) * $factor : 0;
                 $ded   = $ihssE + $rapE + $isr + $cred;
-                $neto  = $bruto - $ded;
+                $neto  = round($bruto - $ded, 2);
 
                 $pdo->prepare("INSERT INTO planilla_detalle
-                    (periodo_id,empleado_id,sueldo_quincenal,total_bruto,
+                    (periodo_id,empleado_id,dias_trabajados,sueldo_quincenal,total_bruto,
                     ihss_empleado,rap_empleado,isr,credimpulsa,total_deducciones,sueldo_neto,
                     ihss_patronal,rap_patronal)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$periodoId,$e['id'],$bruto,$bruto,$ihssE,$rapE,$isr,$cred,$ded,$neto,$ihssP,$rapP]);
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$periodoId,$e['id'],$dias,$bruto,$bruto,$ihssE,$rapE,$isr,$cred,$ded,$neto,$ihssP,$rapP]);
 
                 $totalBruto += $bruto;
                 $totalDed   += $ded;
@@ -162,8 +175,8 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $copiarDist->execute([$periodoId]);
 
             $pdo->commit();
-            registrarAuditoria($pdo,'INSERT','planilla_periodos',$periodoId,'Planilla generada');
-            jsonOk(['id' => $periodoId], 'Planilla generada correctamente.');
+            registrarAuditoria($pdo,'INSERT','planilla_periodos',$periodoId,'Planilla ' . $tipo . ' generada');
+            jsonOk(['id' => $periodoId], 'Planilla ' . $tipo . ' generada correctamente.');
         } catch (\Exception $e) {
             $pdo->rollBack();
             jsonErr('Error: ' . $e->getMessage());
@@ -173,6 +186,11 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'guardar_credimpulsa') {
         $pid  = (int)$_POST['periodo_id'];
         $rows = $_POST['rows'] ?? [];
+        $sp = $pdo->prepare("SELECT * FROM planilla_periodos WHERE id=?");
+        $sp->execute([$pid]);
+        if (!$per = $sp->fetch()) jsonErr('Planilla no encontrada.');
+        $maxDias = diasPeriodoPlanilla($per);
+        $factor  = factorDeduccionesPlanilla($per);
         $pdo->beginTransaction();
         try {
             // Salario mensual por fila para recalcular bruto según días trabajados
@@ -194,18 +212,19 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     total_deducciones=?, sueldo_neto=?,
                     observacion=?
                 WHERE id=? AND periodo_id=?");
+            // Las deducciones del empleado son por quincena: de una mensual se guarda la mitad
             $syncEmp = $pdo->prepare("UPDATE empleados e
                 JOIN planilla_detalle pd ON e.id = pd.empleado_id
-                SET e.ded_ihss_empleado=pd.ihss_empleado,
-                    e.ded_ihss_patronal=pd.ihss_patronal,
-                    e.ded_rap=pd.rap_empleado,
-                    e.ded_isr=pd.isr,
-                    e.ded_credimpulsa=pd.credimpulsa
+                SET e.ded_ihss_empleado=ROUND(pd.ihss_empleado/$factor,2),
+                    e.ded_ihss_patronal=ROUND(pd.ihss_patronal/$factor,2),
+                    e.ded_rap=ROUND(pd.rap_empleado/$factor,2),
+                    e.ded_isr=ROUND(pd.isr/$factor,2),
+                    e.ded_credimpulsa=ROUND(pd.credimpulsa/$factor,2)
                 WHERE pd.id=?");
             foreach ($rows as $r) {
                 $p    = fn(string $k) => max(0, (float)str_replace(',', '', $r[$k] ?? '0'));
                 $id   = (int)$r['id'];
-                $dias = max(1, min(15, (int)($r['dias_trabajados'] ?? 15)));
+                $dias = max(1, min($maxDias, (int)($r['dias_trabajados'] ?? $maxDias)));
                 $sal  = $salMap[$id] ?? 0;
                 $bruto = round($sal / 30 * $dias, 2);
                 $ihssE = $p('ihss_empleado'); $ihssP = $p('ihss_patronal');
@@ -269,7 +288,7 @@ include __DIR__ . '/includes/header.php';
 ?>
 
 <div class="page-header">
-  <h1><i class="fas fa-money-check-dollar"></i> Planillas Quincenales</h1>
+  <h1><i class="fas fa-money-check-dollar"></i> Planillas de Sueldos</h1>
   <?php if ($action === 'list'): ?>
   <button class="btn-proscala" data-bs-toggle="modal" data-bs-target="#modal-generar">
     <i class="fas fa-plus"></i> Generar Planilla
@@ -285,14 +304,14 @@ include __DIR__ . '/includes/header.php';
   <div class="card-body p-0">
     <table class="table-proscala w-100">
       <thead>
-        <tr><th>Número</th><th>Período</th><th>Quincena</th><th>Fecha Pago</th><th>Total Bruto</th><th>Deducciones</th><th>Total Neto</th><th>Estado</th><th></th></tr>
+        <tr><th>Número</th><th>Período</th><th>Tipo</th><th>Fecha Pago</th><th>Total Bruto</th><th>Deducciones</th><th>Total Neto</th><th>Estado</th><th></th></tr>
       </thead>
       <tbody>
         <?php foreach ($periodos as $p): ?>
         <tr>
           <td class="font-mono"><?= htmlspecialchars($p['numero'] ?? '—') ?><?= badgeHistorico($p) ?></td>
           <td><?= $meses[$p['mes']-1] . ' ' . $p['anio'] ?></td>
-          <td><?= $p['quincena'] === 'primera' ? '1<sup>ra</sup> (1-15)' : '2<sup>da</sup> (16-31)' ?></td>
+          <td><?= htmlspecialchars(nombrePeriodoPlanilla($p)) ?></td>
           <td><?= fmtFecha($p['fecha_pago'] ?? '') ?></td>
           <td class="font-mono"><?= lps($p['total_bruto']) ?></td>
           <td class="font-mono text-danger"><?= lps($p['total_deducciones']) ?></td>
@@ -318,8 +337,8 @@ include __DIR__ . '/includes/header.php';
 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
 <div id="print-area">
   <div class="print-header">
-    <h4>Proscala — Planilla Quincional</h4>
-    <p><?= $meses[$periodo['mes']-1] . ' ' . $periodo['anio'] ?> | <?= $periodo['quincena'] === 'primera' ? '1ra Quincena (1-15)' : '2da Quincena (16-31)' ?></p>
+    <h4>Proscala — Planilla <?= esPlanillaMensual($periodo) ? 'Mensual' : 'Quincenal' ?></h4>
+    <p><?= $meses[$periodo['mes']-1] . ' ' . $periodo['anio'] ?> | <?= htmlspecialchars(nombrePeriodoPlanilla($periodo)) ?></p>
   </div>
 
   <div class="card mb-3">
@@ -327,7 +346,7 @@ include __DIR__ . '/includes/header.php';
       <i class="fas fa-calendar"></i>
       <?php if ($periodo['numero']): ?><strong class="font-mono"><?= htmlspecialchars($periodo['numero']) ?></strong> —<?php endif; ?>
       <?= $meses[$periodo['mes']-1] . ' ' . $periodo['anio'] ?> —
-      <?= $periodo['quincena'] === 'primera' ? '1ª Quincena' : '2ª Quincena' ?>
+      <?= htmlspecialchars(nombrePeriodoPlanilla($periodo, true)) ?>
       — <?= estadoBadge($periodo['estado']) ?>
       <div class="ms-auto d-flex gap-2 no-print">
         <?php if ($periodo['estado'] === 'procesada'): ?>
@@ -379,7 +398,7 @@ include __DIR__ . '/includes/header.php';
         <thead>
           <tr>
             <th>#</th><th>Empleado</th><th>Cargo</th><th>Proyectos</th>
-            <th>Días</th><th>Q. Bruta</th><th>IHSS</th><th>RAP</th><th>ISR</th>
+            <th>Días</th><th><?= esPlanillaMensual($periodo) ? 'Sueldo Bruto' : 'Q. Bruta' ?></th><th>IHSS</th><th>RAP</th><th>ISR</th>
             <th>Credimpulsa</th>
             <th>Ded. Total</th><th>Sueldo Neto</th>
             <th>IHSS Pat.</th><th>RAP Pat.</th><th>Obs.</th><th>Banco / Cuenta</th>
@@ -420,13 +439,13 @@ include __DIR__ . '/includes/header.php';
             </td>
             <td class="text-center">
               <?php if ($canEdit): ?>
-              <input type="number" min="1" max="15" step="1"
+              <input type="number" min="1" max="<?= diasPeriodoPlanilla($periodo) ?>" step="1"
                 class="form-control form-control-sm p-0 text-center font-mono manual-input"
                 style="width:52px;font-size:.78rem"
                 data-id="<?= $d['id'] ?>" data-field="dias_trabajados"
-                value="<?= (int)($d['dias_trabajados'] ?? 15) ?>">
+                value="<?= (int)($d['dias_trabajados'] ?? diasPeriodoPlanilla($periodo)) ?>">
               <?php else: ?>
-              <?= (int)($d['dias_trabajados'] ?? 15) ?>
+              <?= (int)($d['dias_trabajados'] ?? diasPeriodoPlanilla($periodo)) ?>
               <?php endif; ?>
             </td>
             <td class="font-mono"><?= lps($d['total_bruto']) ?></td>
@@ -502,9 +521,10 @@ include __DIR__ . '/includes/header.php';
     <?php if ($canEdit): ?>
   <div class="mt-2 no-print d-flex align-items-center gap-2">
     <button class="btn btn-sm btn-outline-warning" onclick="guardarManuales(<?= $periodo['id'] ?>)">
-      <i class="fas fa-save"></i> Guardar IHSS / RAP / ISR / Credimpulsa
+      <i class="fas fa-save"></i> Guardar días / IHSS / RAP / ISR / Credimpulsa
     </button>
-    <span class="text-muted" style="font-size:.8rem">Edite los montos y guarde antes de aprobar.</span>
+    <span class="text-muted" style="font-size:.8rem">Edite los días (máximo <?= diasPeriodoPlanilla($periodo) ?>) y los montos, y guarde antes de aprobar.
+      El sueldo se recalcula como sueldo mensual / 30 × días.</span>
   </div>
   <?php endif; ?>
 </div>
@@ -603,6 +623,15 @@ include __DIR__ . '/includes/header.php';
           <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
           <input type="hidden" name="_action" value="generar">
           <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Tipo de planilla *</label>
+              <div class="d-flex gap-4">
+                <div class="form-check"><input class="form-check-input" type="radio" name="tipo" id="tipo-quincenal" value="quincenal" checked onchange="updateFechas()">
+                  <label class="form-check-label" for="tipo-quincenal">Quincenal <span class="text-muted">(15 días por empleado)</span></label></div>
+                <div class="form-check"><input class="form-check-input" type="radio" name="tipo" id="tipo-mensual" value="mensual" onchange="updateFechas()">
+                  <label class="form-check-label" for="tipo-mensual">Mensual <span class="text-muted">(30 días por empleado)</span></label></div>
+              </div>
+            </div>
             <div class="col-md-3">
               <label class="form-label">Año *</label>
               <input type="number" name="anio" class="form-control" value="<?= date('Y') ?>" required min="2020" max="2040">
@@ -615,7 +644,7 @@ include __DIR__ . '/includes/header.php';
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-3" id="grp-quin">
               <label class="form-label">Quincena *</label>
               <select name="quincena" class="form-select" required id="sel-quin" onchange="updateFechas()">
                 <option value="primera">1ª Quincena (1-15)</option>
@@ -637,7 +666,10 @@ include __DIR__ . '/includes/header.php';
           </div>
           <div class="alert alert-info mt-3 mb-0" style="font-size:.82rem;">
             <i class="fas fa-info-circle"></i>
-            Se generará la planilla con todos los empleados activos de contrato indefinido o definido.
+            Se generará la planilla con todos los empleados activos de contrato indefinido o definido, con
+            <strong id="txt-dias">15</strong> días trabajados cada uno (sueldo mensual / 30 × días). Quien ingresó durante el
+            período lleva solo los días desde su ingreso; los días se pueden corregir en la planilla.
+            <span id="txt-mensual" hidden>Las deducciones de cada empleado (configuradas por quincena) se toman al doble.</span>
             IHSS, RAP e ISR se ingresan manualmente en la planilla. Solo INFOP se calcula automáticamente.
           </div>
         </form>
@@ -681,7 +713,14 @@ function updateFechas() {
   const mes   = document.querySelector('[name=mes]').value.padStart(2,'0');
   const quin  = document.getElementById('sel-quin').value;
   const lastDay = new Date(anio, mes, 0).getDate();
-  if (quin === 'primera') {
+  const mensual = document.getElementById('tipo-mensual')?.checked;
+  document.getElementById('grp-quin').hidden = mensual;
+  document.getElementById('txt-dias').textContent = mensual ? '30' : '15';
+  document.getElementById('txt-mensual').hidden = !mensual;
+  if (mensual) {
+    document.getElementById('fecha-inicio').value = anio+'-'+mes+'-01';
+    document.getElementById('fecha-fin').value    = anio+'-'+mes+'-'+String(lastDay).padStart(2,'0');
+  } else if (quin === 'primera') {
     document.getElementById('fecha-inicio').value = anio+'-'+mes+'-01';
     document.getElementById('fecha-fin').value    = anio+'-'+mes+'-15';
   } else {

@@ -129,8 +129,8 @@ function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
         case 'planilla_periodos':
             $r = $fila("SELECT * FROM planilla_periodos WHERE id = ?");
             if ($r) $d = ['beneficiario' => 'Planilla de empleados', 'beneficiario_tipo' => 'otro', 'monto' => $r['total_neto'],
-                'concepto' => "Planilla quincenal {$r['numero']} — " . $meses[$r['mes'] - 1] . " {$r['anio']}, "
-                            . ($r['quincena'] === 'primera' ? '1ª' : '2ª') . ' quincena'];
+                'concepto' => 'Planilla ' . (esPlanillaMensual($r) ? 'mensual' : 'quincenal') . " {$r['numero']} — " . $meses[$r['mes'] - 1] . " {$r['anio']}"
+                            . (esPlanillaMensual($r) ? '' : ', ' . ($r['quincena'] === 'primera' ? '1ª' : '2ª') . ' quincena')];
             break;
         case 'planilla_asignacion':
             $r = $fila("SELECT * FROM planilla_asignacion WHERE id = ?");

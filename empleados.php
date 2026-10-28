@@ -119,16 +119,18 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $isr   = $d[':aplica_isr']          ? $d[':ded_isr']           : 0;
                 $cred  = $d[':aplica_credimpulsa']  ? $d[':ded_credimpulsa']   : 0;
                 $ded   = $ihssE + $rap + $isr + $cred;
-                // sueldo_quincenal y total_bruto se recalculan según días trabajados
+                // sueldo_quincenal y total_bruto se recalculan según días trabajados; las deducciones
+                // son por quincena: en las planillas mensuales van al doble (factorDeduccionesPlanilla)
+                $f = "IF(pp.tipo = 'mensual', 2, 1)";
                 $pdo->prepare("UPDATE planilla_detalle pd
                     JOIN planilla_periodos pp ON pd.periodo_id = pp.id
                     SET pd.sueldo_quincenal     = ROUND(? / 30 * pd.dias_trabajados, 2),
                         pd.total_bruto          = ROUND(? / 30 * pd.dias_trabajados, 2),
-                        pd.ihss_empleado=?, pd.ihss_patronal=?,
-                        pd.rap_empleado=?, pd.rap_patronal=?,
-                        pd.isr=?, pd.credimpulsa=?,
-                        pd.total_deducciones=?,
-                        pd.sueldo_neto = ROUND(? / 30 * pd.dias_trabajados, 2) - ?
+                        pd.ihss_empleado=? * $f, pd.ihss_patronal=? * $f,
+                        pd.rap_empleado=? * $f, pd.rap_patronal=? * $f,
+                        pd.isr=? * $f, pd.credimpulsa=? * $f,
+                        pd.total_deducciones=? * $f,
+                        pd.sueldo_neto = ROUND(? / 30 * pd.dias_trabajados, 2) - ? * $f
                     WHERE pd.empleado_id=?
                       AND pp.estado != 'pagada'")
                     ->execute([$nuevoSueldo, $nuevoSueldo,
@@ -391,7 +393,7 @@ include __DIR__ . '/includes/header.php';
       <div class="row g-3">
         <div class="col-md-4">
           <label class="form-label">Cargo *</label>
-          <select name="cargo" class="form-select" required>
+          <select name="cargo" class="form-select" required data-alta="cargo">
             <option value="">— Seleccionar cargo —</option>
             <?php foreach ($cargos as $c): ?>
             <option value="<?= htmlspecialchars($c['nombre']) ?>"
@@ -403,7 +405,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">Departamento *</label>
-          <select name="departamento" class="form-select" required>
+          <select name="departamento" class="form-select" required data-alta="departamento">
             <option value="">— Seleccionar —</option>
             <?php foreach ($departamentos as $d): ?>
             <option value="<?= htmlspecialchars($d['nombre']) ?>"
@@ -438,7 +440,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">Banco</label>
-          <select name="banco" class="form-select">
+          <select name="banco" class="form-select" data-alta="banco">
             <option value="">— Sin banco —</option>
             <?php foreach ($bancos as $b): ?>
             <option value="<?= htmlspecialchars($b['nombre']) ?>"

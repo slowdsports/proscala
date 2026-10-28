@@ -118,6 +118,30 @@ function verificarEdicion(PDO $pdo, string $modulo): void {
 }
 
 /**
+ * Abrir un proceso (?action=ver|editar&id=…): el registro debe existir. Un enlace con el número del
+ * proceso (?id=SC26-0201) se lleva a su id; si no existe, a la lista con un aviso. Sin esto la página
+ * no encontraba el registro y mostraba el formulario de un proceso nuevo.
+ */
+function verificarRegistroAbierto(PDO $pdo, string $modulo): void {
+    $def = EDICION_PROCESOS[$modulo] ?? null;
+    if (!$def || $_SERVER['REQUEST_METHOD'] !== 'GET' || !isset($_GET['id'])
+        || !in_array($_GET['action'] ?? '', ['ver', 'editar'], true)) return;
+    $valor = trim((string)$_GET['id']);
+    $esId  = ctype_digit($valor) && (int)$valor > 0;
+    $s = $pdo->prepare("SELECT id FROM `{$def['tabla']}` WHERE " . ($esId ? 'id' : 'numero') . " = ? LIMIT 1");
+    $s->execute([$esId ? (int)$valor : $valor]);
+    $id = (int)$s->fetchColumn();
+    if ($id && $esId) return;
+    if ($id) {
+        header('Location: ' . BASE_URL . $modulo . '?' . http_build_query(['id' => $id] + $_GET));
+    } else {
+        $_SESSION['aviso'] = 'No se encontró el proceso ' . mb_substr($valor, 0, 40) . '. Puede que se haya eliminado o que el enlace esté incompleto.';
+        header('Location: ' . BASE_URL . $modulo);
+    }
+    exit;
+}
+
+/**
  * Al terminar una edición (registrarPeticion): el proceso vuelve a su estado inicial, se anulan
  * revisión / autorización / rechazo y su orden de pago se actualiza y vuelve a pendiente.
  */

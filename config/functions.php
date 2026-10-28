@@ -73,6 +73,38 @@ function nombreMes(int $mes): string {
     return ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][$mes - 1] ?? '';
 }
 
+// ── Planillas quincenales o mensuales (planilla_periodos.tipo) ─────
+// Una mensual se guarda con quincena = 'segunda' (el índice único es año + mes + quincena) y no
+// convive con quincenales del mismo mes. El sueldo es sueldo mensual / 30 × días trabajados (mes
+// comercial). Las deducciones de cada empleado se configuran por quincena: la mensual lleva el doble.
+
+function esPlanillaMensual(array $p): bool { return ($p['tipo'] ?? 'quincenal') === 'mensual'; }
+
+/** Días de un período completo: 15 la quincena, 30 el mes. */
+function diasPeriodoPlanilla(array $p): int { return esPlanillaMensual($p) ? 30 : 15; }
+
+/** Veces la deducción quincenal del empleado que lleva el período. */
+function factorDeduccionesPlanilla(array $p): int { return esPlanillaMensual($p) ? 2 : 1; }
+
+/** "1ª Quincena (1-15)", "2ª Quincena (16-31)" o "Mensual (1-31)"; $corto sin el rango. */
+function nombrePeriodoPlanilla(array $p, bool $corto = false): string {
+    if (esPlanillaMensual($p)) return $corto ? 'Mensual' : 'Mensual (1-' . date('t', mktime(0, 0, 0, (int)$p['mes'], 1, (int)$p['anio'])) . ')';
+    $n = $p['quincena'] === 'primera' ? '1ª Quincena' : '2ª Quincena';
+    return $corto ? $n : $n . ($p['quincena'] === 'primera' ? ' (1-15)' : ' (16-31)');
+}
+
+/**
+ * Días trabajados de un empleado en el período: el período completo, o desde su ingreso si entró
+ * durante el período (días comerciales: el día 31 no cuenta). 0 si ingresó después del período.
+ */
+function diasTrabajadosPlanilla(array $p, ?string $fechaIngreso): int {
+    $completo = diasPeriodoPlanilla($p);
+    if (!$fechaIngreso || $fechaIngreso <= $p['fecha_inicio']) return $completo;
+    if ($fechaIngreso > $p['fecha_fin']) return 0;
+    $desde = esPlanillaMensual($p) || $p['quincena'] === 'primera' ? 1 : 16;   // primer día del período
+    return max(1, min($completo, $completo - (min(30, (int)date('j', strtotime($fechaIngreso))) - $desde)));
+}
+
 // ── Cálculos de Planilla Honduras ─────────────────────────────────
 function calcularPlanilla(float $sueldoMensual, array $_config = []): array {
     // Todas las deducciones se ingresan manualmente en cada planilla

@@ -1,5 +1,5 @@
 <?php
-// ── Planilla Quincenal distribuida por Proyecto ─────────────────
+// ── Planilla de sueldos distribuida por Proyecto ─────────────────
 // Plantilla de impresión (print.php): datos del documento y su contenido,
 // dentro de la página común con el diseño de todos los documentos.
 
@@ -15,8 +15,8 @@ $proyMap = proyectosMap($pdo);
 [$repartos, $resumenProy] = distribuirQuincenal($detalle,
     cargarDistribucion($pdo, 'planilla_detalle_proyectos', array_column($detalle, 'id')));
 $mes    = $meses[$doc['mes'] - 1] ?? '';
-$quin   = $doc['quincena'] === 'primera' ? '1ª Quincena (1-15)' : '2ª Quincena (16-31)';
-$title  = 'PLANILLA QUINCENAL POR PROYECTO';
+$quin   = nombrePeriodoPlanilla($doc);
+$title  = esPlanillaMensual($doc) ? 'PLANILLA MENSUAL POR PROYECTO' : 'PLANILLA QUINCENAL POR PROYECTO';
 $docNum = ($doc['numero'] ? "{$doc['numero']} — " : '') . "{$mes} {$doc['anio']} — {$quin}";
 
 // Firmas
@@ -33,8 +33,8 @@ require __DIR__ . '/_pagina_inicio.php';
         <div class="meta-value"><?= $meses[$doc['mes'] - 1] . ' ' . $doc['anio'] ?></div>
       </div>
       <div class="meta-item">
-        <div class="meta-label">Quincena</div>
-        <div class="meta-value"><?= $doc['quincena'] === 'primera' ? '1ª (1-15)' : '2ª (16-31)' ?></div>
+        <div class="meta-label"><?= esPlanillaMensual($doc) ? 'Tipo' : 'Quincena' ?></div>
+        <div class="meta-value"><?= esPlanillaMensual($doc) ? 'Mensual' : ($doc['quincena'] === 'primera' ? '1ª (1-15)' : '2ª (16-31)') ?></div>
       </div>
       <div class="meta-item">
         <div class="meta-label">Fecha de Pago</div>

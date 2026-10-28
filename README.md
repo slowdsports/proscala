@@ -223,7 +223,7 @@ Resumen de la organización: empleados activos, gastos y anticipos pendientes, �
 
 **Empleados.** El expediente de cada persona: datos personales, puesto, departamento, salario, banco y cuenta, y proyectos a los que se asigna. Si registra el **correo** del empleado, el sistema le crea su usuario automáticamente y le envía por correo el enlace para activar su cuenta. Al dar de baja a un empleado, su usuario se desactiva.
 
-**Planillas Quincenales.** Cree el período (mes y quincena) y el sistema calcula salario, IHSS, RAP, ISR y demás deducciones de cada empleado. Puede registrar deducciones de Credimpulsa y distribuir el costo de cada empleado entre proyectos. Estados: *Borrador → Procesada → Aprobada → Pagada*. Al aprobarla se genera su orden de pago. Imprima la planilla general, la distribución por proyecto, el reporte Credimpulsa y los **recibos** individuales que firma cada empleado.
+**Planillas de Sueldos.** Cree el período, **quincenal** (mes y quincena, 15 días por empleado) o **mensual** (30 días), y el sistema calcula salario (sueldo mensual / 30 × días trabajados; quien ingresó durante el período lleva solo sus días), IHSS, RAP, ISR y demás deducciones de cada empleado. Puede registrar deducciones de Credimpulsa y distribuir el costo de cada empleado entre proyectos. Estados: *Borrador → Procesada → Aprobada → Pagada*. Al aprobarla se genera su orden de pago. Imprima la planilla general, la distribución por proyecto, el reporte Credimpulsa y los **recibos** individuales que firma cada empleado.
 
 **Planillas de Asignación.** Pagos por concepto a un grupo de empleados (por ejemplo, de un proyecto). *Borrador → Aprobada → Pagada*, con recibos individuales.
 

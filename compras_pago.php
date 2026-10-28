@@ -382,7 +382,7 @@ include __DIR__ . '/includes/header.php';
       </div>
       <div class="col-md-4" id="prov-wrap">
         <label class="form-label">Proveedor</label>
-        <select name="proveedor_id" class="form-select" id="sel-prov-op" onchange="setBenef(this)">
+        <select name="proveedor_id" class="form-select" id="sel-prov-op" data-alta="proveedor" onchange="setBenef(this)">
           <option value="">--</option>
           <?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= ($ocData&&$ocData['proveedor_id']==$p['id'])?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?>
         </select>
@@ -408,7 +408,7 @@ include __DIR__ . '/includes/header.php';
       <div class="col-md-3"><label class="form-label">No. Factura del Proveedor</label><input type="text" name="factura_proveedor" class="form-control" placeholder="Ej: F-0001"></div>
       <div class="col-md-3">
         <label class="form-label">Banco (referencia)</label>
-        <select name="banco" class="form-select" id="sel-banco">
+        <select name="banco" class="form-select" id="sel-banco" data-alta="banco">
           <option value="">-- Seleccionar --</option>
           <?php foreach($bancos as $b): ?>
           <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>

@@ -97,6 +97,54 @@ try {
         }
     });
 
+    prueba('Abrir un proceso: el dashboard enlaza por id y un número o id inexistente no abre el formulario', function () use ($baseUrl, $sesAdmin, $pdo) {
+        [, $html] = pedir("$baseUrl/dashboard.php", $sesAdmin);
+        afirmar(!preg_match('/action=ver&(amp;)?id=[A-Za-z]/', $html), 'el dashboard enlaza un proceso por su número');
+        $op = $pdo->query("SELECT id FROM ordenes_pago ORDER BY id DESC LIMIT 1")->fetchColumn();
+        if ($op) afirmar(str_contains($html, "compras_pago.php?action=ver&amp;id=$op") || str_contains($html, "compras_pago.php?action=ver&id=$op"), 'las órdenes de pago del dashboard no tienen enlace');
+        $sc = $pdo->query("SELECT id, numero FROM solicitud_compra ORDER BY id DESC LIMIT 1")->fetch();
+        if ($sc) {
+            $ctx = stream_context_create(['http' => ['header' => "Cookie: PROSCALA=$sesAdmin\r\n", 'ignore_errors' => true, 'follow_location' => 0]]);
+            @file_get_contents("$baseUrl/compras_solicitud.php?action=ver&id=" . urlencode($sc['numero']), false, $ctx);
+            $location = preg_grep('/^Location:/i', $http_response_header ?? []);
+            afirmar((bool)preg_grep('/[?&]id=' . (int)$sc['id'] . '(&|$)/', $location), "el número {$sc['numero']} no redirige a id={$sc['id']}");
+        }
+        [$cod] = pedir("$baseUrl/compras_solicitud.php?action=ver&id=999999999", $sesAdmin);
+        iguales(302, $cod, 'un id inexistente vuelve a la lista');
+    });
+
+    prueba('Catálogo de cuentas: se descargan la plantilla y el catálogo actual en Excel', function () use ($baseUrl, $sesAdmin) {
+        foreach (['plantilla', 'catalogo'] as $tipo) {
+            [$cod, $xlsx] = pedir("$baseUrl/catalogos.php?export=$tipo", $sesAdmin);
+            afirmar($cod === 200 && str_starts_with($xlsx, "PK\x03\x04"), "?export=$tipo (HTTP $cod) no devolvió un .xlsx");
+        }
+    });
+
+    prueba('Alta rápida desde una lista: crea el proveedor y el banco, y no los duplica', function () use ($baseUrl, $sesAdmin, $pdo) {
+        $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba'])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/alta_rapida.php", false, $ctx), true) ?: [];
+        };
+        $nombre = 'Proveedor de prueba ' . bin2hex(random_bytes(4));
+        $creados = ['proveedores' => [], 'cat_bancos' => []];
+        try {
+            $r = $enviar(['tipo' => 'proveedor', 'nombre' => $nombre, 'rtn' => '', 'categoria' => 'bienes']);
+            afirmar(!empty($r['success']) && $r['valor'] === (string)$r['id'], 'no creó el proveedor: ' . ($r['message'] ?? 'sin respuesta'));
+            $creados['proveedores'][] = (int)$r['id'];
+            $otra = $enviar(['tipo' => 'proveedor', 'nombre' => $nombre]);
+            iguales($r['id'], $otra['id'] ?? null, 'el mismo nombre devuelve el proveedor existente');
+            $b = $enviar(['tipo' => 'banco', 'nombre' => $nombre]);
+            afirmar(!empty($b['success']) && $b['valor'] === $nombre, 'no creó el banco');
+            $creados['cat_bancos'][] = (int)$b['id'];
+            afirmar(empty($enviar(['tipo' => 'proyecto', 'nombre' => 'x'])['success']), 'aceptó un tipo desconocido');
+            afirmar(empty($enviar(['tipo' => 'banco', 'nombre' => '  '])['success']), 'aceptó un nombre vacío');
+        } finally {
+            foreach ($creados as $tabla => $ids) foreach ($ids as $id) $pdo->exec("DELETE FROM `$tabla` WHERE id = $id");
+        }
+    });
+
     prueba('Página principal, inicio de sesión y recuperar contraseña (sin sesión)', function () use ($baseUrl) {
         foreach (['' => 'Iniciar sesión', 'login.php' => 'RTN de la empresa', 'recuperar.php' => 'Enviar enlace'] as $p => $texto) {
             [$cod, $html] = pedir("$baseUrl/$p");
@@ -110,5 +158,5 @@ try {
 } finally {
     foreach ($GLOBALS['_sesiones_prueba'] ?? [] as $id) @unlink(RAIZ . "/storage/sesiones/sess_$id");
     // Las visitas de prueba no quedan en la bitácora
-    $pdo->prepare("DELETE FROM auditoria WHERE ip IN ('127.0.0.1', '::1') AND created_at >= ? AND accion IN ('IMPRIMIR', 'ACCESO_DENEGADO')")->execute([$inicioHttp]);
+    $pdo->prepare("DELETE FROM auditoria WHERE ip IN ('127.0.0.1', '::1') AND created_at >= ? AND (accion IN ('IMPRIMIR', 'ACCESO_DENEGADO') OR modulo = 'alta_rapida.php')")->execute([$inicioHttp]);
 }

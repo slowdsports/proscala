@@ -716,6 +716,7 @@ CREATE TABLE `planilla_periodos` (
   `anio` int(11) NOT NULL,
   `mes` int(11) NOT NULL,
   `quincena` enum('primera','segunda') NOT NULL,
+  `tipo` enum('quincenal','mensual') NOT NULL DEFAULT 'quincenal',
   `fecha_inicio` date NOT NULL,
   `fecha_fin` date NOT NULL,
   `fecha_pago` date DEFAULT NULL,

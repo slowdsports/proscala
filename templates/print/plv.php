@@ -12,12 +12,13 @@ $s2 = $pdo->prepare("SELECT pd.*, CONCAT(e.nombre,' ',e.apellidos) AS empleado_n
     WHERE pd.periodo_id = ? ORDER BY e.apellidos, e.nombre");
 $s2->execute([$id]); $detalle = $s2->fetchAll();
 $mes    = $meses[$doc['mes'] - 1] ?? '';
-$quin   = $doc['quincena'] === 'primera' ? '1ª Quincena (1-15)' : '2ª Quincena (16-31)';
+$quin   = nombrePeriodoPlanilla($doc);
+$plMensual = esPlanillaMensual($doc);
 // Distribución por proyecto (el donante requiere el recibo firmado por el empleado)
 $proyMap = proyectosMap($pdo);
 $distV   = cargarDistribucion($pdo, 'planilla_detalle_proyectos', array_column($detalle, 'id'));
 [$repartosV] = distribuirQuincenal($detalle, $distV);
-$title  = 'RECIBOS DE QUINCENA';
+$title  = $plMensual ? 'RECIBOS DE PAGO MENSUAL' : 'RECIBOS DE QUINCENA';
 $docNum = ($doc['numero'] ? "{$doc['numero']} — " : '') . "{$mes} {$doc['anio']} — {$quin}";
 
 // Recibo de un solo empleado (?emp_id=)
@@ -31,7 +32,7 @@ require __DIR__ . '/_inicio.php';
 <div id="all-pages">
 <?php
 $mesNombrePlv = $meses[$doc['mes'] - 1];
-$quinceNamePlv = $doc['quincena'] === 'primera' ? '1ª Quincena (1–15)' : '2ª Quincena (16–31)';
+$quinceNamePlv = $quin;
 foreach ($detalle as $i => $d):
     $safeEmpName = preg_replace('/[^\w]/', '_', $d['empleado_nombre']);
 ?>
@@ -40,7 +41,7 @@ foreach ($detalle as $i => $d):
   <div class="doc-header">
     <?php $orgContacto = false; require __DIR__ . '/_org.php'; ?>
     <div class="doc-title-block">
-      <div class="doc-type">RECIBO DE QUINCENA</div>
+      <div class="doc-type"><?= $plMensual ? 'RECIBO DE PAGO MENSUAL' : 'RECIBO DE QUINCENA' ?></div>
       <div class="doc-number" style="font-size:13pt"><?= htmlspecialchars($mesNombrePlv . ' ' . $doc['anio']) ?></div>
       <div style="font-size:8.5pt;color:#64748b;margin-top:3px"><?= $quinceNamePlv ?></div>
     </div>
@@ -86,7 +87,7 @@ foreach ($detalle as $i => $d):
           <td style="padding:7px 8px;text-align:right;font-family:'Courier New',monospace;color:#374151"><?= lps($d['sueldo_base'] ?? ($d['total_bruto'] * 2)) ?></td>
         </tr>
         <tr style="border-bottom:2px solid #e2e8f0;background:#f0f5fc">
-          <td style="padding:8px 8px;font-weight:700;color:#0D3F6A">Quincena Bruta</td>
+          <td style="padding:8px 8px;font-weight:700;color:#0D3F6A"><?= $plMensual ? 'Sueldo Bruto' : 'Quincena Bruta' ?></td>
           <td style="padding:8px 8px;text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#0D3F6A"><?= lps($d['total_bruto']) ?></td>
         </tr>
         <tr style="border-bottom:1px solid #e2e8f0">
@@ -119,7 +120,7 @@ foreach ($detalle as $i => $d):
 
   <?php $tieneDist = !empty($distV[$d['id']]);
   if ($tieneDist) echo voucherDistTabla($repartosV[$d['id']], $proyMap,
-      ['pct_salario' => '%', 'total_bruto' => 'QUINCENA BRUTA', 'total_deducciones' => 'DEDUCCIONES', 'sueldo_neto' => 'NETO']); ?>
+      ['pct_salario' => '%', 'total_bruto' => $plMensual ? 'SUELDO BRUTO' : 'QUINCENA BRUTA', 'total_deducciones' => 'DEDUCCIONES', 'sueldo_neto' => 'NETO']); ?>
 
   <div class="amount-block" style="margin:14px 28px">
     <div>

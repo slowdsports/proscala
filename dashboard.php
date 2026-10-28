@@ -56,12 +56,12 @@ $totTopCuentas = array_sum(array_column($topCuentas, 'total'));
 
 // ── Recent purchases + payments ──────────────────────────────────
 $compras_recientes = $pdo->query("
-    SELECT sc.numero, CONCAT(e.nombre,' ',e.apellidos) AS solicitante, sc.estado
+    SELECT sc.id, sc.numero, CONCAT(e.nombre,' ',e.apellidos) AS solicitante, sc.estado
     FROM solicitud_compra sc JOIN empleados e ON sc.solicitante_id=e.id
     ORDER BY sc.id DESC LIMIT 6")->fetchAll();
 
 $pagos_recientes = $pdo->query("
-    SELECT numero, beneficiario, monto, estado
+    SELECT id, numero, beneficiario, monto, estado
     FROM ordenes_pago ORDER BY id DESC LIMIT 6")->fetchAll();
 
 $labelsJson  = json_encode($prettyLabels);
@@ -218,7 +218,7 @@ include __DIR__ . '/includes/header.php';
           <tbody>
             <?php foreach ($compras_recientes as $r): ?>
             <tr>
-              <td class="font-mono"><a href="<?= BASE_URL ?>compras_solicitud.php?action=ver&id=<?= $r['numero'] ?>"><?= $r['numero'] ?></a></td>
+              <td class="font-mono"><a href="<?= BASE_URL ?>compras_solicitud.php?action=ver&id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($r['numero']) ?></a></td>
               <td><?= htmlspecialchars($r['solicitante']) ?></td>
               <td><?= estadoBadge($r['estado']) ?></td>
             </tr>
@@ -243,7 +243,7 @@ include __DIR__ . '/includes/header.php';
           <tbody>
             <?php foreach ($pagos_recientes as $r): ?>
             <tr>
-              <td class="font-mono"><?= $r['numero'] ?></td>
+              <td class="font-mono"><a href="<?= BASE_URL ?>compras_pago.php?action=ver&id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($r['numero']) ?></a></td>
               <td><?= htmlspecialchars($r['beneficiario']) ?></td>
               <td class="font-mono"><?= lps($r['monto']) ?></td>
               <td><?= estadoBadge($r['estado']) ?></td>

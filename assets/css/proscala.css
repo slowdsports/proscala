@@ -1456,3 +1456,17 @@ a.kpi-card:hover .kpi-icon,
 [data-theme="dark"] .select2-container--bootstrap-5 .select2-results__option[aria-selected="true"] {
   background: var(--surface-2);
 }
+
+/* Alta rápida: "Agregar…" al pie de la lista (AltaRapida en proscala.js) */
+.alta-rapida-pie {
+  display: flex; align-items: center; gap: .45rem; width: 100%;
+  padding: .5rem .75rem; border: 0; border-top: 1px solid var(--border);
+  background: var(--surface-2); color: var(--primary);
+  font-size: .85rem; font-weight: 600; text-align: left;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+}
+.alta-rapida-pie span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alta-rapida-pie:hover, .alta-rapida-pie:focus-visible { background: rgba(var(--primary-rgb), .1); outline: none; }
+/* Abierto desde una lista que está dentro de otro modal: va encima de ese */
+.modal.alta-rapida.sobre-modal { z-index: 1070; }
+.modal-backdrop.alta-rapida-backdrop { z-index: 1065; }

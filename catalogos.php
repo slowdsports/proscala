@@ -2,8 +2,23 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/functions.php';
+require_once __DIR__ . '/config/catalogo_cuentas.php';
 requireLogin();
 $pagina = 'Catálogos';
+
+// ── Catálogo contable en Excel: plantilla vacía o con el catálogo actual (config/catalogo_cuentas.php) ──
+if (in_array($_GET['export'] ?? '', ['plantilla', 'catalogo'], true)) {
+    $conDatos = $_GET['export'] === 'catalogo';
+    try { $xlsx = plantillaCatalogo($conDatos ? $pdo : null); }
+    catch (Throwable $e) { http_response_code(500); exit('No se pudo generar el archivo de Excel.'); }
+    if ($conDatos) registrarEvento($pdo, 'EXPORTAR', ['detalle' => 'Descargó el catálogo de cuentas en Excel']);
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . ($conDatos ? 'Catalogo_de_cuentas_' . date('Y-m-d') : 'Plantilla_catalogo_de_cuentas') . '.xlsx"');
+    header('Content-Length: ' . strlen($xlsx));
+    header('Cache-Control: no-store');
+    echo $xlsx;
+    exit;
+}
 
 // Catálogos de nombres. Los registros guardan el nombre (no el id): renombrar actualiza
 // los registros que lo usan y no se elimina mientras alguno lo use.
@@ -56,6 +71,31 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'eliminar') {
         $pdo->prepare("UPDATE cuentas_contables SET activa=0 WHERE id=?")->execute([(int)$_POST['id']]);
         jsonOk([],'Cuenta desactivada.');
+    }
+    // Importar desde Excel: aplicar=0 solo revisa el archivo (vista previa, no queda en la bitácora);
+    // aplicar=1 lo revisa de nuevo y, sin errores, lo vuelca en una transacción
+    if ($_act === 'importar_cuentas') {
+        $aplicar = ($_POST['aplicar'] ?? '') === '1';
+        if (!$aplicar) $GLOBALS['_bitacora_explicita'] = true;
+        $f = $_FILES['archivo'] ?? null;
+        if (!$f || $f['error'] === UPLOAD_ERR_NO_FILE) jsonErr('Elija el archivo de Excel con el catálogo.');
+        if (in_array($f['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || $f['size'] > CATALOGO_MAX_MB * 1048576) jsonErr('El archivo supera ' . CATALOGO_MAX_MB . ' MB.');
+        if ($f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) jsonErr('No se pudo recibir el archivo. Inténtelo de nuevo.');
+        if (strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) !== 'xlsx') jsonErr('Solo se aceptan libros de Excel (.xlsx) hechos con la plantilla.');
+        try { $filas = leerXlsx($f['tmp_name'], CATALOGO_MAX_CUENTAS + 1); }
+        catch (RuntimeException $e) { jsonErr($e->getMessage()); }
+        $desactivar = ($_POST['desactivar_faltantes'] ?? '') === '1';
+        $v = validarCatalogo($pdo, $filas, $desactivar);
+        if (!$aplicar) {
+            jsonOk(['valido' => !$v['errores'], 'errores' => array_slice($v['errores'], 0, 100), 'total_errores' => count($v['errores']), 'resumen' => $v['resumen']],
+                $v['errores'] ? 'El archivo tiene errores: no se importó nada.' : 'El archivo está listo para importarse.');
+        }
+        if ($v['errores']) jsonErr('El archivo tiene ' . count($v['errores']) . ' error(es) y no se importó nada. Revíselo de nuevo.');
+        try { aplicarCatalogo($pdo, $v['cuentas'], $desactivar); }
+        catch (PDOException $e) { jsonErr('No se pudo importar el catálogo; no se cambió nada. ' . $e->getMessage(), 500); }
+        $r = $v['resumen'];
+        jsonOk($r, "Catálogo importado: {$r['nuevas']} cuenta(s) nueva(s), {$r['actualizadas']} actualizada(s)"
+            . ($r['desactivadas'] ? ", {$r['desactivadas']} desactivada(s)" : '') . " ({$f['name']}).");
     }
 
     // ── Cargos, departamentos y bancos ────────────────────────────────
@@ -122,6 +162,8 @@ include __DIR__ . '/includes/header.php';
   <div class="d-flex gap-2">
     <?php if ($tab === 'cuentas'): ?>
     <button class="btn-proscala-outline" data-bs-toggle="collapse" data-bs-target="#filtros"><i class="fas fa-filter"></i> Filtrar</button>
+    <a href="?export=plantilla" class="btn-proscala-outline" download><i class="fas fa-file-excel"></i> Plantilla Excel</a>
+    <button class="btn-proscala-outline" onclick="abrirImportacion()"><i class="fas fa-file-import"></i> Importar Excel</button>
     <button class="btn-proscala" data-bs-toggle="modal" data-bs-target="#modal-cuenta"><i class="fas fa-plus"></i> Nueva Cuenta</button>
     <?php else: ?>
     <button class="btn-proscala" onclick="abrirCatalogo()"><i class="fas fa-plus"></i> Nuevo <?= htmlspecialchars($def['label']) ?></button>
@@ -214,6 +256,42 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 
+<!-- Modal importar catálogo desde Excel (config/catalogo_cuentas.php) -->
+<div class="modal fade" id="modal-importar" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="fas fa-file-import"></i> Importar catálogo de cuentas</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <ol class="small mb-3 ps-3">
+          <li>Descargue la <a href="?export=plantilla" download>plantilla vacía</a> o el <a href="?export=catalogo" download>catálogo actual</a> para editarlo.</li>
+          <li>Llene una cuenta por fila sin cambiar, agregar ni quitar columnas:
+            <span class="text-muted"><?= htmlspecialchars(implode(' · ', CATALOGO_COLUMNAS)) ?></span>.
+            Obligatorias: Código, Nombre y Tipo (<?= htmlspecialchars(implode(', ', CATALOGO_TIPOS)) ?>). Si el nivel queda vacío se calcula desde la cuenta padre.</li>
+          <li>Suba el archivo: primero se revisa completo y, solo si no tiene errores, se importa.</li>
+        </ol>
+        <form id="form-importar" onsubmit="event.preventDefault(); revisarImportacion();">
+          <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
+          <input type="hidden" name="_action" value="importar_cuentas">
+          <input type="hidden" name="aplicar" id="imp-aplicar" value="0">
+          <label class="form-label fw-semibold">Archivo de Excel (.xlsx, máximo <?= CATALOGO_MAX_MB ?> MB)</label>
+          <input type="file" name="archivo" id="imp-archivo" class="form-control" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+          <div class="form-check mt-3">
+            <input type="checkbox" name="desactivar_faltantes" value="1" class="form-check-input" id="imp-desactivar">
+            <label class="form-check-label" for="imp-desactivar">Desactivar las cuentas actuales que no estén en el archivo
+              <span class="d-block text-muted small">Para reemplazar el catálogo por uno distinto. No se borran: los procesos que ya las usan las conservan.</span></label>
+          </div>
+        </form>
+        <div id="imp-resultado" class="mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-proscala-outline" id="imp-revisar" onclick="revisarImportacion()"><i class="fas fa-magnifying-glass"></i> Revisar archivo</button>
+        <button type="button" class="btn-proscala" id="imp-aplicar-btn" onclick="aplicarImportacion()" hidden><i class="fas fa-file-import"></i> Importar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php else: ?>
 <div class="card">
   <div class="card-body p-0">
@@ -299,6 +377,59 @@ async function saveCuenta(){
     const r=await post('catalogos.php',new FormData(document.getElementById('form-cuenta')));
     Toast.show(r.message,'success'); setTimeout(()=>Nav.recargar(),800);
   } catch(e){ Toast.show(e.message,'error'); }
+}
+
+// ── Importar desde Excel: revisar (vista previa) y luego importar ──
+function abrirImportacion(){
+  document.getElementById('form-importar').reset();
+  importacionPendiente(false);
+  document.getElementById('imp-resultado').innerHTML='';
+  new bootstrap.Modal(document.getElementById('modal-importar')).show();
+}
+// Cambiar el archivo o la opción obliga a revisar de nuevo
+function importacionPendiente(lista){
+  document.getElementById('imp-aplicar-btn').hidden=!lista;
+  document.getElementById('imp-revisar').hidden=lista;
+}
+['imp-archivo','imp-desactivar'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{
+  importacionPendiente(false); document.getElementById('imp-resultado').innerHTML='';
+}));
+async function enviarImportacion(aplicar){
+  const archivo=document.getElementById('imp-archivo');
+  if(!archivo.files.length){ Toast.show('Elija el archivo de Excel con el catálogo.','warning'); return null; }
+  document.getElementById('imp-aplicar').value=aplicar?'1':'0';
+  const btns=document.querySelectorAll('#modal-importar .modal-footer button');
+  btns.forEach(b=>b.disabled=true);
+  try { return await post('catalogos.php',new FormData(document.getElementById('form-importar'))); }
+  catch(e){ Toast.show(e.message,'error',8000); return null; }
+  finally { btns.forEach(b=>b.disabled=false); }
+}
+async function revisarImportacion(){
+  const r=await enviarImportacion(false);
+  if(!r) return;
+  const esc=Notificaciones.esc, s=r.resumen||{}, caja=document.getElementById('imp-resultado');
+  if(!r.valido){
+    caja.innerHTML=`<div class="alert alert-danger mb-0"><strong><i class="fas fa-circle-xmark"></i> ${r.total_errores} error(es): no se importará nada.</strong>
+      <div class="small mt-1">Corríjalos en el archivo y súbalo de nuevo.</div>
+      <ul class="small mb-0 mt-2" style="max-height:240px;overflow:auto">${r.errores.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>
+      ${r.total_errores>r.errores.length?`<div class="small mt-1">Y ${r.total_errores-r.errores.length} más.</div>`:''}</div>`;
+    importacionPendiente(false);
+    return;
+  }
+  caja.innerHTML=`<div class="alert alert-success mb-0"><strong><i class="fas fa-circle-check"></i> El archivo es válido: ${s.total} cuenta(s).</strong>
+    <ul class="small mb-0 mt-2"><li>${s.nuevas} nueva(s)</li><li>${s.actualizadas} existente(s) se actualizarán con los datos del archivo</li>
+    ${s.desactivadas?`<li><strong>${s.desactivadas} cuenta(s) actual(es) que no están en el archivo se desactivarán</strong></li>`:''}
+    ${s.sin_cambio?`<li>${s.sin_cambio} cuenta(s) actual(es) que no están en el archivo quedan igual</li>`:''}</ul></div>`;
+  const btn=document.getElementById('imp-aplicar-btn');
+  btn.innerHTML=`<i class="fas fa-file-import"></i> Importar ${s.total} cuenta(s)`+(s.desactivadas?` y desactivar ${s.desactivadas}`:'');
+  importacionPendiente(true);
+}
+async function aplicarImportacion(){
+  const r=await enviarImportacion(true);
+  if(!r) return;
+  bootstrap.Modal.getInstance(document.getElementById('modal-importar'))?.hide();
+  Toast.show(r.message,'success',7000);
+  setTimeout(()=>Nav.recargar(),900);
 }
 
 JS;

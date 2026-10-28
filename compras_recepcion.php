@@ -171,7 +171,7 @@ include __DIR__ . '/includes/header.php';
       </div>
       <div class="col-md-3">
         <label class="form-label">Proveedor *</label>
-        <select name="proveedor_id" class="form-select" required id="sel-prov-nr">
+        <select name="proveedor_id" class="form-select" required id="sel-prov-nr" data-alta="proveedor">
           <option value="">--</option>
           <?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>" <?= (($nrE['proveedor_id'] ?? ($ocData['proveedor_id'] ?? 0))==$p['id'])?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?>
         </select>

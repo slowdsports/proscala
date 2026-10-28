@@ -14,7 +14,7 @@ $s2 = $pdo->prepare("SELECT pd.*, CONCAT(e.nombre,' ',e.apellidos) AS empleado_n
     ORDER BY e.apellidos, e.nombre");
 $s2->execute([$id]); $detalle = $s2->fetchAll();
 $mes    = $meses[$doc['mes'] - 1] ?? '';
-$quin   = $doc['quincena'] === 'primera' ? '1ª Quincena (1-15)' : '2ª Quincena (16-31)';
+$quin   = nombrePeriodoPlanilla($doc);
 $title  = 'REPORTE CREDIMPULSA';
 $docNum = ($doc['numero'] ? "{$doc['numero']} — " : '') . "{$mes} {$doc['anio']} — {$quin}";
 
@@ -32,8 +32,8 @@ require __DIR__ . '/_pagina_inicio.php';
         <div class="meta-value"><?= $meses[$doc['mes'] - 1] . ' ' . $doc['anio'] ?></div>
       </div>
       <div class="meta-item">
-        <div class="meta-label">Quincena</div>
-        <div class="meta-value"><?= $doc['quincena'] === 'primera' ? '1ª (1-15)' : '2ª (16-31)' ?></div>
+        <div class="meta-label"><?= esPlanillaMensual($doc) ? 'Tipo' : 'Quincena' ?></div>
+        <div class="meta-value"><?= esPlanillaMensual($doc) ? 'Mensual' : ($doc['quincena'] === 'primera' ? '1ª (1-15)' : '2ª (16-31)') ?></div>
       </div>
       <div class="meta-item">
         <div class="meta-label">Fecha de Pago</div>

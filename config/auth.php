@@ -75,7 +75,7 @@ const MODULOS = [
     ],
     'Personal' => [
         'empleados.php'            => ['fa-users',              'Empleados'],
-        'planillas.php'            => ['fa-money-check-dollar', 'Planillas Quincenales'],
+        'planillas.php'            => ['fa-money-check-dollar', 'Planillas de Sueldos'],
         'planillas_asignacion.php' => ['fa-list-check',         'Planillas de Asignación'],
         'planillas_beneficios.php' => ['fa-gift',               'Planillas de Beneficios'],
     ],
@@ -131,9 +131,9 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
 // (respaldo.php valida que sea el super administrador; mis_solicitudes.php y buscar.php muestran
-// solo lo que cada usuario puede ver)
+// solo lo que cada usuario puede ver; alta_rapida.php, que tenga acceso a un módulo que use el tipo)
 const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php',
-                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php'];
+                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php', 'alta_rapida.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -414,6 +414,8 @@ function requireLogin() {
         exit;
     }
 
+    // ?action=ver&id=… de un proceso que no existe (o con su número en vez del id): config/edicion.php
+    verificarRegistroAbierto($GLOBALS['pdo'], $script);
     if (soloRegistrosPropios()) verificarRegistrosPropios($GLOBALS['pdo'], $script);
 
     // Bitácora: toda acción enviada (POST) se registra al terminar la petición, con su resultado
