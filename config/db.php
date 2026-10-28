@@ -109,7 +109,8 @@ function iniciarSesion(): void {
         $_SESSION = ['aviso_login' => 'Su sesión se cerró tras ' . (SESION_INACTIVIDAD / 3600) . ' horas sin actividad. Ingrese de nuevo.'];
         session_regenerate_id(true);
     }
-    $_SESSION['ultima_actividad'] = $ahora;
+    // Consultas automáticas (campana de notificaciones): no cuentan como actividad del usuario
+    if (!defined('SIN_ACTIVIDAD')) $_SESSION['ultima_actividad'] = $ahora;
 }
 iniciarSesion();
 

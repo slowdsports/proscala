@@ -37,6 +37,8 @@ async function ajax(url, data = null, method = 'GET') {
     if (res.status === 401 && body?.sesion_expirada) Sesion.expirada(body.message);
     throw new Error(body?.message || `HTTP ${res.status}`);
   }
+  // Una acción (revisar, autorizar, crear…) puede cambiar lo pendiente de la campana
+  if (method === 'POST' && !/notificaciones\.php/.test(url)) Notificaciones.programar();
   return res.json();
 }
 
@@ -92,6 +94,129 @@ const Sesion = {
   window.addEventListener(ev, () => { Sesion.ultimaActividad = Date.now(); }, { passive: true, capture: true }));
 setInterval(() => Sesion.revisar(), 30 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) Sesion.revisar(); });
+
+// ── Notificaciones (campana de la barra superior → notificaciones.php) ──
+// Lo que el usuario tiene pendiente de revisar o autorizar y sus avisos (proceso revisado,
+// autorizado, rechazado…). Se actualiza al cargar, al navegar, tras cada acción y cada 2 min
+// con la pestaña visible; consultarla no mantiene viva la sesión. Un aviso nuevo se anuncia.
+const Notificaciones = {
+  INTERVALO: 2 * 60 * 1000,
+  datos: null,
+  ultimoId: null,           // aviso más reciente ya visto (para anunciar los nuevos)
+  temporizador: null,
+  esc: s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]),
+
+  iniciar() {
+    const btn = document.getElementById('btn-notif');
+    if (!btn) return;
+    btn.addEventListener('click', e => { e.stopPropagation(); this.alternar(); });
+    document.getElementById('notif-leer-todas').addEventListener('click', () => this.leer(null));
+    document.addEventListener('click', e => { if (!document.getElementById('notif').contains(e.target)) this.alternar(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') this.alternar(false); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.actualizar(); });
+    setInterval(() => { if (!document.hidden) this.actualizar(); }, this.INTERVALO);
+    this.actualizar();
+  },
+
+  // Tras una acción o al navegar: una sola consulta aunque haya varias seguidas
+  programar() {
+    clearTimeout(this.temporizador);
+    this.temporizador = setTimeout(() => this.actualizar(), 800);
+  },
+
+  async actualizar() {
+    if (!document.getElementById('btn-notif') || Sesion.terminada) return;
+    try {
+      const r = await fetch('notificaciones.php', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' });
+      if (r.status === 401) { let b = {}; try { b = await r.json(); } catch (_) {} if (b.sesion_expirada) Sesion.expirada(b.message); return; }
+      if (r.ok) this.recibir(await r.json());
+    } catch (_) { /* sin red: se reintenta en la próxima consulta */ }
+  },
+
+  recibir(d) {
+    if (!d?.success) return;
+    const nuevos = this.ultimoId === null ? [] : d.avisos.filter(a => !a.leida && a.id > this.ultimoId);
+    this.ultimoId = Math.max(this.ultimoId ?? 0, ...d.avisos.map(a => a.id));
+    if (nuevos.length === 1) Toast.show(`<strong>${this.esc(nuevos[0].titulo)}</strong><br>${this.esc(nuevos[0].mensaje)}`, 'info', 6000);
+    else if (nuevos.length > 1) Toast.show(`Tiene ${nuevos.length} notificaciones nuevas.`, 'info', 6000);
+    this.datos = d;
+    this.pintar();
+  },
+
+  alternar(abrir) {
+    const panel = document.getElementById('notif-panel'), btn = document.getElementById('btn-notif');
+    if (!panel) return;
+    abrir = abrir ?? panel.hidden;
+    panel.hidden = !abrir;
+    btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (abrir) this.actualizar();
+  },
+
+  // Marca un aviso (o todos, con id null) como leído
+  async leer(id) {
+    const fd = new FormData();
+    fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+    fd.append('_action', id ? 'leer' : 'leer_todas');
+    if (id) fd.append('id', id);
+    try { this.recibir(await post('notificaciones.php', fd)); } catch (_) {}
+  },
+
+  abrir(url, id) {
+    this.alternar(false);
+    if (id) this.leer(id);
+    Nav.ir(url);
+  },
+
+  hace(fecha) {
+    const t = new Date(String(fecha).replace(' ', 'T'));
+    const min = Math.round((Date.now() - t) / 60000);
+    if (isNaN(min)) return '';
+    if (min < 1) return 'Ahora';
+    if (min < 60) return `Hace ${min} min`;
+    if (min < 24 * 60) return `Hace ${Math.round(min / 60)} h`;
+    if (min < 7 * 24 * 60) { const d = Math.round(min / 1440); return `Hace ${d} día${d === 1 ? '' : 's'}`; }
+    return t.toLocaleDateString('es-HN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  },
+
+  pintar() {
+    const d = this.datos, esc = this.esc;
+    const total = d.pendientes.total + d.no_leidas;
+    const badge = document.getElementById('notif-badge');
+    badge.hidden = total === 0;
+    badge.textContent = total > 99 ? '99+' : total;
+    document.getElementById('btn-notif').title = total ? `Notificaciones (${total})` : 'Notificaciones';
+    document.getElementById('notif-leer-todas').hidden = d.no_leidas === 0;
+
+    const iconos = {
+      revisar: ['fa-magnifying-glass', 'aviso'], autorizar: ['fa-signature', 'aviso'], pendiente: ['fa-hourglass-half', 'aviso'],
+      revisado: ['fa-eye', ''], autorizado: ['fa-circle-check', 'exito'], rechazado: ['fa-circle-xmark', 'peligro'], corregido: ['fa-pen', ''],
+    };
+    const item = (tipo, titulo, mensaje, fecha, url, id, noLeida) => {
+      const [ic, clase] = iconos[tipo] || ['fa-bell', ''];
+      return `<button type="button" class="notif-item${noLeida ? ' no-leida' : ''}" data-url="${esc(url)}" data-id="${id || ''}">
+        <span class="notif-icono ${clase}"><i class="fas ${ic}"></i></span>
+        <span class="notif-texto"><span class="notif-titulo">${esc(titulo)}</span>
+          <span class="notif-mensaje d-block">${esc(mensaje)}</span>
+          <span class="notif-fecha d-block">${esc(this.hace(fecha))}</span></span></button>`;
+    };
+
+    let html = '';
+    if (d.pendientes.total) {
+      html += `<div class="notif-seccion">Por aprobar (${d.pendientes.total})</div>`;
+      html += d.pendientes.items.map(p => item(p.paso, `${p.numero} · ${p.proceso}`,
+        (p.paso === 'revisar' ? 'Por revisar' : 'Por autorizar') + (p.de ? ` · de ${p.de}` : ''), p.fecha, p.url, 0, false)).join('');
+      if (d.pendientes.total > d.pendientes.items.length) html += `<div class="notif-mas">Y ${d.pendientes.total - d.pendientes.items.length} más en sus módulos.</div>`;
+    }
+    if (d.avisos.length) {
+      html += `<div class="notif-seccion">Avisos${d.no_leidas ? ` (${d.no_leidas} sin leer)` : ''}</div>`;
+      html += d.avisos.map(a => item(a.tipo, a.titulo, a.mensaje, a.fecha, a.url, a.id, !a.leida)).join('');
+    }
+    const cuerpo = document.getElementById('notif-cuerpo');
+    cuerpo.innerHTML = html || '<div class="notif-vacio"><i class="fas fa-bell-slash"></i>No tiene notificaciones.</div>';
+    cuerpo.querySelectorAll('.notif-item').forEach(b => b.addEventListener('click', () => this.abrir(b.dataset.url, +b.dataset.id)));
+  },
+};
+document.addEventListener('DOMContentLoaded', () => Notificaciones.iniciar());
 
 async function post(url, data) { return ajax(url, data, 'POST'); }
 
@@ -279,6 +404,7 @@ const Nav = {
     history[push ? 'pushState' : 'replaceState']({ nav: true }, '', final.href);
     marcarSidebarActivo();
     document.getElementById('sidebar')?.classList.remove('open');
+    Notificaciones.programar();   // al abrir un proceso sus avisos quedan leídos
 
     initFechas(main);
     await this.ejecutarScripts(main, doc);

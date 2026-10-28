@@ -180,6 +180,8 @@ function generarOrdenPago(PDO $pdo, string $tabla, int $id): ?string {
     registrarParticipacion($pdo, 'compras_pago.php', $opId);   // "Elaborado por": quien autorizó el proceso
     registrarEvento($pdo, 'INSERT', ['modulo' => 'compras_pago.php', 'tabla' => 'ordenes_pago', 'registro_id' => $opId,
         'detalle' => "Orden de pago $num generada automáticamente para {$d['numero_origen']}"]);
+    try { avisarPendiente($pdo, 'compras_pago.php', $opId, 'revisar'); }
+    catch (Throwable $e) { error_log('Proscala: no se pudo avisar la orden de pago ' . $num . ': ' . $e->getMessage()); }
     return $num;
 }
 

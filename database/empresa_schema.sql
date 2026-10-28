@@ -459,6 +459,22 @@ CREATE TABLE `notas_recepcion_detalle` (
   KEY `nota_id` (`nota_id`),
   CONSTRAINT `notas_recepcion_detalle_ibfk_1` FOREIGN KEY (`nota_id`) REFERENCES `notas_recepcion` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `notificaciones` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario_id` int(11) NOT NULL,
+  `tipo` varchar(20) NOT NULL,
+  `titulo` varchar(120) NOT NULL,
+  `mensaje` text NOT NULL,
+  `url` varchar(255) DEFAULT NULL,
+  `tabla` varchar(40) DEFAULT NULL,
+  `registro_id` int(11) DEFAULT NULL,
+  `leida` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_notif_usuario` (`usuario_id`,`leida`,`id`),
+  KEY `idx_notif_registro` (`tabla`,`registro_id`),
+  CONSTRAINT `fk_notif_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `ordenes_compra` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `numero` varchar(20) NOT NULL,
@@ -926,6 +942,7 @@ CREATE TABLE `usuarios` (
   `ultimo_acceso` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `foto` varchar(255) DEFAULT NULL,
+  `notificar_correo` tinyint(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `uq_usuarios_empleado` (`empleado_id`)

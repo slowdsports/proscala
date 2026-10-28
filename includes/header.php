@@ -75,6 +75,19 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
       <span><?= htmlspecialchars($user['nombre']) ?></span>
       <span class="topbar-role"><?= htmlspecialchars(esSuperadmin() ? 'Super Administrador' : rolLabel($user['rol'])) ?></span>
     </a>
+    <?php // Notificaciones: lo pendiente de aprobar y los avisos del usuario (proscala.js → Notificaciones) ?>
+    <div class="notif" id="notif">
+      <button type="button" id="btn-notif" title="Notificaciones" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">
+        <i class="fas fa-bell"></i><span class="notif-badge" id="notif-badge" hidden></span>
+      </button>
+      <div class="notif-panel" id="notif-panel" role="dialog" aria-label="Notificaciones" hidden>
+        <div class="notif-cab">
+          <strong>Notificaciones</strong>
+          <button type="button" class="notif-leer-todas" id="notif-leer-todas" hidden>Marcar todo como leído</button>
+        </div>
+        <div class="notif-cuerpo" id="notif-cuerpo"><div class="notif-vacio">Cargando…</div></div>
+      </div>
+    </div>
     <button id="btn-theme" onclick="toggleTheme()" title="Cambiar tema">
       <i class="fas fa-moon" id="theme-icon"></i>
     </button>

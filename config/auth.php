@@ -95,7 +95,7 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
-const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'logout.php', 'adjuntos.php', 'sesion.php'];
+const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'logout.php', 'adjuntos.php', 'sesion.php', 'notificaciones.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -117,7 +117,7 @@ function moduloLabel(?string $archivo): string {
     if ($mapa === null) {
         $mapa = ['index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
-                 'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos'];
+                 'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
     return $mapa[$archivo] ?? (string)$archivo;
@@ -284,6 +284,19 @@ function paginaInicio(): string {
     return 'perfil.php';
 }
 
+/**
+ * Página a la que se va al iniciar sesión: la de ?ir= (enlace de un correo de notificación o
+ * página que se abrió con la sesión vencida) si es del sistema, de esta empresa (?e=) y el
+ * usuario puede abrirla; si no, su página de inicio.
+ */
+function destinoTrasLogin(int $empresaId): string {
+    $ir = (string)($_GET['ir'] ?? '');
+    $e  = (int)($_GET['e'] ?? $empresaId);
+    if ($e === $empresaId && preg_match('/^([a-z_]+\.php)(\?[\w=&%.\-]*)?$/', $ir, $m)
+        && !in_array($m[1], ['index.php', 'logout.php', 'sesion.php', 'notificaciones.php'], true) && puedeAcceder($m[1])) return $ir;
+    return paginaInicio();
+}
+
 function cerrarSesionYSalir() {
     // Se conserva el aviso para el login (p. ej. "su sesión se cerró por inactividad")
     $aviso = $_SESSION['aviso_login'] ?? null;
@@ -295,7 +308,11 @@ function cerrarSesionYSalir() {
         die(json_encode(['success' => false, 'sesion_expirada' => true,
             'message' => $aviso ?? 'Su sesión terminó. Ingrese de nuevo.'], JSON_UNESCAPED_UNICODE));
     }
-    header('Location: ' . BASE_URL . 'index.php');
+    // Al entrar de nuevo se vuelve a la página que se intentaba abrir
+    $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
+    $ir = $_SERVER['REQUEST_METHOD'] === 'GET' && !in_array($script, ['index.php', 'logout.php'], true)
+        ? '?' . http_build_query(['ir' => $script . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '')]) : '';
+    header('Location: ' . BASE_URL . 'index.php' . $ir);
     exit;
 }
 
@@ -368,6 +385,7 @@ function requireLogin() {
     // Al ver un proceso: su orden de pago (o, en una orden de pago, su proceso de origen)
     if (!$esPost && ($_GET['action'] ?? '') === 'ver' && (int)($_GET['id'] ?? 0)) {
         $GLOBALS['enlaces_orden_pago'] = enlacesOrdenPago($GLOBALS['pdo'], $script, (int)$_GET['id']);
+        if (isset(PROCESOS[$script])) marcarNotificacionesLeidas($GLOBALS['pdo'], PROCESOS[$script]['tabla'], (int)$_GET['id']);
     }
 
     // Flujo Creado → Revisado → Autorizado (config/aprobaciones.php)
@@ -554,6 +572,9 @@ function registrarPeticion(): void {
             if (in_array($act, ['guardar', 'crear'], true)) registrarParticipacion($GLOBALS['pdo'], $script, $regId);
             anotarFlujoTrasPeticion($GLOBALS['pdo'], $script, $act, $regId);
         } catch (Throwable $e) {}
+        // Avisos (campana y correo) a quien le toca el siguiente paso o sigue el proceso
+        try { notificarFlujo($GLOBALS['pdo'], $script, $act, $regId); }
+        catch (Throwable $e) { error_log('Proscala: no se pudieron generar las notificaciones: ' . $e->getMessage()); }
     } elseif (!$error && isset(EDICION_PROCESOS[$script]) && in_array($act, ['guardar', 'crear', 'generar'], true)) {
         // Procesos sin flujo (planillas, préstamos…): quién los creó, para la regla de edición
         try { registrarParticipacion($GLOBALS['pdo'], $script, $postId ?: (int)($res[2] ?? 0)); } catch (Throwable $e) {}
@@ -601,3 +622,4 @@ require_once __DIR__ . '/historico.php';
 require_once __DIR__ . '/correlativos.php';
 require_once __DIR__ . '/edicion.php';
 require_once __DIR__ . '/adjuntos.php';
+require_once __DIR__ . '/notificaciones.php';

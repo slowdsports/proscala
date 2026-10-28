@@ -48,6 +48,12 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonOk([], 'Contraseña actualizada correctamente.');
     }
 
+    if ($act === 'notificar_correo') {
+        $activo = ($_POST['activo'] ?? '') === '1' ? 1 : 0;
+        $pdo->prepare("UPDATE usuarios SET notificar_correo=? WHERE id=?")->execute([$activo, $userId]);
+        jsonOk([], $activo ? 'Recibirá los avisos también por correo.' : 'Ya no recibirá avisos por correo; seguirán en la campana.');
+    }
+
     if ($act === 'foto') {
         if (empty($_FILES['foto']) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) jsonErr('No se recibió ningún archivo.');
         $file = $_FILES['foto'];
@@ -112,7 +118,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Load profile ──────────────────────────────────────────────────────
-$stmt = $pdo->prepare("SELECT id, nombre, email, rol, foto, created_at, ultimo_acceso, debe_cambiar_password FROM usuarios WHERE id=?");
+$stmt = $pdo->prepare("SELECT id, nombre, email, rol, foto, created_at, ultimo_acceso, debe_cambiar_password, notificar_correo FROM usuarios WHERE id=?");
 $stmt->execute([$userId]);
 $me = $stmt->fetch();
 
@@ -217,6 +223,21 @@ include __DIR__ . '/includes/header.php';
       </div>
     </div>
 
+    <!-- Notificaciones -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="fas fa-bell"></i> Notificaciones</div>
+      <div class="card-body">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="chk-notificar-correo" <?= $me['notificar_correo'] ? 'checked' : '' ?>>
+          <label class="form-check-label" for="chk-notificar-correo">Recibir los avisos también por correo</label>
+        </div>
+        <div class="text-muted mt-1" style="font-size:.8rem;">
+          Procesos que esperan su revisión o autorización, y los suyos cuando se revisan, autorizan, rechazan o corrigen.
+          Siempre aparecen en la campana <i class="fas fa-bell"></i> de la barra superior.
+        </div>
+      </div>
+    </div>
+
     <!-- Cambiar contraseña -->
     <?php if ($me['debe_cambiar_password']): ?>
     <div class="alert alert-warning py-2" style="font-size:.85rem;">
@@ -313,6 +334,15 @@ async function quitarFoto() {
       else Toast.show(r.message,'danger');
     });
 }
+
+document.getElementById('chk-notificar-correo').addEventListener('change', async function(){
+  const fd = new FormData();
+  fd.append('csrf_token', _csrfPerfil);
+  fd.append('_action', 'notificar_correo');
+  fd.append('activo', this.checked ? '1' : '0');
+  try { const r = await post('perfil.php', fd); Toast.show(r.message, 'success'); }
+  catch (e) { this.checked = !this.checked; Toast.show(e.message, 'error'); }
+});
 
 bindAjaxForm('form-datos', r => {
   Toast.show(r.message, 'success');

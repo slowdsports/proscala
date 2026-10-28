@@ -11,6 +11,22 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.4.0 — 2026-10-27
+**Notificaciones**
+- Campana en la barra superior con un consolidado de lo importante para cada usuario:
+  - **Por aprobar**: los procesos que puede revisar o autorizar en este momento (con las mismas reglas del flujo y del organigrama).
+  - **Avisos**: sus procesos revisados, autorizados, rechazados (con el motivo) o corregidos, y los que esperan su revisión o autorización.
+  - Muestra cuántos hay pendientes y sin leer, se actualiza sola cada 2 minutos y tras cada acción, y anuncia los avisos nuevos. Al abrir un proceso, sus avisos quedan leídos; también se puede marcar todo como leído.
+- Correo con cada aviso, con un botón que abre el proceso (si no hay sesión abierta, al entrar se va directo a él).
+- A quién se avisa:
+  - Un proceso nuevo, corregido o una orden de pago generada al autorizar: al puesto superior más cercano que aprueba procesos, según el organigrama de quien lo creó. Si ese puesto no tiene usuarios, a los Administradores.
+  - Un proceso revisado: a quien lo creó, y a quien le toca autorizarlo (nunca a quien lo revisó).
+  - Un proceso autorizado, rechazado o corregido: a quien lo creó y al empleado a cuyo nombre está.
+- En Mi Perfil cada usuario puede dejar de recibir los avisos por correo; en la campana siempre aparecen.
+- La consulta automática de la campana no cuenta como actividad: la sesión se sigue cerrando tras 2 h sin uso.
+- Al abrir cualquier página con la sesión vencida, después de iniciar sesión se vuelve a esa página.
+- Base de datos: tabla `notificaciones` y columna `usuarios.notificar_correo`.
+
 ## 1.3.0 — 2026-10-27
 **Historial de rechazos con evidencia**
 - Cada rechazo queda guardado con quién lo hizo, cuándo y el motivo, en el historial del proceso. Ya no se pierde cuando el proceso se corrige y vuelve a revisión: el panel del flujo muestra el rechazo vigente y los anteriores ("Corregido después").

@@ -3,7 +3,7 @@ require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/auth.php';
 if (isset($_SESSION['usuario_id'], $_SESSION['empresa_id'])) {
-    header('Location: ' . BASE_URL . paginaInicio());
+    header('Location: ' . BASE_URL . destinoTrasLogin((int)$_SESSION['empresa_id']));
     exit;
 }
 
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = ?")->execute([$u['id']]);
             registrarEvento($pdo, 'LOGIN', ['modulo' => 'index.php', 'detalle' => 'Inicio de sesión']);
             // Contraseña inicial (usuarios creados desde Empleados): primero debe cambiarla
-            header('Location: ' . BASE_URL . ($u['debe_cambiar_password'] ? 'perfil.php?cambiar=1' : paginaInicio()));
+            header('Location: ' . BASE_URL . ($u['debe_cambiar_password'] ? 'perfil.php?cambiar=1' : destinoTrasLogin((int)$acc['empresa_id'])));
             exit;
         } elseif ($motivo === 'Empresa desactivada') {
             $error = 'La empresa de este usuario está desactivada. Contacte al administrador de Proscala.';
