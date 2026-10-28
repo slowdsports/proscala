@@ -19,7 +19,13 @@ function iniciarSesion(): void {
     ini_set('session.use_only_cookies', '1');
     session_name('PROSCALA');
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Lax']);
+    // Páginas con sesión: nunca en caché (del navegador, del hosting ni de un proxy). Llevan datos
+    // del usuario y su token CSRF; servidas a otra sesión, todos sus envíos serían rechazados.
+    // PHP lo hace con 'nocache' por omisión, pero el hosting puede haberlo cambiado.
+    session_cache_limiter('nocache');
     session_start();
+    header('Cache-Control: no-store, no-cache, must-revalidate, private');
+    header('X-LiteSpeed-Cache-Control: no-cache');
 
     $ahora = time();
     if (isset($_SESSION['usuario_id'], $_SESSION['ultima_actividad']) && $ahora - $_SESSION['ultima_actividad'] > SESION_INACTIVIDAD) {

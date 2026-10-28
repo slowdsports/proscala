@@ -14,6 +14,7 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 ## Sin publicar
 - Corregido: un formulario abierto antes de cerrar sesión y volver a entrar (por ejemplo en otra pestaña) no se guardaba: el token de seguridad ya no coincidía, en pantalla solo aparecía "Error" y la bitácora registraba la acción sin explicación. Ahora el sistema toma el token vigente y reenvía el formulario solo, sin perder lo escrito; si aun así falla, muestra el motivo, y la bitácora registra "Token de seguridad vencido o inválido".
 - Corregido: Solicitud de Compra, Cotizaciones, Orden de Compra, Nota de Recepción y Anticipos mostraban "Error" sin el motivo cuando no se podía guardar.
+- Las páginas con sesión se envían siempre como "no guardar en caché" (también para la caché de LiteSpeed del hosting): una página guardada y servida a otra sesión llevaría un token de seguridad ajeno.
 - Corregido: `actualizar_bd.php` decía "Todo está al día" aunque no hubiera podido revisar alguna base; ahora avisa cuántas fallaron.
 
 ## 1.10.0 — 2026-10-28
