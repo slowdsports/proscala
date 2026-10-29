@@ -11,6 +11,12 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.15.1 — 2026-10-29
+**Octubre 2026 de AHDECO con planilla mensual**
+- Corregido: al no poder generar una planilla (p. ej. el mes ya tiene planilla quincenal y se pidió una mensual), la pantalla decía "Error de conexión" en lugar del motivo.
+- `actualizar_bd.php`, **una sola vez y solo en AHDECO** (por pedido expreso): borra las planillas quincenales de octubre 2026 con todo lo que depende de ellas (detalle, distribución por proyecto, órdenes de pago aunque estén pagadas, adjuntos, aprobaciones y avisos), para poder pagar ese mes con una planilla mensual. Queda en la bitácora con números y montos, y una marca en la configuración impide que vuelva a ejecutarse.
+- Pruebas automáticas: 37 (1 nueva: el borrado único, en una transacción que se revierte).
+
 ## 1.15.0 — 2026-10-29
 **Expediente digital del empleado**
 - **Expediente digital del empleado** (Empleados → editar): documentos de la persona clasificados por categoría (Identificación, Contrato y adendas, Hoja de vida, Títulos y certificados, Antecedentes, Constancias y referencias, Evaluaciones de desempeño, Acciones de personal, Salud y seguros, Planillas y pagos, Otros). Se elige la categoría y se suben archivos, se toma una foto con el celular o se arrastran; se muestran agrupados por categoría, con vista previa y descarga. Al registrar un empleado nuevo también se pueden adjuntar (cada archivo con su categoría) y se suben al guardar. La lista de empleados indica cuántos documentos tiene cada expediente. Solo lo ven y completan quienes tienen acceso al módulo Empleados; quitar un documento: quien lo subió o el Administrador. Queda en la bitácora. Usa el mismo sistema de documentos adjuntos de los procesos (`config/adjuntos.php` → `EXPEDIENTES`).

@@ -104,3 +104,68 @@ function cambiosEsquema(PDO $db, array $esquema): array {
     }
     return $cambios;
 }
+
+// ── Correcciones de datos de una sola vez (pasos de actualizar_bd.php) ──
+
+/** Id de la empresa (base central) cuyo RTN es $rtn, si $db es su base; si no, null. Sirve en local y en producción. */
+function empresaDeBase(PDO $db, PDO $master, string $rtn): ?int {
+    $s = $master->prepare("SELECT id FROM empresas WHERE rtn = ? AND db_nombre = ?");
+    $s->execute([$rtn, (string)$db->query('SELECT DATABASE()')->fetchColumn()]);
+    return ($id = $s->fetchColumn()) ? (int)$id : null;
+}
+
+/**
+ * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: borra las planillas quincenales de
+ * octubre de 2026 para poder pagar ese mes con una planilla mensual. Se llevan todo lo que depende
+ * de ellas: detalle y distribución por proyecto, sus órdenes de pago aunque estén
+ * pagadas, adjuntos (registros y archivos), aprobaciones, rechazos, recordatorios, participación y
+ * avisos. En una transacción (o en la que esté abierta); deja constancia en la bitácora y la marca
+ * paso_quincenas_oct2026 en la configuración. Devuelve el resumen de lo borrado.
+ */
+function borrarQuincenasOctubre2026(PDO $db, int $empresaId, string $raiz): string {
+    $propia = !$db->inTransaction();
+    if ($propia) $db->beginTransaction();
+    try {
+        $pl = $db->query("SELECT id, numero, quincena, estado, total_neto FROM planilla_periodos
+                          WHERE anio = 2026 AND mes = 10 AND tipo = 'quincenal' ORDER BY quincena")->fetchAll();
+        $plIds = array_map(fn($p) => (int)$p['id'], $pl);
+        $ops = $plIds ? $db->query("SELECT id, numero, estado, monto FROM ordenes_pago
+                                    WHERE origen_tabla = 'planilla_periodos' AND origen_id IN (" . implode(',', $plIds) . ")")->fetchAll() : [];
+        $opIds = array_map(fn($o) => (int)$o['id'], $ops);
+        $archivos = [];
+        foreach (['planilla_periodos' => $plIds, 'ordenes_pago' => $opIds] as $tabla => $ids) {
+            if (!$ids) continue;
+            $en = implode(',', $ids);
+            foreach ($db->query("SELECT archivo FROM adjuntos WHERE tabla = '$tabla' AND registro_id IN ($en)") as $a) $archivos[] = $a['archivo'];
+            foreach (['adjuntos', 'aprobaciones', 'rechazos', 'recordatorios', 'registro_usuarios', 'notificaciones'] as $t) {
+                $db->exec("DELETE FROM `$t` WHERE tabla = '$tabla' AND registro_id IN ($en)");
+            }
+        }
+        if ($opIds) $db->exec("DELETE FROM ordenes_pago WHERE id IN (" . implode(',', $opIds) . ")");
+        if ($plIds) {
+            // Explícito, no en cascada: actualizar_bd.php aplica con FOREIGN_KEY_CHECKS=0 y así no hay cascada
+            $en = implode(',', $plIds);
+            $db->exec("DELETE pdp FROM planilla_detalle_proyectos pdp JOIN planilla_detalle pd ON pd.id = pdp.detalle_id WHERE pd.periodo_id IN ($en)");
+            $db->exec("DELETE FROM planilla_detalle WHERE periodo_id IN ($en)");
+            $db->exec("DELETE FROM planilla_periodos WHERE id IN ($en)");
+        }
+
+        $resumen = $pl
+            ? 'Planillas quincenales de octubre 2026 borradas para generar la mensual: '
+              . implode('; ', array_map(fn($p) => trim(($p['numero'] ?: "#{$p['id']}") . " ({$p['quincena']} quincena, {$p['estado']}, neto L. " . number_format((float)$p['total_neto'], 2) . ')'), $pl))
+              . ($ops ? '. Órdenes de pago borradas: ' . implode('; ', array_map(fn($o) => "{$o['numero']} ({$o['estado']}, L. " . number_format((float)$o['monto'], 2) . ')', $ops)) : '')
+              . ($archivos ? '. Adjuntos: ' . count($archivos) : '')
+            : 'No había planillas quincenales de octubre 2026 que borrar.';
+        $db->prepare("INSERT INTO auditoria (accion, modulo, tabla_afectada, resultado, detalle) VALUES ('DELETE', 'actualizar_bd.php', 'planilla_periodos', 'ok', ?)")
+            ->execute([$resumen]);
+        $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
+            ('paso_quincenas_oct2026', '1', 'actualizar_bd.php ya borró las planillas quincenales de octubre 2026 (se pagó con una mensual)')");
+        if ($propia) $db->commit();
+    } catch (Throwable $e) {
+        if ($propia) $db->rollBack();
+        throw $e;
+    }
+    // Los archivos, solo si los registros ya se borraron de verdad
+    if ($propia) foreach ($archivos as $f) @unlink("$raiz/assets/uploads/adjuntos/$empresaId/$f");
+    return $resumen;
+}

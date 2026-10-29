@@ -743,7 +743,10 @@ async function submitPlanilla() {
       Toast.show(res.message, 'success');
       setTimeout(() => Nav.ir('planillas.php?action=ver&id='+res.id), 1500);
     } else { Toast.show(res.message,'error'); btn.disabled=false; btn.innerHTML='<i class="fas fa-cog"></i> Generar Planilla'; }
-  } catch { Toast.show('Error de conexión','error'); btn.disabled=false; btn.innerHTML='<i class="fas fa-cog"></i> Generar Planilla'; }
+  } catch (e) {   // el motivo del servidor (p. ej. el mes ya tiene planilla), no un genérico
+    Toast.show(e.message || 'No se pudo generar la planilla.', 'error', 9000);
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-cog"></i> Generar Planilla';
+  }
 }
 
 JS;

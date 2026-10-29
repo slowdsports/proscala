@@ -344,3 +344,31 @@ prueba('Caja chica: el responsable la edita (no la elimina) mientras está abier
         afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'liquidada: ya no se edita');
     });
 });
+require_once RAIZ . '/config/esquema.php';
+prueba('Paso único 1.15.1: borra las quincenas de octubre 2026 de AHDECO con todo lo que depende de ellas, y nada más', function () use ($pdo, $pdoMaster) {
+    $esAhdeco = empresaDeBase($pdo, $pdoMaster, '08269016867779');
+    if (!$esAhdeco) throw new Omitir('la base de prueba no es la de AHDECO');
+    $cuenta = fn(string $sql) => (int)$pdo->query($sql)->fetchColumn();
+    $oct = "SELECT id FROM planilla_periodos WHERE anio = 2026 AND mes = 10 AND tipo = 'quincenal'";
+    $otras = $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE NOT (anio = 2026 AND mes = 10 AND tipo = 'quincenal')");
+    $detalleOtras = $cuenta("SELECT COUNT(*) FROM planilla_detalle WHERE periodo_id NOT IN ($oct)");
+    $opsOtras = $cuenta("SELECT COUNT(*) FROM ordenes_pago WHERE COALESCE(origen_tabla, '') <> 'planilla_periodos' OR origen_id NOT IN ($oct)");
+    $pdo->beginTransaction();
+    try {
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=0');   // como actualizar_bd.php al aplicar
+        $resumen = borrarQuincenasOctubre2026($pdo, $esAhdeco, RAIZ);
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+        iguales(0, $cuenta("SELECT COUNT(*) FROM ($oct) t"), 'quedan quincenas de octubre 2026');
+        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_detalle WHERE periodo_id NOT IN (SELECT id FROM planilla_periodos)"), 'detalle huérfano');
+        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_detalle_proyectos WHERE detalle_id NOT IN (SELECT id FROM planilla_detalle)"), 'distribución huérfana');
+        iguales(0, $cuenta("SELECT COUNT(*) FROM ordenes_pago WHERE origen_tabla = 'planilla_periodos' AND origen_id NOT IN (SELECT id FROM planilla_periodos)"), 'órdenes de pago huérfanas');
+        iguales([$otras, $detalleOtras, $opsOtras], [$cuenta("SELECT COUNT(*) FROM planilla_periodos"), $cuenta("SELECT COUNT(*) FROM planilla_detalle"), $cuenta("SELECT COUNT(*) FROM ordenes_pago")],
+            'no tocó otras planillas, su detalle ni otras órdenes de pago');
+        afirmar((bool)$cuenta("SELECT COUNT(*) FROM configuracion WHERE clave = 'paso_quincenas_oct2026'"), 'no dejó la marca de una sola vez');
+        afirmar(str_contains($resumen, 'octubre 2026'), 'resumen para la bitácora');
+    } finally { if ($pdo->inTransaction()) $pdo->rollBack(); $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); }
+    foreach ($pdoMaster->query("SELECT db_nombre FROM empresas WHERE rtn <> '08269016867779'") as $otra) {
+        try { $db = conectarBD($otra['db_nombre']); } catch (Throwable $e) { continue; }
+        iguales(null, empresaDeBase($db, $pdoMaster, '08269016867779'), "{$otra['db_nombre']} no se reconoce como AHDECO");
+    }
+});

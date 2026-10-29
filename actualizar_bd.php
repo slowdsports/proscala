@@ -59,6 +59,16 @@ $PASOS = [
                 ('paso_colegas_administracion', '1', 'actualizar_bd.php ya activó que en Administración los colegas se revisen entre sí')");
         },
     ],
+    [
+        // Pedido expreso, solo AHDECO (por su RTN) y una sola vez (marca paso_quincenas_oct2026): config/esquema.php
+        'base' => 'empresa',
+        'descripcion' => 'AHDECO: borrar las planillas quincenales de octubre 2026 y sus órdenes de pago (también las pagadas) para pagar ese mes con una planilla mensual — una sola vez (1.15.1)',
+        'pendiente' => fn(PDO $db) => empresaDeBase($db, $GLOBALS['pdoMaster'], '08269016867779') !== null
+            && !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_quincenas_oct2026'")->fetchColumn(),
+        'aplicar' => function (PDO $db) {
+            borrarQuincenasOctubre2026($db, (int)empresaDeBase($db, $GLOBALS['pdoMaster'], '08269016867779'), __DIR__);
+        },
+    ],
 ];
 
 // ── Acceso: terminal o clave de mantenimiento ────────────────────────
