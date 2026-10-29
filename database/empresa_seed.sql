@@ -29,18 +29,20 @@ INSERT INTO configuracion (clave, valor, descripcion) VALUES
 ('prefijo_op', 'OP', 'Prefijo orden de pago'),
 ('prefijo_nr', 'NR', 'Prefijo nota de recepción'),
 ('recordatorio_dias', '2', 'Días que un proceso espera antes de recordar a quien le toca aprobarlo'),
-('escalamiento_dias', '5', 'Días que un proceso espera antes de avisar al siguiente nivel del organigrama');
+('escalamiento_dias', '5', 'Días que un proceso espera antes de avisar al siguiente nivel del organigrama'),
+('paso_colegas_administracion', '1', 'actualizar_bd.php ya activó que en Administración los colegas se revisen entre sí');
 
 -- Puestos iniciales (se agregan, renombran y ordenan en Roles y Permisos)
-INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES
-('admin',               'Administrador',       NULL,                  1, 0, 1),
-('junta_directiva',     'Junta Directiva',     NULL,                  1, 0, 2),
-('direccion_ejecutiva', 'Dirección Ejecutiva', 'junta_directiva',     1, 0, 3),
-('administracion',      'Administración',      'direccion_ejecutiva', 1, 0, 4),
-('contabilidad',        'Contabilidad',        'administracion',      1, 0, 5),
-('finanzas',            'Finanzas',            'administracion',      1, 0, 6),
-('recursos_humanos',    'Recursos Humanos',    'administracion',      0, 0, 7),
-('empleado',            'Empleado',            'administracion',      0, 1, 8);
+-- aprueba_colegas: los miembros del puesto se revisan y corrigen entre sí (config/aprobaciones.php)
+INSERT INTO roles (clave, nombre, depende_de, aprueba, aprueba_colegas, solo_propios, orden) VALUES
+('admin',               'Administrador',       NULL,                  1, 0, 0, 1),
+('junta_directiva',     'Junta Directiva',     NULL,                  1, 0, 0, 2),
+('direccion_ejecutiva', 'Dirección Ejecutiva', 'junta_directiva',     1, 0, 0, 3),
+('administracion',      'Administración',      'direccion_ejecutiva', 1, 1, 0, 4),
+('contabilidad',        'Contabilidad',        'administracion',      1, 0, 0, 5),
+('finanzas',            'Finanzas',            'administracion',      1, 0, 0, 6),
+('recursos_humanos',    'Recursos Humanos',    'administracion',      0, 0, 0, 7),
+('empleado',            'Empleado',            'administracion',      0, 0, 1, 8);
 
 INSERT INTO cat_bancos (nombre) VALUES
 ('BAC'),('Atlántida'),('FICOHSA'),('Davivienda'),('Banrural'),('Occidente');

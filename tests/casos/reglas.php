@@ -293,3 +293,35 @@ prueba('Cotizaciones: recomienda el proveedor único y la compra por artículo s
     $g = analizarCotizacion([], [['id' => 1, 'total' => 500, 'precios' => []], ['id' => 2, 'total' => 450, 'precios' => []]]);
     iguales([false, 2, null], [$g['con_detalle'], $g['unico']['oferta_id'], $g['por_articulo']], 'montos globales: la oferta más baja');
 });
+prueba('Jerarquía: en la cima del organigrama los colegas del mismo puesto se aprueban entre sí; abajo, no', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u) use ($pdo, $accion) {
+        $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_cima', 'ZZ Cima', NULL, 1, 0, 93)");
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $nuevo = function (string $rol) use ($pdo) {
+            $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES (?,?,?,?,1)")
+                ->execute(["ZZ $rol", "zz.$rol." . bin2hex(random_bytes(4)) . '@prueba.local', 'x', $rol]);
+            return (int)$pdo->lastInsertId();
+        };
+        $permiso = function (int $creador, string $num) use ($pdo, $emp) {
+            $pdo->prepare("INSERT INTO permisos (numero, empleado_id, fecha_solicitud, fecha_inicio, fecha_fin, dias, tipo, motivo, estado)
+                           VALUES (?, ?, CURDATE(), CURDATE(), CURDATE(), 1, 'personal', 'Prueba automática', 'pendiente')")->execute([$num, $emp]);
+            $id = (int)$pdo->lastInsertId();
+            $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('permisos', ?, ?, 'creador')")->execute([$id, $creador]);
+            return $id;
+        };
+        $c1 = $nuevo('zz_cima'); $c2 = $nuevo('zz_cima'); $p2 = $nuevo('zz_par');
+        roles(true);
+        $deCima = $permiso($c1, 'ZZPRUEBA-CIMA');
+        comoUsuario($pdo, $c2); iguales(true, $accion($pdo, $deCima, 'revisar'), 'un colega de la cima revisa');
+        iguales(true, puedeEditar($pdo, 'permisos.php', $deCima), 'un colega de la cima corrige');
+        comoUsuario($pdo, $c1); afirmar($accion($pdo, $deCima, 'revisar') !== true, 'nadie revisa lo que creó, ni en la cima');
+        $deMedio = $permiso($u['par'], 'ZZPRUEBA-MEDIO');
+        comoUsuario($pdo, $p2); afirmar($accion($pdo, $deMedio, 'revisar') !== true, 'abajo de la cima, un colega del mismo puesto no revisa');
+        // Con "sus miembros se revisan entre sí" (p. ej. Administración), sí
+        $pdo->exec("UPDATE roles SET aprueba_colegas = 1 WHERE clave = 'zz_par'");
+        roles(true);
+        iguales(true, $accion($pdo, $deMedio, 'revisar'), 'con la opción del puesto, un colega revisa');
+        iguales(true, puedeEditar($pdo, 'permisos.php', $deMedio), 'con la opción del puesto, un colega corrige');
+        comoUsuario($pdo, $u['par']); afirmar($accion($pdo, $deMedio, 'revisar') !== true, 'con la opción, tampoco se revisa lo propio');
+    });
+});

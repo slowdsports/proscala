@@ -11,6 +11,12 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.13.0 — 2026-10-28
+**Colegas del mismo puesto se revisan entre sí (cima del organigrama y Administración)**
+- Corregido: un proceso creado por alguien de un puesto en la cima del organigrama (que aprueba y no depende de nadie, p. ej. Administrador) no lo podía revisar ni corregir nadie: "solo un puesto superior a Administrador…", y no hay ninguno. Ahora ahí los colegas del mismo puesto se revisan, autorizan y corrigen entre sí (nunca lo propio).
+- **"Sus miembros se revisan entre sí"** (Roles y Permisos → editar puesto): lo mismo para cualquier puesto que apruebe procesos, aunque no esté en la cima. Activado para **Administración** (en las empresas existentes, `actualizar_bd.php` lo activa una vez; si después se desactiva, se respeta). En la tabla de puestos, "Sus procesos los aprueban" muestra a los colegas cuando aplica. En los demás puestos la regla no cambia.
+- Base de datos (`actualizar_bd.php`): columna `roles.aprueba_colegas`.
+
 ## 1.12.0 — 2026-10-28
 **Cuadro comparativo de cotizaciones por artículo y recomendación de compra**
 - **Cuadro comparativo de cotizaciones por artículo**: las cotizaciones ya no se registran con un monto global por proveedor sino como se ve cada cotización: una fila por artículo (cargados de la solicitud de compra, editables, se pueden agregar más) y una columna por proveedor con el precio unitario de cada uno; vacío = no lo cotizó. El total de cada proveedor se calcula solo y el menor precio de cada artículo se marca en verde mientras se escribe. Las cotizaciones anteriores se siguen viendo con su monto global; al editarlas se cargan los artículos de su solicitud.

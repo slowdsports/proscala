@@ -83,10 +83,20 @@ function esSuperiorDe(string $superior, string $rol): bool {
 /**
  * ¿La jerarquía permite al usuario actual aprobar un proceso creado por alguien del puesto $rolCreador?
  * null si sí; si no, el motivo. Sin creador conocido (procesos antiguos) no hay restricción.
+ * Entre colegas del mismo puesto (nunca lo propio: eso lo impiden accionesFlujo y puedeEditar), si
+ * el puesto aprueba procesos y: está en la cima del organigrama (no depende de nadie, p. ej.
+ * Administrador: no hay nadie por encima), o tiene "sus miembros se revisan entre sí"
+ * (roles.aprueba_colegas, en Roles y Permisos; p. ej. Administración).
  */
+function puedenAprobarseEntreColegas(string $rol): bool {
+    $p = roles()[$rol] ?? null;
+    return $p && !empty($p['aprueba']) && (empty($p['depende_de']) || !empty($p['aprueba_colegas']));
+}
+
 function motivoJerarquia(?string $rolCreador): ?string {
     if (tieneAccesoTotal() || !$rolCreador || !isset(roles()[$rolCreador])) return null;
     if (esSuperiorDe($_SESSION['usuario_rol'] ?? '', $rolCreador)) return null;
+    if (($_SESSION['usuario_rol'] ?? '') === $rolCreador && puedenAprobarseEntreColegas($rolCreador)) return null;
     if (delegacionQueHabilita($rolCreador)) return null;
     return 'Según el organigrama, solo un puesto superior a ' . roles()[$rolCreador]['nombre'] . ' puede aprobar o corregir este proceso.';
 }

@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.12.0';
+const VERSION_BD = '1.13.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -46,6 +46,17 @@ $PASOS = [
             $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
                 ('recordatorio_dias', '2', 'Días que un proceso espera antes de recordar a quien le toca aprobarlo'),
                 ('escalamiento_dias', '5', 'Días que un proceso espera antes de avisar al siguiente nivel del organigrama')");
+        },
+    ],
+    [
+        // Una sola vez (queda anotado en configuracion): si después se desactiva en Roles y Permisos, no se vuelve a activar
+        'base' => 'empresa',
+        'descripcion' => 'Administración: sus miembros se revisan y corrigen entre sí (1.13.0)',
+        'pendiente' => fn(PDO $db) => !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_colegas_administracion'")->fetchColumn(),
+        'aplicar' => function (PDO $db) {
+            $db->exec("UPDATE roles SET aprueba_colegas = 1 WHERE clave = 'administracion'");
+            $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
+                ('paso_colegas_administracion', '1', 'actualizar_bd.php ya activó que en Administración los colegas se revisen entre sí')");
         },
     ],
 ];

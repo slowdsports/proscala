@@ -50,10 +50,12 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             jsonErr('Un puesto no puede depender de sí mismo ni de un puesto que está debajo de él.');
         }
         $aprueba = $clave === 'admin' ? 1 : (isset($_POST['aprueba']) ? 1 : 0);
+        $colegas = $aprueba && isset($_POST['aprueba_colegas']) ? 1 : 0;   // sus miembros se revisan entre sí
 
         if ($clave !== '') {
-            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba = ? WHERE clave = ?")->execute([$nombre, $padre, $aprueba, $clave]);
-            registrarAuditoria($pdo, 'UPDATE', 'roles', 0, "Puesto $nombre ($clave): depende de " . ($padre ? $roles[$padre]['nombre'] : '—') . ', ' . ($aprueba ? 'aprueba procesos' : 'no aprueba procesos'));
+            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba = ?, aprueba_colegas = ? WHERE clave = ?")->execute([$nombre, $padre, $aprueba, $colegas, $clave]);
+            registrarAuditoria($pdo, 'UPDATE', 'roles', 0, "Puesto $nombre ($clave): depende de " . ($padre ? $roles[$padre]['nombre'] : '—') . ', ' . ($aprueba ? 'aprueba procesos' : 'no aprueba procesos')
+                . ($colegas ? ', sus miembros se revisan entre sí' : ''));
             jsonOk([], 'Puesto actualizado.');
         }
 
@@ -62,9 +64,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $soloPropios = isset($roles[$copiar]) ? (int)$roles[$copiar]['solo_propios'] : 0;
         $pdo->beginTransaction();
         try {
-            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden)
-                           SELECT ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
-                ->execute([$clave, $nombre, $padre, $aprueba, $soloPropios]);
+            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba, aprueba_colegas, solo_propios, orden)
+                           SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
+                ->execute([$clave, $nombre, $padre, $aprueba, $colegas, $soloPropios]);
             // Copiar los módulos de un puesto parecido (opcional)
             if (isset($roles[$copiar]) && $copiar !== 'admin') {
                 $pdo->prepare("INSERT INTO rol_modulos (rol, modulo) SELECT ?, modulo FROM rol_modulos WHERE rol = ?")->execute([$clave, $copiar]);
@@ -192,13 +194,15 @@ include __DIR__ . '/includes/header.php';
               <td style="font-size:.78rem;"><?php
                 // Superiores de su rama que aprueban (config/aprobaciones.php → esSuperiorDe), más el Administrador
                 $aprobadores = [];
+                // Colegas del mismo puesto, si se aprueban entre sí (cima del organigrama u opción del puesto)
+                if ($k !== 'admin' && puedenAprobarseEntreColegas($k)) $aprobadores[] = '<em>colegas de ' . htmlspecialchars($r['nombre']) . '</em>';
                 foreach ($roles as $k2 => $r2) if ($k2 !== 'admin' && $r2['aprueba'] && esSuperiorDe($k2, $k)) $aprobadores[] = htmlspecialchars($r2['nombre']);
                 echo $k === 'admin' ? '<span class="text-muted">Otro Administrador</span>'
                     : implode(', ', $aprobadores) . ($aprobadores ? ' y ' : '') . '<span class="text-muted">Administrador</span>';
               ?></td>
               <td class="text-center"><?= (int)($conteo[$k] ?? 0) ?></td>
               <td class="text-end" style="white-space:nowrap">
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba' => (int)$r['aprueba']], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba' => (int)$r['aprueba'], 'aprueba_colegas' => (int)($r['aprueba_colegas'] ?? 0)], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
                 <?php if (!in_array($k, ROLES_SISTEMA, true)): ?>
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar" onclick='eliminarPuesto(<?= json_encode($k) ?>, <?= json_encode($r['nombre'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-trash"></i></button>
                 <?php endif; ?>
@@ -227,6 +231,8 @@ include __DIR__ . '/includes/header.php';
   Quien crea una solicitud puede <strong>editarla mientras nadie la haya revisado, autorizado ni rechazado</strong>.
   Los puestos que <strong>aprueban procesos</strong> pueden revisarlos, autorizarlos, rechazarlos y corregirlos, nunca los que ellos mismos crearon
   y solo si están <strong>por encima</strong> de quien creó el proceso en el organigrama (el Administrador puede con todos).
+  Los <strong>colegas del mismo puesto</strong> se revisan y corrigen entre sí en los puestos de la cima del organigrama (los que aprueban y no dependen de nadie: no hay nadie por encima)
+  y en los que tienen marcado <em>"Sus miembros se revisan entre sí"</em> (editar el puesto).
   Ejemplo: si Empleado depende de Contabilidad y Contabilidad de Finanzas, los procesos de un empleado los aprueban Contabilidad, Finanzas y sus superiores.
 </div>
 <div class="card"><div class="card-body p-0" style="overflow-x:auto;">
@@ -302,6 +308,12 @@ include __DIR__ . '/includes/header.php';
             <input type="checkbox" name="aprueba" id="puesto-aprueba" class="form-check-input" value="1">
             <label class="form-check-label" for="puesto-aprueba">Aprueba procesos <span class="text-muted">(revisar, autorizar, rechazar y corregir)</span></label>
           </div>
+          <div class="form-check mb-3 ms-4" id="puesto-colegas-wrap">
+            <input type="checkbox" name="aprueba_colegas" id="puesto-colegas" class="form-check-input" value="1">
+            <label class="form-check-label" for="puesto-colegas">Sus miembros se revisan entre sí
+              <span class="d-block text-muted small">Una persona de este puesto puede revisar, autorizar y corregir lo que creó otra del mismo puesto (nunca lo suyo).
+                En los puestos que no dependen de nadie ya es así.</span></label>
+          </div>
           <div class="mb-1" id="puesto-copiar-wrap">
             <label class="form-label">Copiar los módulos de</label>
             <select name="copiar_de" class="form-select">
@@ -337,6 +349,8 @@ function abrirPuesto(p) {
   document.getElementById('puesto-nombre').value = p.nombre || '';
   document.getElementById('puesto-aprueba').checked = !!p.aprueba;
   document.getElementById('puesto-aprueba').disabled = p.clave === 'admin';
+  document.getElementById('puesto-colegas').checked = !!p.aprueba_colegas;
+  document.getElementById('puesto-colegas-wrap').hidden = p.clave === 'admin' || !p.aprueba;
   document.getElementById('puesto-copiar-wrap').style.display = p.clave ? 'none' : '';
   // Un puesto no puede depender de sí mismo
   const sel = document.getElementById('puesto-depende');
@@ -344,6 +358,11 @@ function abrirPuesto(p) {
   sel.value = p.depende_de || '';
   new bootstrap.Modal(document.getElementById('modal-puesto')).show();
 }
+// "Se revisan entre sí" solo tiene sentido si el puesto aprueba procesos
+document.getElementById('puesto-aprueba')?.addEventListener('change', e => {
+  document.getElementById('puesto-colegas-wrap').hidden = !e.target.checked;
+  if (!e.target.checked) document.getElementById('puesto-colegas').checked = false;
+});
 function nuevoPuesto() { abrirPuesto({}); }
 function editarPuesto(p) { abrirPuesto(p); }
 async function guardarPuesto() {
