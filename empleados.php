@@ -222,7 +222,8 @@ $proyectosDist = $action === 'list' ? [] : array_values(proyectosMap($pdo));
 $empleados = [];
 if ($action === 'list') {
     $empleados = $pdo->query("SELECT e.*, u.id AS usuario_id, u.rol AS usuario_rol, u.activo AS usuario_activo,
-                                     u.debe_cambiar_password
+                                     u.debe_cambiar_password,
+                                     (SELECT COUNT(*) FROM adjuntos a WHERE a.tabla = 'empleados' AND a.registro_id = e.id) AS docs_expediente
                               FROM empleados e LEFT JOIN usuarios u ON u.empleado_id = e.id
                               ORDER BY e.apellidos, e.nombre")->fetchAll();
 }
@@ -268,7 +269,8 @@ include __DIR__ . '/includes/header.php';
         <?php foreach ($empleados as $e): ?>
         <tr>
           <td class="font-mono"><?= htmlspecialchars($e['codigo']) ?></td>
-          <td><strong><?= htmlspecialchars($e['apellidos'] . ', ' . $e['nombre']) ?></strong></td>
+          <td><strong><?= htmlspecialchars($e['apellidos'] . ', ' . $e['nombre']) ?></strong>
+            <?php if ($e['docs_expediente']): ?><a href="?action=editar&id=<?= $e['id'] ?>#expediente" class="badge bg-light text-dark border ms-1 text-decoration-none" title="Documentos en su expediente digital"><i class="fas fa-folder-open"></i> <?= (int)$e['docs_expediente'] ?></a><?php endif; ?></td>
           <td><?= htmlspecialchars($e['cargo']) ?></td>
           <td><?= htmlspecialchars($e['departamento']) ?></td>
           <td class="font-mono"><?= lps($e['sueldo_mensual']) ?></td>
@@ -545,6 +547,9 @@ include __DIR__ . '/includes/header.php';
         </button>
       </div>
 
+      <?php // Empleado nuevo: los documentos del expediente se suben al guardar (al editar, panel abajo)
+      if (!$emp) { $adjModulo = 'empleados.php'; include __DIR__ . '/includes/adjuntos_form.php'; } ?>
+
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn-proscala"><i class="fas fa-save"></i> Guardar</button>
         <a href="?" class="btn btn-outline-secondary btn-sm">Cancelar</a>
@@ -552,6 +557,9 @@ include __DIR__ . '/includes/header.php';
     </form>
   </div>
 </div>
+
+<?php // Expediente digital del empleado (config/adjuntos.php → EXPEDIENTES)
+if ($emp) { echo '<div id="expediente"></div>'; $adjModulo = 'empleados.php'; $adjId = $emp['id']; include __DIR__ . '/includes/adjuntos.php'; } ?>
 
 <?php if (!empty($histSalarial)): ?>
 <div class="card mt-3">

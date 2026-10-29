@@ -188,6 +188,43 @@ try {
         afirmar(!$fallas, implode(' | ', $fallas));
     });
 
+    prueba('Expediente digital del empleado: sube por categoría, lo muestra agrupado y no lo ve quien no tiene Empleados', function () use ($baseUrl, $sesAdmin, $pdo, $empresa) {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        if (!$emp) throw new Omitir('no hay empleados');
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        $b = 'zz' . bin2hex(random_bytes(8));
+        $campo = fn($n, $v) => "--$b\r\nContent-Disposition: form-data; name=\"$n\"\r\n\r\n$v\r\n";
+        $cuerpo = $campo('csrf_token', 'tokenprueba') . $campo('_action', 'subir') . $campo('modulo', 'empleados.php') . $campo('registro_id', $emp)
+                . $campo('categoria', 'Contrato y adendas')
+                . "--$b\r\nContent-Disposition: form-data; name=\"archivos[]\"; filename=\"zz-contrato-prueba.png\"\r\nContent-Type: image/png\r\n\r\n$png\r\n--$b--\r\n";
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'content' => $cuerpo,
+            'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: multipart/form-data; boundary=$b\r\n"]]);
+        $r = json_decode((string)@file_get_contents("$baseUrl/adjuntos.php", false, $ctx), true) ?: [];
+        $adj = $pdo->query("SELECT * FROM adjuntos WHERE tabla = 'empleados' AND registro_id = $emp AND nombre = 'zz-contrato-prueba.png' ORDER BY id DESC LIMIT 1")->fetch();
+        try {
+            afirmar(!empty($r['success']) && $adj, 'no se subió el documento: ' . ($r['message'] ?? 'sin respuesta'));
+            iguales('Contrato y adendas', $adj['categoria'], 'categoría guardada');
+            afirmar(str_contains($r['html'] ?? '', 'Contrato y adendas'), 'la lista no agrupa por categoría');
+            [$cod, $html] = pedir("$baseUrl/empleados.php?action=editar&id=$emp", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Expediente digital') && str_contains($html, 'zz-contrato-prueba.png') && !erroresPhp($html), "la ficha del empleado no muestra el expediente (HTTP $cod)");
+            [$cod] = pedir("$baseUrl/adjuntos.php?action=ver&id={$adj['id']}", $sesAdmin);
+            iguales(200, $cod, 'quien tiene Empleados descarga el documento');
+            // Sin acceso al módulo Empleados (p. ej. un empleado que solo ve sus solicitudes): no lo ve
+            $sin = $pdo->query("SELECT u.id FROM usuarios u WHERE u.activo = 1 AND u.rol <> 'admin'
+                                AND NOT EXISTS (SELECT 1 FROM rol_modulos m WHERE m.rol = u.rol AND m.modulo = 'empleados.php') LIMIT 1")->fetchColumn();
+            if ($sin) {
+                [$cod] = pedir("$baseUrl/adjuntos.php?action=ver&id={$adj['id']}", sesionDePrueba($pdo, $empresa, (int)$sin));
+                iguales(404, $cod, 'sin acceso a Empleados no se descarga el documento');
+            }
+        } finally {
+            if ($adj) {
+                @unlink(RAIZ . '/assets/uploads/adjuntos/' . (int)$empresa['id'] . '/' . $adj['archivo']);
+                $pdo->exec("DELETE FROM adjuntos WHERE id = {$adj['id']}");
+            }
+            $pdo->exec("DELETE FROM auditoria WHERE modulo = 'empleados.php' AND detalle LIKE '%zz-contrato-prueba.png%'");
+        }
+    });
+
     prueba('Catálogo de cuentas: se descargan la plantilla y el catálogo actual en Excel', function () use ($baseUrl, $sesAdmin) {
         foreach (['plantilla', 'catalogo'] as $tipo) {
             [$cod, $xlsx] = pedir("$baseUrl/catalogos.php?export=$tipo", $sesAdmin);

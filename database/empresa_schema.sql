@@ -57,6 +57,7 @@ CREATE TABLE `adjuntos` (
   `tabla` varchar(50) NOT NULL,
   `registro_id` int(11) NOT NULL,
   `rechazo_id` int(11) DEFAULT NULL,
+  `categoria` varchar(60) DEFAULT NULL,
   `nombre` varchar(255) NOT NULL,
   `archivo` varchar(255) NOT NULL,
   `mime` varchar(100) NOT NULL,

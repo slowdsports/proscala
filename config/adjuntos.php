@@ -1,6 +1,7 @@
 <?php
-// ── Documentos adjuntos de los procesos ─────────────────────────────
-// Facturas, recibos, fotos tomadas con el celular… de cualquier proceso de EDICION_PROCESOS.
+// ── Documentos adjuntos de los procesos y expedientes ──────────────
+// Facturas, recibos, fotos tomadas con el celular… de cualquier proceso de EDICION_PROCESOS, y
+// los expedientes de EXPEDIENTES (p. ej. el expediente digital de cada empleado).
 // Los sube quien puede ver el proceso (también quien lo creó, aun ya pagado); los archivos
 // viven en ADJUNTOS_DIR/<empresa>/<tabla>/<id>/, carpeta cerrada a la web: solo se sirven
 // por adjuntos.php, que valida el acceso al proceso.
@@ -16,6 +17,21 @@ const ADJUNTOS_TIPOS  = [
 ];
 // Lo que acepta el selector de archivos (el servidor vuelve a validar el contenido)
 const ADJUNTOS_ACCEPT = 'image/*,application/pdf,.pdf,.xml,.doc,.docx,.xls,.xlsx,.heic,.heif';
+
+// Expedientes: registros que no son procesos pero guardan documentos, clasificados por categoría.
+// Los ve y completa quien tiene acceso al módulo (información personal: no hay acceso "propio").
+const EXPEDIENTES = [
+    'empleados.php' => ['tabla' => 'empleados', 'titulo' => 'Expediente digital', 'categorias' => [
+        'Identificación (DNI, RTN, licencia)', 'Contrato y adendas', 'Hoja de vida', 'Títulos y certificados',
+        'Antecedentes penales y policiales', 'Constancias y referencias', 'Evaluaciones de desempeño',
+        'Acciones de personal (memorandos, amonestaciones)', 'Salud y seguros', 'Planillas y pagos', 'Otros',
+    ]],
+];
+
+/** Tabla donde se guardan los registros del módulo (proceso o expediente), o null si no admite adjuntos. */
+function tablaAdjuntos(string $modulo): ?string {
+    return EDICION_PROCESOS[$modulo]['tabla'] ?? EXPEDIENTES[$modulo]['tabla'] ?? null;
+}
 
 /** Extensión segura del archivo subido según su contenido, o null si no se permite. */
 function tipoAdjunto(string $tmp, string $nombre): ?array {
@@ -56,30 +72,37 @@ function validarAdjunto(array $a, ?array &$tipo = null): ?string {
  * Guarda un archivo subido como adjunto del proceso ($rechazoId: evidencia de un rechazo).
  * true o el motivo por el que no se guardó.
  */
-function guardarAdjunto(PDO $pdo, string $tabla, int $id, array $a, ?int $rechazoId = null) {
+function guardarAdjunto(PDO $pdo, string $tabla, int $id, array $a, ?int $rechazoId = null, ?string $categoria = null) {
     if ($motivo = validarAdjunto($a, $tipo)) return $motivo;
     [$mime, $ext] = $tipo;
     $archivo = "$tabla/$id/" . bin2hex(random_bytes(10)) . '.' . $ext;
     $destino = rutaAdjunto(['archivo' => $archivo]);
     if (!is_dir(dirname($destino)) && !@mkdir(dirname($destino), 0755, true)) return 'no se pudo crear la carpeta en el servidor';
     if (!move_uploaded_file($a['tmp'], $destino)) return 'no se pudo guardar';
-    $pdo->prepare("INSERT INTO adjuntos (tabla, registro_id, rechazo_id, nombre, archivo, mime, tamano, usuario_id) VALUES (?,?,?,?,?,?,?,?)")
-        ->execute([$tabla, $id, $rechazoId, mb_substr($a['nombre'], 0, 255), $archivo, $mime, $a['tamano'], $_SESSION['usuario_id']]);
+    $pdo->prepare("INSERT INTO adjuntos (tabla, registro_id, rechazo_id, categoria, nombre, archivo, mime, tamano, usuario_id) VALUES (?,?,?,?,?,?,?,?,?)")
+        ->execute([$tabla, $id, $rechazoId, $categoria, mb_substr($a['nombre'], 0, 255), $archivo, $mime, $a['tamano'], $_SESSION['usuario_id']]);
     return true;
 }
 
-/** Módulo (EDICION_PROCESOS) al que pertenece una tabla de proceso. */
+/** Módulo (EDICION_PROCESOS o EXPEDIENTES) al que pertenece una tabla. */
 function moduloDeTabla(string $tabla): ?string {
-    foreach (EDICION_PROCESOS as $modulo => $def) if ($def['tabla'] === $tabla) return $modulo;
+    foreach (EDICION_PROCESOS + EXPEDIENTES as $modulo => $def) if ($def['tabla'] === $tabla) return $modulo;
     return null;
 }
 
-/** ¿Puede el usuario ver (y adjuntar a) este proceso? */
+/** ¿Puede el usuario ver (y adjuntar a) este proceso o expediente? */
 function puedeVerProceso(PDO $pdo, string $modulo, int $id): bool {
-    if (!isset(EDICION_PROCESOS[$modulo]) || !$id || !puedeAcceder($modulo)) return false;
-    $s = $pdo->prepare("SELECT 1 FROM `" . EDICION_PROCESOS[$modulo]['tabla'] . "` WHERE id = ?");
+    $tabla = tablaAdjuntos($modulo);
+    if (!$tabla || !$id || !puedeAcceder($modulo)) return false;
+    $s = $pdo->prepare("SELECT 1 FROM `$tabla` WHERE id = ?");
     $s->execute([$id]);
     return $s->fetchColumn() && esRegistroPropio($pdo, $modulo, $id);
+}
+
+/** Categoría válida del expediente del módulo (null si no usa categorías o no se eligió una de la lista). */
+function categoriaAdjunto(string $modulo, ?string $categoria): ?string {
+    $lista = EXPEDIENTES[$modulo]['categorias'] ?? [];
+    return $lista && in_array($categoria, $lista, true) ? $categoria : null;
 }
 
 /** Quitar un adjunto: quien lo subió mientras el proceso siga abierto; el Administrador siempre. */
@@ -87,6 +110,7 @@ function puedeQuitarAdjunto(PDO $pdo, array $a, string $modulo) {
     if (!empty($a['rechazo_id'])) return 'La evidencia de un rechazo forma parte de su constancia y no se puede quitar.';
     if (tieneAccesoTotal()) return true;
     if ((int)$a['usuario_id'] !== (int)($_SESSION['usuario_id'] ?? 0)) return 'Solo quien subió el documento (o el Administrador) puede quitarlo.';
+    if (!isset(EDICION_PROCESOS[$modulo])) return true;   // expediente: no se cierra
     return motivoCierre($pdo, $modulo, (int)$a['registro_id']) === null ? true
         : 'El proceso ya está cerrado: sus documentos solo los puede quitar el Administrador.';
 }
@@ -124,13 +148,28 @@ function tamanoLegible(int $bytes): string {
     return $bytes >= 1048576 ? number_format($bytes / 1048576, 1) . ' MB' : max(1, round($bytes / 1024)) . ' KB';
 }
 
-/** Lista de adjuntos de un proceso (includes/adjuntos.php y adjuntos.php?action=lista). */
+/** Lista de adjuntos de un proceso o expediente (includes/adjuntos.php y adjuntos.php?action=lista). */
 function htmlAdjuntos(PDO $pdo, string $modulo, int $id): string {
-    $lista = adjuntosDe($pdo, EDICION_PROCESOS[$modulo]['tabla'], $id);
+    $lista = adjuntosDe($pdo, tablaAdjuntos($modulo), $id);
     if (!$lista) return '<div class="text-muted small py-2"><i class="fas fa-paperclip"></i> Aún no hay documentos adjuntos.</div>';
-    $html = '<div class="adjuntos-lista">';
-    foreach ($lista as $a) $html .= htmlAdjunto($a, puedeQuitarAdjunto($pdo, $a, $modulo) === true);
-    return $html . '</div>';
+    $categorias = EXPEDIENTES[$modulo]['categorias'] ?? null;
+    if (!$categorias) {
+        $html = '<div class="adjuntos-lista">';
+        foreach ($lista as $a) $html .= htmlAdjunto($a, puedeQuitarAdjunto($pdo, $a, $modulo) === true);
+        return $html . '</div>';
+    }
+    // Expediente: agrupado por categoría, en el orden de la lista (los sin categoría, en "Otros")
+    $grupos = [];
+    foreach ($lista as $a) $grupos[categoriaAdjunto($modulo, $a['categoria']) ?? 'Otros'][] = $a;
+    $html = '';
+    foreach ($categorias as $cat) {
+        if (empty($grupos[$cat])) continue;
+        $html .= '<div class="adj-categoria-titulo">' . htmlspecialchars($cat) . ' <span class="badge bg-secondary">' . count($grupos[$cat]) . '</span></div>'
+               . '<div class="adjuntos-lista mb-2">';
+        foreach ($grupos[$cat] as $a) $html .= htmlAdjunto($a, puedeQuitarAdjunto($pdo, $a, $modulo) === true);
+        $html .= '</div>';
+    }
+    return $html;
 }
 
 /** Tarjeta de un adjunto: vista previa (imágenes) o ícono, nombre, datos y descarga. */

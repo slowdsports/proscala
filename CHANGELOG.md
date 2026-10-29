@@ -11,6 +11,12 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.15.0 — 2026-10-29
+**Expediente digital del empleado**
+- **Expediente digital del empleado** (Empleados → editar): documentos de la persona clasificados por categoría (Identificación, Contrato y adendas, Hoja de vida, Títulos y certificados, Antecedentes, Constancias y referencias, Evaluaciones de desempeño, Acciones de personal, Salud y seguros, Planillas y pagos, Otros). Se elige la categoría y se suben archivos, se toma una foto con el celular o se arrastran; se muestran agrupados por categoría, con vista previa y descarga. Al registrar un empleado nuevo también se pueden adjuntar (cada archivo con su categoría) y se suben al guardar. La lista de empleados indica cuántos documentos tiene cada expediente. Solo lo ven y completan quienes tienen acceso al módulo Empleados; quitar un documento: quien lo subió o el Administrador. Queda en la bitácora. Usa el mismo sistema de documentos adjuntos de los procesos (`config/adjuntos.php` → `EXPEDIENTES`).
+- Pruebas automáticas: 36 (1 nueva: expediente digital de punta a punta, incluido el acceso).
+- Base de datos (`actualizar_bd.php`): columna `adjuntos.categoria`.
+
 ## 1.14.2 — 2026-10-29
 **Permiso y Vacaciones con 3 firmas**
 - Corregido: los documentos de **Permiso** y **Vacaciones** llevaban 4 firmas (Solicitado por, Elaborado por, Revisado por, Autorizado por). Ahora 3: Solicitado por (el empleado), Revisado por y Autorizado por. Revisados todos los documentos impresos: ninguno pasa de 3 firmas de la organización (la Orden de Compra lleva aparte la del proveedor). La prueba de documentos impresos lo vigila.

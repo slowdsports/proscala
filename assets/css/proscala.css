@@ -1467,6 +1467,10 @@ a.kpi-card:hover .kpi-icon,
 }
 .alta-rapida-pie span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .alta-rapida-pie:hover, .alta-rapida-pie:focus-visible { background: rgba(var(--primary-rgb), .1); outline: none; }
+/* Expediente digital (adjuntos agrupados por categoría: config/adjuntos.php → EXPEDIENTES) */
+.adj-categoria-titulo { font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); margin: 4px 0 6px; }
+.adj-categoria-titulo:not(:first-child) { margin-top: 14px; }
+
 /* Cuadro comparativo de cotizaciones (compras_cotizaciones.php) */
 .cot-matriz { min-width: 100%; }
 .cot-matriz th.cot-prov { min-width: 200px; vertical-align: top; font-weight: 400; }

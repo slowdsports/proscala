@@ -1065,7 +1065,8 @@ const Adjuntos = {
   },
   // Sube archivos ([{file, camara}]) a un proceso: uno por envío, así el límite del servidor
   // aplica a cada uno y no a la suma. alSubir(r) recibe cada respuesta (lista actualizada).
-  async subirA(modulo, id, archivos, maxMb, alSubir) {
+  // categoria: la del expediente elegida en el panel (empleados), o vacía.
+  async subirA(modulo, id, archivos, maxMb, alSubir, categoria = '') {
     const subidos = [], errores = [];
     for (const { file: original, camara } of archivos) {
       const f = await this.comprimir(original, camara);
@@ -1074,6 +1075,7 @@ const Adjuntos = {
       fd.append('_action', 'subir');
       fd.append('modulo', modulo);
       fd.append('registro_id', id);
+      if (categoria) fd.append('categoria', categoria);
       fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
       fd.append('archivos[]', f);
       try {
@@ -1097,7 +1099,7 @@ const Adjuntos = {
     let res;
     try {
       res = await this.subirA(panel.dataset.modulo, panel.dataset.id, files.map(file => ({ file, camara: deCamara })),
-        parseFloat(panel.dataset.maxMb) || 10, r => this.pintar(panel, r));
+        parseFloat(panel.dataset.maxMb) || 10, r => this.pintar(panel, r), panel.querySelector('.adj-categoria')?.value || '');
     } finally {
       panel.classList.remove('subiendo');
       botones.forEach(b => b.classList.remove('disabled'));
@@ -1138,11 +1140,12 @@ const AdjuntosForm = {
   },
   sumar(bloque, files, camara = false) {
     const maxMb = parseFloat(bloque.dataset.maxMb) || 10;
+    const categoria = bloque.querySelector('.adj-categoria')?.value || '';   // expediente: la elegida al agregarlo
     const grandes = [];
     files.forEach(file => {
       // Las fotos se reducen al subirlas: solo se descarta lo que ni así cabría
       if (file.size > maxMb * 1048576 && !/^image\/(jpeg|png|webp)$/.test(file.type)) grandes.push(file.name);
-      else this.lista(bloque).push({ file, camara });
+      else this.lista(bloque).push({ file, camara, categoria });
     });
     if (grandes.length) Toast.show(`Supera ${maxMb} MB y no se adjuntará: ${grandes.join(', ')}`, 'error', 7000);
     this.pintar(bloque);
@@ -1150,11 +1153,12 @@ const AdjuntosForm = {
   pintar(bloque) {
     const ul = bloque.querySelector('.adjf-lista');
     ul.innerHTML = '';
-    this.lista(bloque).forEach(({ file }, i) => {
+    this.lista(bloque).forEach(({ file, categoria }, i) => {
       const li = document.createElement('li');
       li.className = 'adjf-item';
       const icono = /^image\//.test(file.type) ? 'fa-file-image text-info' : /pdf/.test(file.type) ? 'fa-file-pdf text-danger' : 'fa-file text-muted';
       li.innerHTML = `<i class="fas ${icono}"></i><span class="text-truncate flex-grow-1"></span>`
+        + (categoria ? `<span class="badge bg-secondary text-truncate" style="max-width:180px">${Notificaciones.esc(categoria)}</span>` : '')
         + `<small class="text-muted">${file.size >= 1048576 ? (file.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(file.size / 1024)) + ' KB'}</small>`
         + '<button type="button" class="btn btn-sm btn-link text-danger p-0" title="Quitar"><i class="fas fa-xmark"></i></button>';
       li.querySelector('span').textContent = file.name;
@@ -1172,7 +1176,14 @@ const AdjuntosForm = {
     const id = parseInt(res.id || e.form.querySelector('[name=id]')?.value || 0, 10);
     if (!pendientes.length || !id) return;
     Toast.show(`Guardado. Subiendo ${pendientes.length === 1 ? 'el documento adjunto' : pendientes.length + ' documentos adjuntos'}…`, 'info', 3000);
-    const r = await Adjuntos.subirA(e.bloque.dataset.adjuntosForm, id, pendientes.splice(0), parseFloat(e.bloque.dataset.maxMb) || 10);
+    // Un envío por categoría (expediente); en los procesos hay una sola, vacía
+    const porCategoria = {};
+    pendientes.splice(0).forEach(p => { (porCategoria[p.categoria || ''] ??= []).push(p); });
+    const r = { subidos: [], errores: [] };
+    for (const [categoria, archivos] of Object.entries(porCategoria)) {
+      const parcial = await Adjuntos.subirA(e.bloque.dataset.adjuntosForm, id, archivos, parseFloat(e.bloque.dataset.maxMb) || 10, null, categoria);
+      r.subidos.push(...parcial.subidos); r.errores.push(...parcial.errores);
+    }
     this.pintar(e.bloque);
     Adjuntos.avisar(r);
   },

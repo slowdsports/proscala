@@ -1,6 +1,6 @@
 <?php
-// Documentos adjuntos de los procesos (config/adjuntos.php): subir, ver/descargar, listar y quitar.
-// No es un módulo: cada acción valida que el usuario pueda ver el proceso.
+// Documentos adjuntos de los procesos y expedientes (config/adjuntos.php): subir, ver/descargar,
+// listar y quitar. No es un módulo: cada acción valida que el usuario pueda ver el registro.
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/functions.php';
@@ -43,7 +43,7 @@ if ($action === 'lista') {
     $modulo = (string)($_GET['modulo'] ?? '');
     $id = (int)($_GET['id'] ?? 0);
     if (!puedeVerProceso($pdo, $modulo, $id)) jsonErr('Proceso no encontrado.', 404);
-    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id), 'total' => count(adjuntosDe($pdo, EDICION_PROCESOS[$modulo]['tabla'], $id))]);
+    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id), 'total' => count(adjuntosDe($pdo, tablaAdjuntos($modulo), $id))]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . BASE_URL . paginaInicio()); exit; }
@@ -59,7 +59,9 @@ if ($action === 'subir') {
     $modulo = (string)($_POST['modulo'] ?? '');
     $id = (int)($_POST['registro_id'] ?? 0);
     if (!puedeVerProceso($pdo, $modulo, $id)) jsonErr('Proceso no encontrado.', 404);
-    $tabla = EDICION_PROCESOS[$modulo]['tabla'];
+    $tabla = tablaAdjuntos($modulo);
+    // Expediente: categoría elegida en el panel (las que no son de la lista quedan en "Otros")
+    $categoria = isset(EXPEDIENTES[$modulo]) ? (categoriaAdjunto($modulo, $_POST['categoria'] ?? null) ?? 'Otros') : null;
 
     $archivos = archivosSubidos('archivos');
     if (!$archivos) {
@@ -67,13 +69,13 @@ if ($action === 'subir') {
     }
     $subidos = []; $errores = [];
     foreach ($archivos as $a) {
-        $r = guardarAdjunto($pdo, $tabla, $id, $a);
+        $r = guardarAdjunto($pdo, $tabla, $id, $a, null, $categoria);
         if ($r === true) $subidos[] = $a['nombre']; else $errores[] = "{$a['nombre']}: $r";
     }
 
     if ($subidos) {
         registrarEvento($pdo, 'ADJUNTAR', ['modulo' => $modulo, 'tabla' => $tabla, 'registro_id' => $id,
-            'detalle' => 'Adjuntó: ' . implode(', ', $subidos) . ($errores ? ' | Rechazados: ' . implode('; ', $errores) : '')]);
+            'detalle' => 'Adjuntó' . ($categoria ? " ($categoria)" : '') . ': ' . implode(', ', $subidos) . ($errores ? ' | Rechazados: ' . implode('; ', $errores) : '')]);
     } else {
         registrarEvento($pdo, 'ADJUNTAR', ['modulo' => $modulo, 'tabla' => $tabla, 'registro_id' => $id, 'resultado' => 'error',
             'detalle' => 'No se adjuntó: ' . implode('; ', $errores)]);
