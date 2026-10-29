@@ -325,3 +325,22 @@ prueba('Jerarquía: en la cima del organigrama los colegas del mismo puesto se a
         comoUsuario($pdo, $u['par']); afirmar($accion($pdo, $deMedio, 'revisar') !== true, 'con la opción, tampoco se revisa lo propio');
     });
 });
+prueba('Caja chica: el responsable la edita (no la elimina) mientras está abierta, aunque el fondo ya se haya pagado', function () use ($pdo) {
+    conEscenario($pdo, function ($u) use ($pdo) {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $pdo->exec("UPDATE usuarios SET empleado_id = $emp WHERE id = {$u['asistente']}");   // el asistente (no aprueba) es el responsable
+        $pdo->exec("INSERT INTO caja_chica (numero, empleado_id, anticipo, fecha_apertura) VALUES ('ZZPRUEBA-CC', $emp, 1000, CURDATE())");
+        $cc = (int)$pdo->lastInsertId();
+        $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('caja_chica', ?, ?, 'creador')")->execute([$cc, $u['asistente']]);
+        comoUsuario($pdo, $u['asistente']);
+        iguales(true, puedeEditar($pdo, 'caja_chica.php', $cc), 'el responsable registra gastos en su caja (aunque la creó)');
+        afirmar(puedeEditar($pdo, 'caja_chica.php', $cc, 'eliminar') !== true, 'el responsable no la elimina');
+        comoUsuario($pdo, $u['par']); afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'alguien que no es responsable ni superior no la edita');
+        $pdo->exec("INSERT INTO ordenes_pago (numero, fecha, beneficiario, concepto, monto, estado, origen_tabla, origen_id)
+                    VALUES ('ZZPRUEBA-OP', CURDATE(), 'Prueba', 'Fondo de caja chica', 1000, 'pagada', 'caja_chica', $cc)");
+        comoUsuario($pdo, $u['asistente']);
+        iguales(true, puedeEditar($pdo, 'caja_chica.php', $cc), 'con el fondo pagado se siguen registrando gastos');
+        $pdo->exec("UPDATE caja_chica SET estado = 'liquidada' WHERE id = $cc");
+        afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'liquidada: ya no se edita');
+    });
+});

@@ -8,6 +8,21 @@ $action = $_GET['action'] ?? 'list';
 $id     = (int)($_GET['id'] ?? 0);
 $pagina = 'Caja Chica';
 
+/**
+ * Por qué ya no cambian el responsable ni el monto del fondo de una caja (solo sus gastos), o null:
+ * el fondo ya se entregó (su orden de pago está pagada), o quien edita es el propio responsable
+ * (registra los gastos día a día; el fondo lo define un superior).
+ */
+function motivoFondoFijo(PDO $pdo, int $ccId, int $empleadoCaja): ?string {
+    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = 'caja_chica' AND origen_id = ? AND estado = 'pagada'");
+    $s->execute([$ccId]);
+    if ($s->fetchColumn()) return 'El fondo ya fue entregado (su orden de pago está pagada): el responsable y el monto del fondo ya no cambian; solo los gastos.';
+    if (!tieneAccesoTotal() && $empleadoCaja === (int)($_SESSION['empleado_id'] ?? 0)) {
+        return 'Como responsable de la caja puede registrar y corregir los gastos; el responsable y el monto del fondo los cambia un superior.';
+    }
+    return null;
+}
+
 // ── AJAX ──────────────────────────────────────────────────────────
 if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -24,6 +39,15 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$empId)  jsonErr('Debe seleccionar un empleado.');
         if (!$fApert) jsonErr('La fecha de apertura es obligatoria.');
         if (!is_array($items) || !count($items)) jsonErr('Debe ingresar al menos un gasto.');
+
+        if ($ccId) {
+            $s = $pdo->prepare("SELECT empleado_id, anticipo FROM caja_chica WHERE id=?");
+            $s->execute([$ccId]);
+            $actual = $s->fetch();
+            if (!$actual) jsonErr('Caja chica no encontrada.');
+            $fijo = motivoFondoFijo($pdo, $ccId, (int)$actual['empleado_id']);
+            if ($fijo && ($empId !== (int)$actual['empleado_id'] || abs($anticipo - (float)$actual['anticipo']) > 0.004)) jsonErr($fijo);
+        }
 
         $total = 0;
         foreach ($items as $item) $total += (float)$item['monto'];
@@ -418,6 +442,8 @@ include __DIR__ . '/includes/header.php';
 <?php $adjModulo = 'caja_chica.php'; $adjId = $cc['id']; include __DIR__ . '/includes/adjuntos.php'; ?>
 <?php else: /* nuevo o editar */
   $initItems = $detalle ?: [['fecha' => date('Y-m-d'), 'cuenta_id' => '', 'descripcion' => '', 'cantidad' => 1, 'precio_unitario' => 0, 'monto' => 0]];
+  // Responsable o fondo ya entregado: el responsable y el anticipo se muestran pero no se cambian
+  $fondoFijo = $cc ? motivoFondoFijo($pdo, (int)$cc['id'], (int)$cc['empleado_id']) : null;
 ?>
 
 <div class="card">
@@ -432,10 +458,15 @@ include __DIR__ . '/includes/header.php';
       <input type="hidden" name="id" value="<?= $cc['id'] ?? 0 ?>">
       <input type="hidden" name="items" id="items-json">
 
+      <?php if ($fondoFijo): ?>
+      <div class="alert alert-info py-2 small"><i class="fas fa-circle-info"></i> <?= htmlspecialchars($fondoFijo) ?></div>
+      <input type="hidden" name="empleado_id" value="<?= (int)$cc['empleado_id'] ?>">
+      <input type="hidden" name="anticipo" value="<?= htmlspecialchars($cc['anticipo']) ?>">
+      <?php endif; ?>
       <div class="row g-3">
         <div class="col-md-5">
           <label class="form-label">Responsable *</label>
-          <select name="empleado_id" class="form-select" required>
+          <select <?= $fondoFijo ? 'disabled' : 'name="empleado_id" required' ?> class="form-select">
             <option value="">— Seleccione —</option>
             <?php foreach ($empleados as $e): ?>
             <option value="<?= $e['id'] ?>" <?= ($cc['empleado_id'] ?? 0) == $e['id'] ? 'selected' : '' ?>>
@@ -451,7 +482,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-2">
           <label class="form-label">Anticipo (L.)</label>
-          <input type="number" name="anticipo" class="form-control text-end" min="0" step="0.01"
+          <input type="number" <?= $fondoFijo ? 'disabled' : 'name="anticipo"' ?> class="form-control text-end" min="0" step="0.01"
             value="<?= htmlspecialchars($cc['anticipo'] ?? '0') ?>">
           <div class="form-text">0 si es reembolso</div>
         </div>

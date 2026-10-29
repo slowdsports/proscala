@@ -13,6 +13,9 @@
 //   reinicio  → [estado al que vuelve, estados desde los que vuelve (null = cualquiera)] o null
 //   acciones  → acciones del módulo que editan o eliminan => parámetro POST con el id del proceso
 //   bloqueo   → [consulta con ? = id, motivo] que impide editar (p. ej. ya tiene pagos)
+//   responsable → columna con el empleado a cargo: él también lo edita (no lo elimina) mientras
+//                 no esté cerrado, aunque lo haya creado (caja chica: registra los gastos día a día)
+//   op_fondo  → su orden de pago es el fondo que se entrega al empezar: pagarla no lo cierra
 const EDICION_PROCESOS = [
     'compras_solicitud.php'    => ['tabla' => 'solicitud_compra',    'cerrados' => ['cotizando', 'adjudicada', 'anulada'], 'reinicio' => ['pendiente', null],
                                    'acciones' => ['guardar' => 'id']],
@@ -39,7 +42,8 @@ const EDICION_PROCESOS = [
     'liquidaciones.php'        => ['tabla' => 'liquidaciones',       'cerrados' => ['pagada'], 'reinicio' => ['borrador', null],
                                    'acciones' => ['guardar' => 'id', 'eliminar' => 'id']],
     'caja_chica.php'           => ['tabla' => 'caja_chica',          'cerrados' => ['liquidada'], 'reinicio' => null,
-                                   'acciones' => ['guardar' => 'id', 'eliminar' => 'id']],
+                                   'acciones' => ['guardar' => 'id', 'eliminar' => 'id'],
+                                   'responsable' => 'empleado_id', 'op_fondo' => true],
     'planillas.php'            => ['tabla' => 'planilla_periodos',   'cerrados' => ['pagada'], 'reinicio' => ['procesada', ['aprobada']],
                                    'acciones' => ['guardar_credimpulsa' => 'periodo_id', 'guardar_distribucion' => 'periodo_id', 'aplicar_distribucion' => 'periodo_id']],
     'planillas_asignacion.php' => ['tabla' => 'planilla_asignacion', 'cerrados' => ['pagada'], 'reinicio' => ['borrador', ['aprobada']],
@@ -48,13 +52,14 @@ const EDICION_PROCESOS = [
                                    'acciones' => ['guardar_detalle' => 'id', 'guardar_distribucion' => 'id', 'aplicar_distribucion' => 'id', 'eliminar' => 'id']],
 ];
 
-/** ¿Puede el usuario editar (o eliminar) este proceso? true o el motivo por el que no. */
-function puedeEditar(PDO $pdo, string $modulo, int $id) {
+/** ¿Puede el usuario editar (o, con $accion 'eliminar', eliminar) este proceso? true o el motivo por el que no. */
+function puedeEditar(PDO $pdo, string $modulo, int $id, string $accion = 'editar') {
     $def = EDICION_PROCESOS[$modulo] ?? null;
     if (!$def || !$id) return true;
     if ($motivo = motivoCierre($pdo, $modulo, $id)) return $motivo;
 
     if (tieneAccesoTotal()) return true;
+    if ($accion !== 'eliminar' && esResponsableProceso($pdo, $modulo, $id)) return true;
     $s = $pdo->prepare("SELECT usuario_id FROM registro_usuarios WHERE tabla = ? AND registro_id = ? AND participacion = 'creador'");
     $s->execute([$def['tabla'], $id]);
     if ((int)$s->fetchColumn() === (int)($_SESSION['usuario_id'] ?? 0)) {
@@ -65,6 +70,16 @@ function puedeEditar(PDO $pdo, string $modulo, int $id) {
     }
     if (!puedeAprobar()) return 'Solo los puestos que aprueban procesos pueden editarlos.';
     return motivoJerarquia(rolCreador($pdo, $def['tabla'], $id)) ?? true;
+}
+
+/** ¿El usuario es el empleado a cargo del proceso (EDICION_PROCESOS → responsable)? */
+function esResponsableProceso(PDO $pdo, string $modulo, int $id): bool {
+    $def = EDICION_PROCESOS[$modulo] ?? null;
+    $emp = (int)($_SESSION['empleado_id'] ?? 0);
+    if (empty($def['responsable']) || !$emp || !$id) return false;
+    $s = $pdo->prepare("SELECT `{$def['responsable']}` FROM `{$def['tabla']}` WHERE id = ?");
+    $s->execute([$id]);
+    return (int)$s->fetchColumn() === $emp;
 }
 
 /** ¿Alguien ya revisó, autorizó o rechazó el proceso? (tabla aprobaciones) */
@@ -88,9 +103,11 @@ function motivoCierre(PDO $pdo, string $modulo, int $id): ?string {
         $b->execute([$id]);
         if ($b->fetchColumn()) return $def['bloqueo'][1] . ' Ya no se puede editar.';
     }
-    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND estado = 'pagada'");
-    $s->execute([$def['tabla'], $id]);
-    if ($s->fetchColumn()) return 'Su orden de pago ya fue pagada; ya no se puede editar.';
+    if (empty($def['op_fondo'])) {
+        $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND estado = 'pagada'");
+        $s->execute([$def['tabla'], $id]);
+        if ($s->fetchColumn()) return 'Su orden de pago ya fue pagada; ya no se puede editar.';
+    }
     return null;
 }
 
@@ -114,7 +131,8 @@ function verificarEdicion(PDO $pdo, string $modulo): void {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $param = $def['acciones'][$_POST['_action'] ?? ''] ?? null;
         $id = $param ? (int)($_POST[$param] ?? 0) : 0;
-        if ($id && ($motivo = puedeEditar($pdo, $modulo, $id)) !== true) {
+        $accion = preg_match('/elimin/i', (string)($_POST['_action'] ?? '')) ? 'eliminar' : 'editar';
+        if ($id && ($motivo = puedeEditar($pdo, $modulo, $id, $accion)) !== true) {
             $GLOBALS['_bitacora_explicita'] = true;
             registrarEvento($pdo, 'ACCESO_DENEGADO', ['resultado' => 'error', 'registro_id' => $id, 'detalle' => "No pudo editar: $motivo"]);
             jsonErr($motivo, 403);

@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.14.0 — 2026-10-28
+**El responsable de la caja chica registra sus gastos día a día**
+- **El responsable de una caja chica la edita** mientras esté abierta, para registrar y corregir los gastos día a día, aunque la haya creado él. No la elimina ni cambia el monto del fondo ni el responsable: eso lo hace un superior.
+- Corregido: al pagarse la orden de pago de una caja chica (el fondo que se entrega al responsable) la caja quedaba bloqueada para todos, justo cuando empiezan los gastos. Ahora solo la cierra la liquidación; con el fondo pagado, el monto del fondo y el responsable ya no cambian, pero los gastos sí.
+- Pruebas automáticas: 35 (1 nueva: edición de la caja chica por su responsable).
+- Sin cambios en la base de datos.
+
 ## 1.13.0 — 2026-10-28
 **Colegas del mismo puesto se revisan entre sí (cima del organigrama y Administración)**
 - Corregido: un proceso creado por alguien de un puesto en la cima del organigrama (que aprueba y no depende de nadie, p. ej. Administrador) no lo podía revisar ni corregir nadie: "solo un puesto superior a Administrador…", y no hay ninguno. Ahora ahí los colegas del mismo puesto se revisan, autorizan y corrigen entre sí (nunca lo propio).
