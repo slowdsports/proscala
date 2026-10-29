@@ -145,6 +145,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
   <title>Proscala - <?= $activar ? 'Activar su cuenta' : 'Restablecer contraseña' ?></title>
+  <?php include __DIR__ . '/includes/favicon.php'; ?>
   <link rel="stylesheet" href="<?= recurso('assets/vendor/fontawesome/css/all.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/vendor/bootstrap/bootstrap.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">

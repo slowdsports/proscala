@@ -77,7 +77,8 @@ if (!$cli) {
     if (!hash_equals($clave, $dada)) {
         if ($dada !== '') sleep(2);   // frena los intentos de adivinar la clave
         $mensaje = $dada !== '' ? '<p style="color:#c62828">Clave incorrecta.</p>' : '';
-        echo "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Actualizar base de datos</title></head>"
+        echo "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Actualizar base de datos</title>"
+           . '<link rel="icon" href="' . recurso('favicon.ico') . '" sizes="16x16 32x32 48x48"></head>'
            . "<body style=\"font-family:system-ui,sans-serif;max-width:420px;margin:60px auto;padding:0 16px;color:#0e1726\">"
            . "<h2>Proscala · Actualizar base de datos</h2>$mensaje<form method=\"post\"><label>Clave de mantenimiento<br>"
            . "<input type=\"password\" name=\"clave\" autofocus required style=\"width:100%;padding:8px;margin:6px 0 12px\"></label>"
@@ -162,6 +163,7 @@ if ($cli) {
 ?>
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Actualizar base de datos</title>
+<?php include __DIR__ . '/includes/favicon.php'; ?>
 <style>
   body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; max-width: 860px; margin: 32px auto; padding: 0 16px; color: #0e1726; background: #f4f7fb; }
   .base { background: #fff; border: 1px solid #e4e9f0; border-radius: 12px; padding: 14px 18px; margin: 12px 0; }

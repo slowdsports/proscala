@@ -100,9 +100,9 @@ $modulos = [
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Proscala — Sistema de Administración Empresarial</title>
+  <?php include __DIR__ . '/includes/favicon.php'; ?>
   <meta name="description" content="Proscala reúne compras, planillas, anticipos, recursos humanos, proyectos y reportes de su organización en un solo sistema web, con flujo de aprobación y documentos listos para imprimir.">
   <meta name="theme-color" content="#0c1728">
-  <link rel="icon" href="<?= BASE_URL ?>assets/images/proscala.png">
   <script>
     // Mismo tema que el sistema (se recuerda en este navegador)
     (function () {

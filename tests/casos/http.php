@@ -223,6 +223,15 @@ try {
         }
         [$cod] = pedir("$baseUrl/dashboard.php");
         iguales(302, $cod, 'un módulo sin sesión redirige al inicio de sesión');
+        // Ícono de las pestañas (includes/favicon.php) y sus archivos
+        [, $html] = pedir("$baseUrl/login.php");
+        afirmar(str_contains($html, 'favicon.ico') && str_contains($html, 'apple-touch-icon.png'), 'el inicio de sesión no declara el ícono de la pestaña');
+        [$cod, $ico] = pedir("$baseUrl/favicon.ico");
+        afirmar($cod === 200 && str_starts_with($ico, "\x00\x00\x01\x00"), "favicon.ico (HTTP $cod)");
+        foreach (['favicon-32.png', 'favicon-192.png', 'apple-touch-icon.png'] as $f) {
+            [$cod, $png] = pedir("$baseUrl/assets/images/$f");
+            afirmar($cod === 200 && str_starts_with($png, "\x89PNG"), "$f (HTTP $cod)");
+        }
         [$cod] = pedir("$baseUrl/templates/print/sc.php");
         iguales(403, $cod, 'las carpetas internas no se sirven');
     });

@@ -134,6 +134,7 @@ unset($_SESSION['aviso_login']);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Proscala - Iniciar Sesión</title>
+  <?php include __DIR__ . '/includes/favicon.php'; ?>
   <link rel="stylesheet" href="<?= recurso('assets/vendor/fontawesome/css/all.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/vendor/bootstrap/bootstrap.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">

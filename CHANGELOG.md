@@ -11,6 +11,12 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.14.1 — 2026-10-29
+**Ícono de Proscala en las pestañas del navegador**
+- **Ícono de Proscala en las pestañas del navegador** (y al agregar el sistema a la pantalla de inicio del celular), en todas las páginas: sistema, página principal, inicio de sesión, activar cuenta / restablecer contraseña, documentos impresos, página de error y `actualizar_bd.php` (`includes/favicon.php`). Generado desde `assets/images/icono.png` (el original, 1254 px): `favicon.ico` (16, 32 y 48 px) y `favicon-32/192.png` con las esquinas transparentes, y `apple-touch-icon.png` (180 px, con fondo: iOS redondea solo).
+- La prueba de las páginas sin sesión revisa también el ícono y sus archivos.
+- Sin cambios en la base de datos.
+
 ## 1.14.0 — 2026-10-28
 **El responsable de la caja chica registra sus gastos día a día**
 - **El responsable de una caja chica la edita** mientras esté abierta, para registrar y corregir los gastos día a día, aunque la haya creado él. No la elimina ni cambia el monto del fondo ni el responsable: eso lo hace un superior.

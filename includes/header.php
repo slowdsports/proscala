@@ -25,6 +25,7 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf" content="<?= $csrf ?>">
   <title><?= htmlspecialchars($pagina) ?> | Proscala Admin</title>
+  <?php include __DIR__ . '/favicon.php'; ?>
   <script>
     // Aplica el tema antes de que el navegador pinte para evitar el flash. data-bs-theme hace que
     // los componentes de Bootstrap (alertas, pestañas, tablas de color…) usen también su paleta

@@ -45,6 +45,7 @@ function paginaError(string $titulo, string $mensaje, string $codigo = 'ERR', in
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Proscala - {$h($titulo)}</title>
+<link rel="icon" href="{$base}favicon.ico" sizes="16x16 32x32 48x48">
 <style>
   :root { --p:#1B6BA8; --t:#0e1726; --t2:#526070; --b:#e4e9f0; --bg:#f0f4f8; --s:#fff; }
   @media (prefers-color-scheme: dark) { :root { --t:#e6edf5; --t2:#9fb0c2; --b:#243244; --bg:#0b1320; --s:#111c2d; } }
