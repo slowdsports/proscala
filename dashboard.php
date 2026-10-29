@@ -28,7 +28,7 @@ $stats['pagos_mes'] = (float)$s->fetchColumn();
 $stats['prest_saldo'] = (float)$pdo->query("SELECT COALESCE(SUM(saldo),0)       FROM prestamos          WHERE estado='activo'")->fetchColumn();
 
 // ── Last payroll ─────────────────────────────────────────────────
-$ult_pl = $pdo->query("SELECT anio, mes, quincena, estado, total_neto FROM planilla_periodos ORDER BY id DESC LIMIT 1")->fetch();
+$ult_pl = $pdo->query("SELECT anio, mes, quincena, estado, total_neto FROM planilla_periodos WHERE estado <> 'anulada' ORDER BY id DESC LIMIT 1")->fetch();
 
 // ── Chart: gastos + pagos last 6 months, aligned ────────────────
 $chartLabels = $chartGastos = $chartPagos = [];

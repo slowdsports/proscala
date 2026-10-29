@@ -115,57 +115,51 @@ function empresaDeBase(PDO $db, PDO $master, string $rtn): ?int {
 }
 
 /**
- * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: borra las planillas quincenales de
- * octubre de 2026 para poder pagar ese mes con una planilla mensual. Se llevan todo lo que depende
- * de ellas: detalle y distribución por proyecto, sus órdenes de pago aunque estén
- * pagadas, adjuntos (registros y archivos), aprobaciones, rechazos, recordatorios, participación y
- * avisos. En una transacción (o en la que esté abierta); deja constancia en la bitácora y la marca
- * paso_quincenas_oct2026 en la configuración. Devuelve el resumen de lo borrado.
+ * 1.15.1 · Estructura para anular planillas: el estado 'anulada' y, en lugar del índice único
+ * (año, mes, quincena), uno normal por año y mes. Una base de datos no puede exigir "único entre
+ * las no anuladas": la regla del período la aplica planillas.php al generar. Devuelve las
+ * sentencias que faltan (vacío si ya está).
  */
-function borrarQuincenasOctubre2026(PDO $db, int $empresaId, string $raiz): string {
+function cambiosPlanillasAnuladas(PDO $db): array {
+    $sql = [];
+    $tipo = (string)$db->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                                AND TABLE_NAME = 'planilla_periodos' AND COLUMN_NAME = 'estado'")->fetchColumn();
+    if ($tipo !== '' && !str_contains($tipo, "'anulada'")) {
+        $sql[] = "ALTER TABLE `planilla_periodos` MODIFY `estado` enum('borrador','procesada','aprobada','pagada','anulada') DEFAULT 'borrador'";
+    }
+    if (in_array('uk_periodo', indicesDe($db, 'planilla_periodos'), true)) $sql[] = "ALTER TABLE `planilla_periodos` DROP INDEX `uk_periodo`";
+    return $sql;
+}
+
+/**
+ * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: anula (no borra) las planillas
+ * quincenales de octubre de 2026 para pagar ese mes con una planilla mensual. Se conservan con su
+ * detalle, como constancia; sus órdenes de pago aún no pagadas se anulan y las ya pagadas quedan
+ * como están (ese dinero salió). En una transacción (o en la que esté abierta); deja constancia en
+ * la bitácora y la marca paso_quincenas_oct2026 en la configuración. Devuelve el resumen.
+ */
+function anularQuincenasOctubre2026(PDO $db): string {
     $propia = !$db->inTransaction();
     if ($propia) $db->beginTransaction();
     try {
-        $pl = $db->query("SELECT id, numero, quincena, estado, total_neto FROM planilla_periodos
-                          WHERE anio = 2026 AND mes = 10 AND tipo = 'quincenal' ORDER BY quincena")->fetchAll();
-        $plIds = array_map(fn($p) => (int)$p['id'], $pl);
-        $ops = $plIds ? $db->query("SELECT id, numero, estado, monto FROM ordenes_pago
-                                    WHERE origen_tabla = 'planilla_periodos' AND origen_id IN (" . implode(',', $plIds) . ")")->fetchAll() : [];
-        $opIds = array_map(fn($o) => (int)$o['id'], $ops);
-        $archivos = [];
-        foreach (['planilla_periodos' => $plIds, 'ordenes_pago' => $opIds] as $tabla => $ids) {
-            if (!$ids) continue;
-            $en = implode(',', $ids);
-            foreach ($db->query("SELECT archivo FROM adjuntos WHERE tabla = '$tabla' AND registro_id IN ($en)") as $a) $archivos[] = $a['archivo'];
-            foreach (['adjuntos', 'aprobaciones', 'rechazos', 'recordatorios', 'registro_usuarios', 'notificaciones'] as $t) {
-                $db->exec("DELETE FROM `$t` WHERE tabla = '$tabla' AND registro_id IN ($en)");
-            }
+        $pl = $db->query("SELECT id FROM planilla_periodos WHERE anio = 2026 AND mes = 10 AND tipo = 'quincenal' AND estado <> 'anulada' ORDER BY quincena")
+                 ->fetchAll(PDO::FETCH_COLUMN);
+        $partes = [];
+        foreach ($pl as $id) {
+            $r = anularPlanilla($db, (int)$id, 'octubre 2026 se paga con una planilla mensual (actualizar_bd.php, versión 1.15.1)');
+            $partes[] = $r['numero'] . ($r['ops_anuladas'] ? ' (OP anulada: ' . implode(', ', $r['ops_anuladas']) . ')' : '')
+                      . ($r['ops_pagadas'] ? ' (OP ya pagada, se conserva: ' . implode(', ', $r['ops_pagadas']) . ')' : '');
         }
-        if ($opIds) $db->exec("DELETE FROM ordenes_pago WHERE id IN (" . implode(',', $opIds) . ")");
-        if ($plIds) {
-            // Explícito, no en cascada: actualizar_bd.php aplica con FOREIGN_KEY_CHECKS=0 y así no hay cascada
-            $en = implode(',', $plIds);
-            $db->exec("DELETE pdp FROM planilla_detalle_proyectos pdp JOIN planilla_detalle pd ON pd.id = pdp.detalle_id WHERE pd.periodo_id IN ($en)");
-            $db->exec("DELETE FROM planilla_detalle WHERE periodo_id IN ($en)");
-            $db->exec("DELETE FROM planilla_periodos WHERE id IN ($en)");
-        }
-
-        $resumen = $pl
-            ? 'Planillas quincenales de octubre 2026 borradas para generar la mensual: '
-              . implode('; ', array_map(fn($p) => trim(($p['numero'] ?: "#{$p['id']}") . " ({$p['quincena']} quincena, {$p['estado']}, neto L. " . number_format((float)$p['total_neto'], 2) . ')'), $pl))
-              . ($ops ? '. Órdenes de pago borradas: ' . implode('; ', array_map(fn($o) => "{$o['numero']} ({$o['estado']}, L. " . number_format((float)$o['monto'], 2) . ')', $ops)) : '')
-              . ($archivos ? '. Adjuntos: ' . count($archivos) : '')
-            : 'No había planillas quincenales de octubre 2026 que borrar.';
-        $db->prepare("INSERT INTO auditoria (accion, modulo, tabla_afectada, resultado, detalle) VALUES ('DELETE', 'actualizar_bd.php', 'planilla_periodos', 'ok', ?)")
+        $resumen = $partes ? 'Planillas quincenales de octubre 2026 anuladas para generar la mensual: ' . implode('; ', $partes)
+                           : 'No había planillas quincenales de octubre 2026 que anular.';
+        $db->prepare("INSERT INTO auditoria (accion, modulo, tabla_afectada, resultado, detalle) VALUES ('ANULAR', 'actualizar_bd.php', 'planilla_periodos', 'ok', ?)")
             ->execute([$resumen]);
         $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
-            ('paso_quincenas_oct2026', '1', 'actualizar_bd.php ya borró las planillas quincenales de octubre 2026 (se pagó con una mensual)')");
+            ('paso_quincenas_oct2026', '1', 'actualizar_bd.php ya anuló las planillas quincenales de octubre 2026 (se pagó con una mensual)')");
         if ($propia) $db->commit();
     } catch (Throwable $e) {
         if ($propia) $db->rollBack();
         throw $e;
     }
-    // Los archivos, solo si los registros ya se borraron de verdad
-    if ($propia) foreach ($archivos as $f) @unlink("$raiz/assets/uploads/adjuntos/$empresaId/$f");
     return $resumen;
 }

@@ -132,7 +132,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         pd.total_deducciones=? * $f,
                         pd.sueldo_neto = ROUND(? / 30 * pd.dias_trabajados, 2) - ? * $f
                     WHERE pd.empleado_id=?
-                      AND pp.estado != 'pagada'")
+                      AND pp.estado NOT IN ('pagada', 'anulada')")
                     ->execute([$nuevoSueldo, $nuevoSueldo,
                                $ihssE, $ihssP, $rap, $rap, $isr, $cred, $ded,
                                $nuevoSueldo, $ded, $eid]);
@@ -141,7 +141,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     SET total_bruto       = (SELECT SUM(total_bruto)       FROM planilla_detalle WHERE periodo_id = pp.id),
                         total_deducciones = (SELECT SUM(total_deducciones)  FROM planilla_detalle WHERE periodo_id = pp.id),
                         total_neto        = (SELECT SUM(sueldo_neto)        FROM planilla_detalle WHERE periodo_id = pp.id)
-                    WHERE pp.estado != 'pagada'
+                    WHERE pp.estado NOT IN ('pagada', 'anulada')
                       AND EXISTS (SELECT 1 FROM planilla_detalle WHERE periodo_id = pp.id AND empleado_id = ?)")
                     ->execute([$eid]);
                 $guardarDist($eid);

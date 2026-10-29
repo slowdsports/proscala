@@ -122,8 +122,12 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $fPago     = $_POST['fecha_pago'] ?: null;
         if ($mes < 1 || $mes > 12 || !strtotime($fInicio) || !strtotime($fFin) || $fFin < $fInicio) jsonErr('Revise el mes y las fechas del período.');
 
-        // Un mes tiene una planilla mensual o sus dos quincenas, no ambas
-        $chk = $pdo->prepare("SELECT tipo, quincena FROM planilla_periodos WHERE anio=? AND mes=?");
+        // Un mes tiene una planilla mensual o sus dos quincenas, no ambas (las anuladas no cuentan).
+        // Sin índice único (se puede regenerar un período anulado): dos usuarios a la vez se serializan aquí.
+        if ((int)$pdo->query("SELECT GET_LOCK(CONCAT(DATABASE(), '_planilla_generar'), 15)")->fetchColumn() !== 1) {
+            jsonErr('Otro usuario está generando una planilla; intente de nuevo en unos segundos.');
+        }
+        $chk = $pdo->prepare("SELECT tipo, quincena FROM planilla_periodos WHERE anio=? AND mes=? AND estado <> 'anulada'");
         $chk->execute([$anio, $mes]);
         foreach ($chk->fetchAll() as $ya) {
             if ($tipo === 'mensual' || $ya['tipo'] === 'mensual') {
@@ -253,8 +257,31 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'cambiar_estado') {
         $pid    = (int)$_POST['id'];
         $estado = $_POST['estado'];
-        $pdo->prepare("UPDATE planilla_periodos SET estado=? WHERE id=?")->execute([$estado,$pid]);
+        if (!in_array($estado, ['aprobada', 'pagada'], true)) jsonErr('Estado no válido.');
+        $pdo->prepare("UPDATE planilla_periodos SET estado=? WHERE id=? AND estado <> 'anulada'")->execute([$estado,$pid]);
         jsonOk([], 'Estado actualizado.');
+    }
+
+    // Anular: queda como constancia, fuera de reportes y de la regla del mes (se puede generar otra).
+    // Una planilla pagada solo la anula el Administrador; las demás, quien puede corregirla.
+    if ($_act === 'anular') {
+        $pid    = (int)($_POST['id'] ?? 0);
+        $motivo = mb_substr(trim((string)($_POST['motivo'] ?? '')), 0, 500);
+        $sp = $pdo->prepare("SELECT estado FROM planilla_periodos WHERE id=?");
+        $sp->execute([$pid]);
+        $estadoAct = $sp->fetchColumn();
+        if ($estadoAct === false) jsonErr('Planilla no encontrada.');
+        if (mb_strlen($motivo) < 5) jsonErr('Escriba el motivo de la anulación (al menos 5 caracteres).');
+        if ($estadoAct === 'pagada' && !tieneAccesoTotal()) jsonErr('Una planilla pagada solo la anula el Administrador.', 403);
+        if ($estadoAct !== 'pagada' && ($m = puedeEditar($pdo, 'planillas.php', $pid)) !== true) jsonErr($m, 403);
+        try {
+            $pdo->beginTransaction();
+            $r = anularPlanilla($pdo, $pid, $motivo);
+            $pdo->commit();
+        } catch (RuntimeException $e) { $pdo->rollBack(); jsonErr($e->getMessage()); }
+        jsonOk(['id' => $pid], "Planilla {$r['numero']} anulada."
+            . ($r['ops_anuladas'] ? ' Orden de pago anulada: ' . implode(', ', $r['ops_anuladas']) . '.' : '')
+            . ($r['ops_pagadas'] ? ' La orden de pago ' . implode(', ', $r['ops_pagadas']) . ' ya estaba pagada y se conserva.' : ''));
     }
     jsonErr('Acción desconocida.');
 }
@@ -358,13 +385,20 @@ include __DIR__ . '/includes/header.php';
           <i class="fas fa-money-bill"></i> Marcar Pagada
         </button>
         <?php endif; ?>
+        <?php // Anular: quien puede corregirla; si está pagada, solo el Administrador
+        if ($periodo['estado'] !== 'anulada' && ($periodo['estado'] === 'pagada' ? tieneAccesoTotal() : puedeEditar($pdo, 'planillas.php', (int)$periodo['id']) === true)): ?>
+        <button class="btn btn-sm btn-outline-danger" onclick="anularPlanilla(<?= $periodo['id'] ?>, <?= $periodo['estado'] === 'pagada' ? 'true' : 'false' ?>)"
+          title="Queda como constancia y el período se puede volver a generar">
+          <i class="fas fa-ban"></i> Anular
+        </button>
+        <?php endif; ?>
         <a href="<?= BASE_URL ?>print.php?tipo=pl&id=<?= $periodo['id'] ?>" target="_blank" class="btn btn-sm btn-outline-danger">
           <i class="fas fa-file-pdf"></i> PDF
         </a>
         <a href="<?= BASE_URL ?>print.php?tipo=plp&id=<?= $periodo['id'] ?>" target="_blank" class="btn btn-sm btn-outline-secondary">
           <i class="fas fa-diagram-project"></i> Por Proyecto
         </a>
-        <?php if ($periodo['estado'] !== 'pagada'): ?>
+        <?php if (!in_array($periodo['estado'], ['pagada', 'anulada'], true)): ?>
         <button class="btn btn-sm btn-outline-secondary" onclick="aplicarDistribucion(<?= $periodo['id'] ?>)"
           title="Reemplaza la distribución de esta planilla por la configurada en cada empleado">
           <i class="fas fa-rotate"></i> Aplicar distribución de empleados
@@ -384,6 +418,11 @@ include __DIR__ . '/includes/header.php';
       </div>
     </div>
     <div class="card-body">
+      <?php if ($periodo['estado'] === 'anulada'): ?>
+      <div class="alert alert-secondary py-2 small mb-2"><i class="fas fa-ban"></i> <strong>Planilla anulada.</strong>
+        Se conserva como constancia; no cuenta en los reportes y su período se puede volver a generar.
+        <?php if (trim((string)$periodo['notas']) !== ''): ?><div class="mt-1" style="white-space:pre-line"><?= htmlspecialchars(trim($periodo['notas'])) ?></div><?php endif; ?></div>
+      <?php endif; ?>
       <div class="row g-3 mb-2" style="font-size:.85rem;">
         <div class="col-auto">Período: <strong><?= fmtFecha($periodo['fecha_inicio']) ?> — <?= fmtFecha($periodo['fecha_fin']) ?></strong></div>
         <div class="col-auto">Fecha de Pago: <strong><?= fmtFecha($periodo['fecha_pago'] ?? '') ?></strong></div>
@@ -747,6 +786,53 @@ async function submitPlanilla() {
     Toast.show(e.message || 'No se pudo generar la planilla.', 'error', 9000);
     btn.disabled = false; btn.innerHTML = '<i class="fas fa-cog"></i> Generar Planilla';
   }
+}
+
+// Anular una planilla: pide el motivo (queda en sus notas y en la bitácora)
+function anularPlanilla(id, pagada) {
+  let modal = document.getElementById('modal-anular-pl');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-anular-pl';
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title"><i class="fas fa-ban text-danger"></i> Anular planilla</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <p class="small text-muted mb-2">La planilla se conserva como constancia, pero deja de contar en los reportes y su período se puede volver a generar. Sus órdenes de pago aún no pagadas se anulan.</p>
+          <div class="alert alert-warning py-2 small anular-pagada" hidden><i class="fas fa-triangle-exclamation"></i> Esta planilla ya está <strong>pagada</strong>: su orden de pago se conserva, porque ese dinero ya salió. Si genera otra para el mismo período, descuente lo ya pagado para no pagarlo dos veces.</div>
+          <label class="form-label" for="anular-motivo">Motivo *</label>
+          <textarea id="anular-motivo" class="form-control" rows="3" maxlength="500" placeholder="Ej.: el mes se paga con una planilla mensual"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="anular-confirmar"><i class="fas fa-ban"></i> Anular</button>
+        </div>
+      </div></div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('shown.bs.modal', () => modal.querySelector('#anular-motivo').focus());
+  }
+  const txt = modal.querySelector('#anular-motivo'), btn = modal.querySelector('#anular-confirmar');
+  txt.value = '';
+  modal.querySelector('.anular-pagada').hidden = !pagada;
+  const bs = bootstrap.Modal.getOrCreateInstance(modal);
+  btn.onclick = async () => {
+    if (txt.value.trim().length < 5) { Toast.show('Escriba el motivo de la anulación.', 'warning'); txt.focus(); return; }
+    btn.disabled = true;
+    const fd = new FormData();
+    fd.append('_action', 'anular'); fd.append('id', id); fd.append('motivo', txt.value.trim());
+    fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+    try {
+      const r = await post('planillas.php', fd);
+      bs.hide();
+      Toast.show(r.message, 'success', 8000);
+      setTimeout(() => Nav.recargar(), 900);
+    } catch (e) { Toast.show(e.message, 'error', 8000); }
+    finally { btn.disabled = false; }
+  };
+  bs.show();
 }
 
 JS;

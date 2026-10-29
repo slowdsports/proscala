@@ -44,7 +44,7 @@ const EDICION_PROCESOS = [
     'caja_chica.php'           => ['tabla' => 'caja_chica',          'cerrados' => ['liquidada'], 'reinicio' => null,
                                    'acciones' => ['guardar' => 'id', 'eliminar' => 'id'],
                                    'responsable' => 'empleado_id', 'op_fondo' => true],
-    'planillas.php'            => ['tabla' => 'planilla_periodos',   'cerrados' => ['pagada'], 'reinicio' => ['procesada', ['aprobada']],
+    'planillas.php'            => ['tabla' => 'planilla_periodos',   'cerrados' => ['pagada', 'anulada'], 'reinicio' => ['procesada', ['aprobada']],
                                    'acciones' => ['guardar_credimpulsa' => 'periodo_id', 'guardar_distribucion' => 'periodo_id', 'aplicar_distribucion' => 'periodo_id']],
     'planillas_asignacion.php' => ['tabla' => 'planilla_asignacion', 'cerrados' => ['pagada'], 'reinicio' => ['borrador', ['aprobada']],
                                    'acciones' => ['guardar_detalle' => 'id', 'eliminar' => 'id']],

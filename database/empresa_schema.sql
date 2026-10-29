@@ -744,7 +744,7 @@ CREATE TABLE `planilla_periodos` (
   `fecha_inicio` date NOT NULL,
   `fecha_fin` date NOT NULL,
   `fecha_pago` date DEFAULT NULL,
-  `estado` enum('borrador','procesada','aprobada','pagada') DEFAULT 'borrador',
+  `estado` enum('borrador','procesada','aprobada','pagada','anulada') DEFAULT 'borrador',
   `total_bruto` decimal(12,2) DEFAULT 0.00,
   `total_deducciones` decimal(12,2) DEFAULT 0.00,
   `total_neto` decimal(12,2) DEFAULT 0.00,
@@ -753,7 +753,7 @@ CREATE TABLE `planilla_periodos` (
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_estado` (`estado`),
-  UNIQUE KEY `uk_periodo` (`anio`,`mes`,`quincena`)
+  KEY `idx_periodo` (`anio`,`mes`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `prestamos` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

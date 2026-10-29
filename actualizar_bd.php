@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.15.0';
+const VERSION_BD = '1.16.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -60,14 +60,19 @@ $PASOS = [
         },
     ],
     [
+        // El esquema solo agrega lo que falta: cambiar el enum y quitar el índice único van aquí (config/esquema.php)
+        'base' => 'empresa',
+        'descripcion' => 'Planillas: estado "anulada" y un período puede volver a generarse si su planilla se anuló (1.16.0)',
+        'pendiente' => fn(PDO $db) => (bool)cambiosPlanillasAnuladas($db),
+        'aplicar' => function (PDO $db) { foreach (cambiosPlanillasAnuladas($db) as $sql) $db->exec($sql); },
+    ],
+    [
         // Pedido expreso, solo AHDECO (por su RTN) y una sola vez (marca paso_quincenas_oct2026): config/esquema.php
         'base' => 'empresa',
-        'descripcion' => 'AHDECO: borrar las planillas quincenales de octubre 2026 y sus órdenes de pago (también las pagadas) para pagar ese mes con una planilla mensual — una sola vez (1.15.1)',
+        'descripcion' => 'AHDECO: anular las planillas quincenales de octubre 2026 (y sus órdenes de pago aún no pagadas) para pagar ese mes con una planilla mensual — una sola vez (1.16.0)',
         'pendiente' => fn(PDO $db) => empresaDeBase($db, $GLOBALS['pdoMaster'], '08269016867779') !== null
             && !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_quincenas_oct2026'")->fetchColumn(),
-        'aplicar' => function (PDO $db) {
-            borrarQuincenasOctubre2026($db, (int)empresaDeBase($db, $GLOBALS['pdoMaster'], '08269016867779'), __DIR__);
-        },
+        'aplicar' => function (PDO $db) { anularQuincenasOctubre2026($db); },
     ],
 ];
 

@@ -225,6 +225,38 @@ try {
         }
     });
 
+    prueba('Planillas: anular una quincena libera el mes para una planilla mensual (enero 2039)', function () use ($baseUrl, $sesAdmin, $pdo) {
+        $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba'])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/planillas.php", false, $ctx), true) ?: [];
+        };
+        $gen = fn(string $tipo) => $enviar(['_action' => 'generar', 'tipo' => $tipo, 'anio' => 2039, 'mes' => 1, 'quincena' => 'primera',
+            'fecha_inicio' => '2039-01-01', 'fecha_fin' => $tipo === 'mensual' ? '2039-01-31' : '2039-01-15', 'fecha_pago' => '']);
+        if ($pdo->query("SELECT COUNT(*) FROM planilla_periodos WHERE anio = 2039")->fetchColumn()) throw new Omitir('ya hay planillas de 2039');
+        try {
+            $q = $gen('quincenal');
+            afirmar(!empty($q['id']), 'no se generó la quincena: ' . ($q['message'] ?? ''));
+            afirmar(str_contains($gen('mensual')['message'] ?? '', 'ya tiene planilla quincenal'), 'con la quincena vigente, la mensual debía rechazarse');
+            afirmar(empty($enviar(['_action' => 'anular', 'id' => $q['id'], 'motivo' => '']) ['success']), 'aceptó anular sin motivo');
+            $a = $enviar(['_action' => 'anular', 'id' => $q['id'], 'motivo' => 'Prueba automática: se paga mensual']);
+            afirmar(!empty($a['success']), 'no se anuló: ' . ($a['message'] ?? ''));
+            iguales('anulada', $pdo->query("SELECT estado FROM planilla_periodos WHERE id = " . (int)$q['id'])->fetchColumn(), 'estado de la quincena');
+            $m = $gen('mensual');
+            afirmar(!empty($m['id']), 'con la quincena anulada, la mensual debía generarse: ' . ($m['message'] ?? ''));
+            [$cod, $html] = pedir("$baseUrl/planillas.php?action=ver&id={$q['id']}", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Planilla anulada') && str_contains($html, 'se paga mensual') && !erroresPhp($html), "vista de la planilla anulada (HTTP $cod)");
+        } finally {
+            foreach ($pdo->query("SELECT id FROM planilla_periodos WHERE anio = 2039")->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $pdo->exec("DELETE pdp FROM planilla_detalle_proyectos pdp JOIN planilla_detalle pd ON pd.id = pdp.detalle_id WHERE pd.periodo_id = $id");
+                $pdo->exec("DELETE FROM planilla_periodos WHERE id = $id");
+                $pdo->exec("DELETE FROM registro_usuarios WHERE tabla = 'planilla_periodos' AND registro_id = $id");
+            }
+            $pdo->exec("DELETE FROM auditoria WHERE modulo = 'planillas.php' AND ip IN ('127.0.0.1', '::1') AND (detalle LIKE '%anio=2039%' OR detalle LIKE '%Prueba automática: se paga mensual%')");
+        }
+    });
+
     prueba('Catálogo de cuentas: se descargan la plantilla y el catálogo actual en Excel', function () use ($baseUrl, $sesAdmin) {
         foreach (['plantilla', 'catalogo'] as $tipo) {
             [$cod, $xlsx] = pedir("$baseUrl/catalogos.php?export=$tipo", $sesAdmin);

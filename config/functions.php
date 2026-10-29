@@ -105,6 +105,29 @@ function diasTrabajadosPlanilla(array $p, ?string $fechaIngreso): int {
     return max(1, min($completo, $completo - (min(30, (int)date('j', strtotime($fechaIngreso))) - $desde)));
 }
 
+/**
+ * Anula una planilla (estado 'anulada'): se conserva con su detalle y queda fuera de la regla del
+ * mes (se puede generar otra para ese período), de los reportes y de la edición. Sus órdenes de
+ * pago aún no pagadas pasan a 'anulada'; una ya pagada se conserva: el dinero salió. El motivo
+ * queda en las notas. Devuelve ['numero', 'ops_anuladas' => [num…], 'ops_pagadas' => [num…]].
+ */
+function anularPlanilla(PDO $pdo, int $id, string $motivo): array {
+    $s = $pdo->prepare("SELECT id, numero, estado, notas FROM planilla_periodos WHERE id = ?");
+    $s->execute([$id]);
+    $p = $s->fetch();
+    if (!$p) throw new RuntimeException('Planilla no encontrada.');
+    if ($p['estado'] === 'anulada') throw new RuntimeException('La planilla ya está anulada.');
+    $nota = 'Anulada el ' . date('d/m/Y') . ($p['estado'] === 'pagada' ? ' (estaba pagada)' : '') . ': ' . $motivo;
+    $pdo->prepare("UPDATE planilla_periodos SET estado = 'anulada', notas = TRIM(CONCAT(COALESCE(notas, ''), '\n', ?)) WHERE id = ?")->execute([$nota, $id]);
+    $s = $pdo->prepare("SELECT numero, estado FROM ordenes_pago WHERE origen_tabla = 'planilla_periodos' AND origen_id = ? AND estado <> 'anulada'");
+    $s->execute([$id]);
+    $ops = $s->fetchAll();
+    $pdo->prepare("UPDATE ordenes_pago SET estado = 'anulada' WHERE origen_tabla = 'planilla_periodos' AND origen_id = ? AND estado NOT IN ('pagada', 'anulada')")->execute([$id]);
+    return ['numero' => $p['numero'] ?: "#$id",
+            'ops_anuladas' => array_column(array_filter($ops, fn($o) => $o['estado'] !== 'pagada'), 'numero'),
+            'ops_pagadas'  => array_column(array_filter($ops, fn($o) => $o['estado'] === 'pagada'), 'numero')];
+}
+
 // ── Cálculos de Planilla Honduras ─────────────────────────────────
 function calcularPlanilla(float $sueldoMensual, array $_config = []): array {
     // Todas las deducciones se ingresan manualmente en cada planilla

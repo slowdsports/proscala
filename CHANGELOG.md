@@ -11,11 +11,17 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.16.0 — 2026-10-29
+**Anular planillas (en lugar de borrarlas)**
+- **Anular una planilla** (botón **Anular** al verla, con motivo): se conserva con su detalle como constancia, pero deja de contar en los reportes, en el dashboard y en la regla del mes, así que su período se puede volver a generar (p. ej. pagar con una planilla mensual un mes que se había empezado por quincenas). Sus órdenes de pago aún no pagadas se anulan; una ya pagada se conserva, porque ese dinero salió. Una anulada ya no se edita ni cambia de estado, y editar un empleado no la toca. La anula quien puede corregirla; si está pagada, solo el Administrador, con aviso de no pagar dos veces el mismo período. El motivo queda en las notas y en la bitácora.
+- `actualizar_bd.php`, **una sola vez y solo en AHDECO** (pedido expreso): **anula** las planillas quincenales de octubre 2026 (antes las borraba, 1.15.1) para pagar ese mes con una planilla mensual. Sus órdenes de pago aún no pagadas se anulan; la ya pagada se conserva. Queda en la bitácora y una marca impide que se repita.
+- Pruebas automáticas: 38 (2 nuevas: la anulación única de octubre, en una transacción que se revierte, y anular una quincena y generar la mensual de punta a punta).
+- Base de datos (`actualizar_bd.php`): estado `anulada` en `planilla_periodos`; el índice único (año, mes, quincena) pasa a ser un índice normal: la regla del período la aplica el sistema, que ignora las anuladas.
+
 ## 1.15.1 — 2026-10-29
 **Octubre 2026 de AHDECO con planilla mensual**
 - Corregido: al no poder generar una planilla (p. ej. el mes ya tiene planilla quincenal y se pidió una mensual), la pantalla decía "Error de conexión" en lugar del motivo.
-- `actualizar_bd.php`, **una sola vez y solo en AHDECO** (por pedido expreso): borra las planillas quincenales de octubre 2026 con todo lo que depende de ellas (detalle, distribución por proyecto, órdenes de pago aunque estén pagadas, adjuntos, aprobaciones y avisos), para poder pagar ese mes con una planilla mensual. Queda en la bitácora con números y montos, y una marca en la configuración impide que vuelva a ejecutarse.
-- Pruebas automáticas: 37 (1 nueva: el borrado único, en una transacción que se revierte).
+- `actualizar_bd.php`, una sola vez y solo en AHDECO: borraba las planillas quincenales de octubre 2026 con sus órdenes de pago. **Reemplazado en 1.16.0 antes de ejecutarse en producción: ahora se anulan, no se borran.**
 
 ## 1.15.0 — 2026-10-29
 **Expediente digital del empleado**

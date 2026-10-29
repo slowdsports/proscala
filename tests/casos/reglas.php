@@ -345,28 +345,39 @@ prueba('Caja chica: el responsable la edita (no la elimina) mientras está abier
     });
 });
 require_once RAIZ . '/config/esquema.php';
-prueba('Paso único 1.15.1: borra las quincenas de octubre 2026 de AHDECO con todo lo que depende de ellas, y nada más', function () use ($pdo, $pdoMaster) {
-    $esAhdeco = empresaDeBase($pdo, $pdoMaster, '08269016867779');
-    if (!$esAhdeco) throw new Omitir('la base de prueba no es la de AHDECO');
+prueba('Paso único 1.15.1: anula (no borra) las quincenas de octubre 2026 de AHDECO y deja generar la mensual', function () use ($pdo, $pdoMaster) {
+    if (!empresaDeBase($pdo, $pdoMaster, '08269016867779')) throw new Omitir('la base de prueba no es la de AHDECO');
+    iguales([], cambiosPlanillasAnuladas($pdo), 'la base local tiene el estado "anulada" y no tiene el índice único');
     $cuenta = fn(string $sql) => (int)$pdo->query($sql)->fetchColumn();
-    $oct = "SELECT id FROM planilla_periodos WHERE anio = 2026 AND mes = 10 AND tipo = 'quincenal'";
-    $otras = $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE NOT (anio = 2026 AND mes = 10 AND tipo = 'quincenal')");
-    $detalleOtras = $cuenta("SELECT COUNT(*) FROM planilla_detalle WHERE periodo_id NOT IN ($oct)");
-    $opsOtras = $cuenta("SELECT COUNT(*) FROM ordenes_pago WHERE COALESCE(origen_tabla, '') <> 'planilla_periodos' OR origen_id NOT IN ($oct)");
+    $oct = "anio = 2026 AND mes = 10 AND tipo = 'quincenal'";
     $pdo->beginTransaction();
     try {
-        $pdo->exec('SET FOREIGN_KEY_CHECKS=0');   // como actualizar_bd.php al aplicar
-        $resumen = borrarQuincenasOctubre2026($pdo, $esAhdeco, RAIZ);
-        $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
-        iguales(0, $cuenta("SELECT COUNT(*) FROM ($oct) t"), 'quedan quincenas de octubre 2026');
-        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_detalle WHERE periodo_id NOT IN (SELECT id FROM planilla_periodos)"), 'detalle huérfano');
-        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_detalle_proyectos WHERE detalle_id NOT IN (SELECT id FROM planilla_detalle)"), 'distribución huérfana');
-        iguales(0, $cuenta("SELECT COUNT(*) FROM ordenes_pago WHERE origen_tabla = 'planilla_periodos' AND origen_id NOT IN (SELECT id FROM planilla_periodos)"), 'órdenes de pago huérfanas');
-        iguales([$otras, $detalleOtras, $opsOtras], [$cuenta("SELECT COUNT(*) FROM planilla_periodos"), $cuenta("SELECT COUNT(*) FROM planilla_detalle"), $cuenta("SELECT COUNT(*) FROM ordenes_pago")],
-            'no tocó otras planillas, su detalle ni otras órdenes de pago');
+        // Escenario: una quincena de octubre con OP pendiente y otra con OP pagada
+        $q = $pdo->query("SELECT id FROM planilla_periodos WHERE $oct ORDER BY quincena")->fetchAll(PDO::FETCH_COLUMN);
+        if (count($q) < 2) {
+            foreach (['primera', 'segunda'] as $i => $qn) if (!isset($q[$i])) {
+                $pdo->exec("INSERT INTO planilla_periodos (anio, mes, quincena, tipo, fecha_inicio, fecha_fin, estado) VALUES (2026, 10, '$qn', 'quincenal', '2026-10-01', '2026-10-15', 'procesada')");
+                $q[$i] = (int)$pdo->lastInsertId();
+            }
+        }
+        $op = fn(int $pl, string $estado) => $pdo->exec("INSERT INTO ordenes_pago (numero, fecha, beneficiario, concepto, monto, estado, origen_tabla, origen_id)
+            VALUES ('ZZOP-$pl-$estado', CURDATE(), 'Planilla', 'Prueba', 100, '$estado', 'planilla_periodos', $pl)");
+        $op((int)$q[0], 'pagada'); $op((int)$q[1], 'pendiente');
+        $detalle = $cuenta("SELECT COUNT(*) FROM planilla_detalle");
+        $otras = $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE NOT ($oct) AND estado <> 'anulada'");
+        $resumen = anularQuincenasOctubre2026($pdo);
+        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE $oct AND estado <> 'anulada'"), 'quedan quincenas de octubre sin anular');
+        afirmar($cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE $oct AND notas LIKE '%planilla mensual%'") >= 2, 'el motivo no quedó en las notas');
+        iguales($detalle, $cuenta("SELECT COUNT(*) FROM planilla_detalle"), 'no se borra el detalle: queda como constancia');
+        iguales('anulada', $pdo->query("SELECT estado FROM ordenes_pago WHERE numero = 'ZZOP-{$q[1]}-pendiente'")->fetchColumn(), 'la OP pendiente se anula');
+        iguales('pagada', $pdo->query("SELECT estado FROM ordenes_pago WHERE numero = 'ZZOP-{$q[0]}-pagada'")->fetchColumn(), 'la OP pagada se conserva');
+        iguales($otras, $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE NOT ($oct) AND estado <> 'anulada'"), 'no tocó otras planillas');
         afirmar((bool)$cuenta("SELECT COUNT(*) FROM configuracion WHERE clave = 'paso_quincenas_oct2026'"), 'no dejó la marca de una sola vez');
-        afirmar(str_contains($resumen, 'octubre 2026'), 'resumen para la bitácora');
-    } finally { if ($pdo->inTransaction()) $pdo->rollBack(); $pdo->exec('SET FOREIGN_KEY_CHECKS=1'); }
+        afirmar(str_contains($resumen, 'se conserva'), 'el resumen no menciona la OP pagada que se conserva');
+        // La mensual de octubre ya se puede guardar (ocupa el lugar de la 2.ª quincena: sin índice único no choca)
+        $pdo->exec("INSERT INTO planilla_periodos (anio, mes, quincena, tipo, fecha_inicio, fecha_fin, estado) VALUES (2026, 10, 'segunda', 'mensual', '2026-10-01', '2026-10-31', 'borrador')");
+        iguales(0, $cuenta("SELECT COUNT(*) FROM planilla_periodos WHERE anio = 2026 AND mes = 10 AND estado <> 'anulada' AND tipo = 'quincenal'"), 'la regla del mes ya no ve quincenas vigentes');
+    } finally { if ($pdo->inTransaction()) $pdo->rollBack(); }
     foreach ($pdoMaster->query("SELECT db_nombre FROM empresas WHERE rtn <> '08269016867779'") as $otra) {
         try { $db = conectarBD($otra['db_nombre']); } catch (Throwable $e) { continue; }
         iguales(null, empresaDeBase($db, $pdoMaster, '08269016867779'), "{$otra['db_nombre']} no se reconoce como AHDECO");
