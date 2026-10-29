@@ -11,6 +11,10 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.14.2 — 2026-10-29
+**Permiso y Vacaciones con 3 firmas**
+- Corregido: los documentos de **Permiso** y **Vacaciones** llevaban 4 firmas (Solicitado por, Elaborado por, Revisado por, Autorizado por). Ahora 3: Solicitado por (el empleado), Revisado por y Autorizado por. Revisados todos los documentos impresos: ninguno pasa de 3 firmas de la organización (la Orden de Compra lleva aparte la del proveedor). La prueba de documentos impresos lo vigila.
+
 ## 1.14.1 — 2026-10-29
 **Ícono de Proscala en las pestañas del navegador**
 - **Ícono de Proscala en las pestañas del navegador** (y al agregar el sistema a la pantalla de inicio del celular), en todas las páginas: sistema, página principal, inicio de sesión, activar cuenta / restablecer contraseña, documentos impresos, página de error y `actualizar_bd.php` (`includes/favicon.php`). Generado desde `assets/images/icono.png` (el original, 1254 px): `favicon.ico` (16, 32 y 48 px) y `favicon-32/192.png` con las esquinas transparentes, y `apple-touch-icon.png` (180 px, con fondo: iOS redondea solo).

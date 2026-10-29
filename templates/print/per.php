@@ -18,8 +18,9 @@ $TIPOS_PER = [
 $title  = 'PERMISO — ' . strtoupper($TIPOS_PER[$doc['tipo']] ?? $doc['tipo']);
 $docNum = $doc['numero'];
 
-// Firmas
+// Firmas: el empleado que solicita (en lugar de "Elaborado por"), Revisado por y Autorizado por
 $fPER = firmasFlujo($pdo, loadFirmantes($pdo, 'per'), 'permisos.php', $id);
+$fPER[0] = ['posicion' => 1, 'etiqueta' => 'Solicitado por (Empleado)', 'emp_nombre' => $doc['emp_nombre']];
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';
@@ -80,14 +81,7 @@ require __DIR__ . '/_pagina_inicio.php';
     </div>
   </div>
 
-  <?php
-  $perSigs = array_merge(
-      [['etiqueta' => 'Solicitado por (Empleado)', 'emp_nombre' => $doc['emp_nombre']]],
-      $fPER
-  );
-  $perCols = count($perSigs) >= 3 ? 'cols-3' : 'cols-2';
-  echo sigBlock($perSigs, $perCols);
-  ?>
+  <?= sigBlock($fPER) ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
 <?php require __DIR__ . '/_fin.php';

@@ -13,8 +13,9 @@ if (!$doc) die('Solicitud de vacaciones no encontrada.');
 $title  = 'SOLICITUD DE VACACIONES';
 $docNum = $doc['numero'];
 
-// Firmas
+// Firmas: el empleado que solicita (en lugar de "Elaborado por"), Revisado por y Autorizado por
 $fVAC = firmasFlujo($pdo, loadFirmantes($pdo, 'vac'), 'vacaciones.php', $id);
+$fVAC[0] = ['posicion' => 1, 'etiqueta' => 'Solicitado por (Empleado)', 'emp_nombre' => $doc['emp_nombre']];
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';
@@ -77,14 +78,7 @@ require __DIR__ . '/_pagina_inicio.php';
     </div>
   </div>
 
-  <?php
-  $vacSigs = array_merge(
-      [['etiqueta' => 'Solicitado por (Empleado)', 'emp_nombre' => $doc['emp_nombre']]],
-      $fVAC
-  );
-  $vacCols = count($vacSigs) >= 3 ? 'cols-3' : 'cols-2';
-  echo sigBlock($vacSigs, $vacCols);
-  ?>
+  <?= sigBlock($fVAC) ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
 <?php require __DIR__ . '/_fin.php';
