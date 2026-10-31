@@ -16,7 +16,10 @@ const PROCESOS = [
     'gastos_solicitud.php'  => ['tabla' => 'solicitud_gastos', 'docs' => ['sg'],             'autorizado' => 'aprobada', 'rechazado' => 'rechazada', 'abiertos' => ['pendiente']],
     'vacaciones.php'        => ['tabla' => 'vacaciones',       'docs' => ['vac'],            'autorizado' => 'aprobada', 'rechazado' => 'rechazada', 'abiertos' => ['pendiente']],
     'permisos.php'          => ['tabla' => 'permisos',         'docs' => ['per'],            'autorizado' => 'aprobado', 'rechazado' => 'rechazado', 'abiertos' => ['pendiente']],
+    'compras_cotizaciones.php' => ['tabla' => 'cotizaciones',  'docs' => ['co'],             'autorizado' => 'aprobada', 'rechazado' => 'rechazada', 'abiertos' => ['pendiente']],
     'compras_orden.php'     => ['tabla' => 'ordenes_compra',   'docs' => ['oc'],             'autorizado' => null,       'rechazado' => null,        'abiertos' => ['emitida', 'parcial', 'completa']],
+    // Su estado (completa / parcial / devolución) describe lo recibido: revisar y autorizar no lo cambian
+    'compras_recepcion.php' => ['tabla' => 'notas_recepcion',  'docs' => [],                 'autorizado' => null,       'rechazado' => null,        'abiertos' => ['completa', 'parcial', 'devolucion']],
     'compras_pago.php'      => ['tabla' => 'ordenes_pago',     'docs' => ['op'],             'autorizado' => 'aprobada', 'rechazado' => null,        'abiertos' => ['pendiente']],
 ];
 

@@ -383,3 +383,14 @@ prueba('Paso único 1.15.1: anula (no borra) las quincenas de octubre 2026 de AH
         iguales(null, empresaDeBase($db, $pdoMaster, '08269016867779'), "{$otra['db_nombre']} no se reconoce como AHDECO");
     }
 });
+
+prueba('Flujo de aprobación: todo proceso con flujo muestra su panel (compras y viáticos incluidos)', function () {
+    foreach (array_keys(PROCESOS) as $modulo) {
+        $src = (string)file_get_contents(RAIZ . "/$modulo");
+        afirmar(preg_match('/\$flujoModulo\s*=\s*\'' . preg_quote($modulo, '/') . '\'.*?flujo_aprobacion\.php/s', $src), "$modulo no incluye el panel del flujo (includes/flujo_aprobacion.php)");
+        afirmar(isset(NOMBRES_PROCESO[$modulo]), "$modulo no tiene nombre para los avisos (NOMBRES_PROCESO)");
+    }
+    foreach (['compras_solicitud.php', 'compras_cotizaciones.php', 'compras_orden.php', 'compras_recepcion.php', 'compras_pago.php', 'gastos_viajes.php', 'gastos_solicitud.php'] as $m) {
+        afirmar(isset(PROCESOS[$m]), "$m (compras / viáticos) no tiene flujo de aprobación");
+    }
+});

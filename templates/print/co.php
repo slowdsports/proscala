@@ -5,8 +5,7 @@
 // los totales, la recomendación (config/cotizaciones.php: proveedor único y compra por artículo),
 // el proveedor seleccionado con su justificación y las firmas. Las cotizaciones registradas con un
 // monto global (sin precios por artículo) se comparan por ese monto.
-// Cotizaciones no tiene flujo de revisión: firman quien elaboró el resumen y quien lo aprobó (o
-// los firmantes 'co' configurados, si los hay).
+// Firman Elaborado / Revisado / Autorizado por, del flujo de aprobación (config/aprobaciones.php).
 require_once dirname(__DIR__, 2) . '/config/cotizaciones.php';
 
 $s = $pdo->prepare("SELECT co.*, sc.numero AS sc_numero, sc.descripcion AS sc_desc, sc.presupuesto_estimado,
@@ -37,11 +36,12 @@ $recoId = $an['unico']['oferta_id'] ?? null;
 $cant = fn($q) => rtrim(rtrim(number_format((float)$q, 2), '0'), '.');
 $angosto = count($ofertas) >= 4;   // con muchos proveedores, letra más chica para que quepa
 
-// Firmas: las configuradas para 'co' o, si no hay, Elaborado por / Aprobado por del documento
-$fCO = loadFirmantes($pdo, 'co') ?: [['posicion' => 1, 'etiqueta' => 'Elaborado por', 'emp_nombre' => ''],
-                                      ['posicion' => 2, 'etiqueta' => 'Aprobado por',  'emp_nombre' => '']];
-if ($doc['elab_nombre']) $fCO[0]['emp_nombre'] = $doc['elab_nombre'];
-if ($doc['aprobador_nombre'] && count($fCO) > 1) $fCO[count($fCO) - 1]['emp_nombre'] = $doc['aprobador_nombre'];
+// Firmas del flujo: Elaborado / Revisado / Autorizado por (con las personas reales de cada paso).
+// "Elaborado por" sin creador registrado: quien figura en el resumen; una cotización aprobada antes
+// del flujo (botón "Aprobar") conserva a quien la aprobó como "Autorizado por".
+$fCO = firmasFlujo($pdo, loadFirmantes($pdo, 'co'), 'compras_cotizaciones.php', $id);
+if (trim((string)($fCO[0]['emp_nombre'] ?? '')) === '' && $doc['elab_nombre']) $fCO[0]['emp_nombre'] = $doc['elab_nombre'];
+if (trim((string)($fCO[2]['emp_nombre'] ?? '')) === '' && $doc['estado'] === 'aprobada' && $doc['aprobador_nombre']) $fCO[2]['emp_nombre'] = $doc['aprobador_nombre'];
 
 require __DIR__ . '/_inicio.php';
 ?>
@@ -198,7 +198,7 @@ require __DIR__ . '/_inicio.php';
   </div>
   <?php endif; ?>
 
-  <?= sigBlock($fCO, count($fCO) === 2 ? 'cols-2' : 'cols-3') ?>
+  <?= sigBlock($fCO) ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
 <?php require __DIR__ . '/_fin.php';

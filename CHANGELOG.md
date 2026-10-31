@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.17.0 — 2026-10-30
+**Flujo de aprobación en cotizaciones y notas de recepción**
+- **Flujo de aprobación en todo el proceso de compra**: el **Resumen de Cotizaciones** y la **Nota de Recepción** tienen ahora el panel Creado → Revisado → Autorizado, como la solicitud, la orden de compra y la de pago (y los anticipos y liquidaciones, que ya lo tenían). Con las mismas reglas: revisión antes de autorizar, jerarquía del organigrama, nadie aprueba lo propio, delegaciones, avisos, recordatorios y escalamiento, y el creador edita hasta la primera revisión. La cotización autorizada queda aprobada y lista para crear la orden de compra (reemplaza el botón "Aprobar" de un solo paso) y puede rechazarse con motivo; en la nota de recepción, revisar y autorizar no cambian su estado (completa, parcial o devolución). El PDF del resumen de cotizaciones lleva las tres firmas del flujo.
+- La prueba de reglas vigila que todo proceso con flujo muestre su panel.
+
 ## 1.16.0 — 2026-10-29
 **Anular planillas (en lugar de borrarlas)**
 - **Anular una planilla** (botón **Anular** al verla, con motivo): se conserva con su detalle como constancia, pero deja de contar en los reportes, en el dashboard y en la regla del mes, así que su período se puede volver a generar (p. ej. pagar con una planilla mensual un mes que se había empezado por quincenas). Sus órdenes de pago aún no pagadas se anulan; una ya pagada se conserva, porque ese dinero salió. Una anulada ya no se edita ni cambia de estado, y editar un empleado no la toca. La anula quien puede corregirla; si está pagada, solo el Administrador, con aviso de no pagar dos veces el mismo período. El motivo queda en las notas y en la bitácora.

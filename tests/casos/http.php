@@ -152,6 +152,7 @@ try {
             iguales(260.0, (float)$pdo->query("SELECT total FROM cotizaciones_proveedores WHERE cotizacion_id = $coId AND proveedor_id = {$provs[1]}")->fetchColumn(), 'total calculado de la oferta');
             [$cod, $html] = pedir("$baseUrl/compras_cotizaciones.php?action=ver&id=$coId", $sesAdmin);
             afirmar($cod === 200 && str_contains($html, 'Recomendación del sistema') && str_contains($html, 'cot-min') && !erroresPhp($html), "vista de la cotización (HTTP $cod)");
+            afirmar(str_contains($html, 'flujo-aprobacion'), 'la cotización no muestra el flujo de aprobación');
             [$cod, $html] = pedir("$baseUrl/print.php?tipo=co&id=$coId", $sesAdmin);
             afirmar($cod === 200 && str_contains($html, 'Compra por artículo') && !erroresPhp($html), "PDF del resumen (HTTP $cod)");
             pedir("$baseUrl/compras_cotizaciones.php?action=editar&id=$coId", $sesAdmin);   // el formulario de edición carga
@@ -162,7 +163,7 @@ try {
         } finally {
             if ($coId) {
                 $pdo->exec("DELETE FROM cotizaciones WHERE id = $coId");
-                $pdo->exec("DELETE FROM registro_usuarios WHERE tabla = 'cotizaciones' AND registro_id = $coId");
+                foreach (['registro_usuarios', 'notificaciones', 'aprobaciones'] as $t) $pdo->exec("DELETE FROM $t WHERE tabla = 'cotizaciones' AND registro_id = $coId");
             }
             $pdo->prepare("UPDATE solicitud_compra SET estado = ? WHERE id = ?")->execute([$sc['estado'], $sc['id']]);
             $pdo->exec("DELETE FROM auditoria WHERE modulo = 'compras_cotizaciones.php' AND ip IN ('127.0.0.1', '::1') AND detalle LIKE '%Z-{$provs[0]}%'");

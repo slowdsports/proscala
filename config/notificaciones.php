@@ -15,7 +15,9 @@ const NOMBRES_PROCESO = [
     'gastos_solicitud.php'  => 'Liquidación / reembolso',
     'vacaciones.php'        => 'Solicitud de vacaciones',
     'permisos.php'          => 'Permiso',
+    'compras_cotizaciones.php' => 'Resumen de cotizaciones',
     'compras_orden.php'     => 'Orden de compra',
+    'compras_recepcion.php' => 'Nota de recepción',
     'compras_pago.php'      => 'Orden de pago',
 ];
 

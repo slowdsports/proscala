@@ -103,10 +103,13 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             jsonOk(['id'=>$coId],'Cotización guardada.');
         } catch(\Exception $e){ $pdo->rollBack(); jsonErr($e->getMessage()); }
     }
+    // Autorizar o rechazar desde el panel del flujo (validarFlujoAprobacion ya verificó quién puede)
     if ($_act === 'cambiar_estado') {
-        $coId=(int)$_POST['id'];
-        $pdo->prepare("UPDATE cotizaciones SET estado=?,aprobador_id=? WHERE id=?")->execute([$_POST['estado'],$_SESSION['empleado_id'] ?? null,$coId]);
-        jsonOk([],'Estado actualizado.');
+        $coId = (int)$_POST['id'];
+        $estado = $_POST['estado'] ?? '';
+        if (!in_array($estado, ['aprobada', 'rechazada'], true)) jsonErr('Estado no válido.');
+        $pdo->prepare("UPDATE cotizaciones SET estado=?,aprobador_id=? WHERE id=?")->execute([$estado,$_SESSION['empleado_id'] ?? null,$coId]);
+        jsonOk([], $estado === 'aprobada' ? 'Cotización autorizada.' : 'Cotización rechazada.');
     }
     jsonErr('Acción desconocida.');
 }
@@ -189,13 +192,12 @@ include __DIR__ . '/includes/header.php';
   $aprobada = $co['estado'] === 'aprobada';
   $urlOc = fn(int $provId, bool $plan = false) => BASE_URL . 'compras_orden.php?action=nuevo&co_id=' . $co['id'] . '&prov_id=' . $provId . ($plan ? '&plan=articulo' : '');
 ?>
+<?php // Creado → Revisado → Autorizado (config/aprobaciones.php): autorizar la deja 'aprobada'
+$flujoModulo = 'compras_cotizaciones.php'; $flujoId = $co['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-file-lines"></i> <?= $co['numero'] ?> — Ref. SC: <?= $co['sc_num'] ?> — <?= estadoBadge($co['estado']) ?>
     <div class="ms-auto d-flex gap-2 no-print">
-      <?php if($co['estado']==='pendiente'): ?>
-      <button class="btn btn-sm btn-success" onclick="cambiarEstado('compras_cotizaciones.php',<?=$co['id']?>,'aprobada','cotizaciones',()=>Nav.recargar())"><i class="fas fa-check"></i> Aprobar</button>
-      <?php endif; ?>
       <?php if($aprobada && $co['proveedor_seleccionado_id']): ?>
       <a href="<?= $urlOc((int)$co['proveedor_seleccionado_id']) ?>" class="btn btn-sm btn-primary"><i class="fas fa-file-circle-check"></i> Crear OC</a>
       <?php endif; ?>
