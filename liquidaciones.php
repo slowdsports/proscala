@@ -193,17 +193,18 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // 'aprobada' llega del flujo (validarFlujoAprobacion ya verificó quién autoriza); 'pagada', solo si ya se aprobó
     if ($_act === 'cambiar_estado') {
         $lid    = (int)$_POST['id'];
-        $estado = in_array($_POST['estado'], ['aprobada','pagada','borrador']) ? $_POST['estado'] : '';
-        if (!$estado) jsonErr('Estado inválido.');
-        $fecha  = $estado === 'pagada' ? date('Y-m-d') : null;
-        $pdo->prepare("UPDATE liquidaciones SET estado=?, aprobador_id=?, fecha_aprobacion=?, fecha_pago=? WHERE id=?")
-            ->execute([$estado, currentUser()['id'],
-                       in_array($estado,['aprobada','pagada']) ? date('Y-m-d') : null,
-                       $fecha, $lid]);
+        $estado = $_POST['estado'] ?? '';
+        if (!in_array($estado, ['aprobada', 'pagada'], true)) jsonErr('Estado inválido.');
+        $s = $estado === 'aprobada'
+            ? $pdo->prepare("UPDATE liquidaciones SET estado='aprobada', aprobador_id=?, fecha_aprobacion=CURDATE() WHERE id=? AND estado='borrador'")
+            : $pdo->prepare("UPDATE liquidaciones SET estado='pagada', fecha_pago=CURDATE() WHERE id=? AND estado='aprobada'");
+        $s->execute($estado === 'aprobada' ? [currentUser()['id'], $lid] : [$lid]);
+        if (!$s->rowCount()) jsonErr($estado === 'pagada' ? 'Solo una liquidación aprobada se marca como pagada.' : 'La liquidación ya no está pendiente de aprobación.');
         registrarAuditoria($pdo, 'UPDATE', 'liquidaciones', $lid, "Estado liquidación → $estado");
-        jsonOk([], 'Estado actualizado.');
+        jsonOk([], $estado === 'aprobada' ? 'Liquidación autorizada.' : 'Liquidación marcada como pagada.');
     }
 
     if ($_act === 'eliminar') {
@@ -311,6 +312,7 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <?php elseif ($action === 'ver' && $liq): ?>
+<?php $flujoModulo = 'liquidaciones.php'; $flujoId = $liq['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 
 <div class="card mb-3">
   <div class="card-header">
@@ -318,11 +320,8 @@ include __DIR__ . '/includes/header.php';
     <strong><?= htmlspecialchars($liq['numero']) ?></strong> — <?= estadoBadge($liq['estado']) ?>
     <div class="ms-auto d-flex gap-2 no-print">
       <?= botonEditar($pdo, 'liquidaciones.php', (int)$id, 'js:editarLiq(' . (int)$id . ')') ?>
-      <?php if ($liq['estado'] === 'borrador'): ?>
-      <button class="btn btn-sm btn-success" onclick="cambiarEstLiq(<?= $id ?>,'aprobada')">
-        <i class="fas fa-check"></i> Aprobar
-      </button>
-      <?php elseif ($liq['estado'] === 'aprobada'): ?>
+      <?php // Aprobar: desde el panel del flujo (revisar y autorizar), arriba
+      if ($liq['estado'] === 'aprobada'): ?>
       <button class="btn btn-sm btn-info text-white" onclick="cambiarEstLiq(<?= $id ?>,'pagada')">
         <i class="fas fa-money-bill-wave"></i> Marcar Pagada
       </button>

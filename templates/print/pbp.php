@@ -18,7 +18,7 @@ $title  = strtoupper($pbTipos[$doc['tipo']] ?? $doc['tipo']) . ' POR PROYECTO';
 $docNum = $doc['numero'];
 
 // Firmas
-$fPB = loadFirmantes($pdo, 'pb');
+$fPB = firmasProceso($pdo, 'pb', 'planillas_beneficios.php', $id, $doc['estado']);
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';

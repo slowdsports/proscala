@@ -257,8 +257,11 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'cambiar_estado') {
         $pid    = (int)$_POST['id'];
         $estado = $_POST['estado'];
+        // 'aprobada' llega del flujo (validarFlujoAprobacion ya verificó quién autoriza); 'pagada', solo si ya se aprobó
         if (!in_array($estado, ['aprobada', 'pagada'], true)) jsonErr('Estado no válido.');
-        $pdo->prepare("UPDATE planilla_periodos SET estado=? WHERE id=? AND estado <> 'anulada'")->execute([$estado,$pid]);
+        $s = $pdo->prepare("UPDATE planilla_periodos SET estado=? WHERE id=? AND estado " . ($estado === 'pagada' ? "= 'aprobada'" : "IN ('borrador','procesada')"));
+        $s->execute([$estado,$pid]);
+        if (!$s->rowCount()) jsonErr($estado === 'pagada' ? 'Solo una planilla aprobada se marca como pagada.' : 'La planilla ya no está pendiente de aprobación.');
         jsonOk([], 'Estado actualizado.');
     }
 
@@ -363,6 +366,7 @@ include __DIR__ . '/includes/header.php';
 <!-- Detalle de planilla -->
 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
 <div id="print-area">
+  <?php if ($periodo['estado'] !== 'anulada') { $flujoModulo = 'planillas.php'; $flujoId = $periodo['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; } ?>
   <div class="print-header">
     <h4>Proscala — Planilla <?= esPlanillaMensual($periodo) ? 'Mensual' : 'Quincenal' ?></h4>
     <p><?= $meses[$periodo['mes']-1] . ' ' . $periodo['anio'] ?> | <?= htmlspecialchars(nombrePeriodoPlanilla($periodo)) ?></p>
@@ -376,11 +380,8 @@ include __DIR__ . '/includes/header.php';
       <?= htmlspecialchars(nombrePeriodoPlanilla($periodo, true)) ?>
       — <?= estadoBadge($periodo['estado']) ?>
       <div class="ms-auto d-flex gap-2 no-print">
-        <?php if ($periodo['estado'] === 'procesada'): ?>
-        <button class="btn btn-sm btn-success" onclick="cambiarEstado('planillas.php',<?= $periodo['id'] ?>,'aprobada','planilla_periodos',()=>Nav.recargar())">
-          <i class="fas fa-check"></i> Aprobar
-        </button>
-        <?php elseif ($periodo['estado'] === 'aprobada'): ?>
+        <?php // Aprobar: desde el panel del flujo (revisar y autorizar), arriba
+        if ($periodo['estado'] === 'aprobada'): ?>
         <button class="btn btn-sm btn-info text-white" onclick="cambiarEstado('planillas.php',<?= $periodo['id'] ?>,'pagada','planilla_periodos',()=>Nav.recargar())">
           <i class="fas fa-money-bill"></i> Marcar Pagada
         </button>

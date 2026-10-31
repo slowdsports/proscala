@@ -19,7 +19,7 @@ $title  = 'REPORTE CREDIMPULSA';
 $docNum = ($doc['numero'] ? "{$doc['numero']} — " : '') . "{$mes} {$doc['anio']} — {$quin}";
 
 // Firmas
-$fPLC = loadFirmantes($pdo, 'pl');
+$fPLC = firmasProceso($pdo, 'pl', 'planillas.php', $id, $doc['estado']);
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';

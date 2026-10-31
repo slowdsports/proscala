@@ -669,7 +669,7 @@ function registrarPeticion(): void {
     if (!$error && isset(PROCESOS[$script])) {
         $regId = $postId ?: (int)($res[2] ?? 0);
         try {
-            if (in_array($act, ['guardar', 'crear'], true)) registrarParticipacion($GLOBALS['pdo'], $script, $regId);
+            if (in_array($act, ['guardar', 'crear', 'generar'], true)) registrarParticipacion($GLOBALS['pdo'], $script, $regId);
             anotarFlujoTrasPeticion($GLOBALS['pdo'], $script, $act, $regId);
         } catch (Throwable $e) {}
     } elseif (!$error && isset(EDICION_PROCESOS[$script]) && in_array($act, ['guardar', 'crear', 'generar'], true)) {

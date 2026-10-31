@@ -19,6 +19,10 @@ const NOMBRES_PROCESO = [
     'compras_orden.php'     => 'Orden de compra',
     'compras_recepcion.php' => 'Nota de recepción',
     'compras_pago.php'      => 'Orden de pago',
+    'planillas.php'            => 'Planilla de sueldos',
+    'planillas_asignacion.php' => 'Planilla de asignación',
+    'planillas_beneficios.php' => 'Planilla de beneficios',
+    'liquidaciones.php'        => 'Liquidación laboral',
 ];
 
 // Lo pendiente de aprobar se calcula al consultar la campana; se reutiliza durante este tiempo
@@ -171,7 +175,7 @@ function notificarFlujo(PDO $pdo, string $modulo, string $act, int $id): void {
     $def     = PROCESOS[$modulo];
     $estado  = $_POST['estado'] ?? '';
     $quien   = $_SESSION['usuario_nombre'] ?? 'Un usuario';
-    $guardar = in_array($act, ['guardar', 'crear'], true);
+    $guardar = in_array($act, ['guardar', 'crear', 'generar'], true);   // generar: planillas de sueldos
 
     if ($guardar && !(int)($_POST['id'] ?? 0)) {
         avisarPendiente($pdo, $modulo, $id, 'revisar');

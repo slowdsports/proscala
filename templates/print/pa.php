@@ -16,7 +16,7 @@ $title  = 'PLANILLA DE ASIGNACIÓN';
 $docNum = $doc['numero'];
 
 // Firmas
-$fPA = loadFirmantes($pdo, 'pa');
+$fPA = firmasProceso($pdo, 'pa', 'planillas_asignacion.php', $id, $doc['estado']);
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';

@@ -21,6 +21,11 @@ const PROCESOS = [
     // Su estado (completa / parcial / devolución) describe lo recibido: revisar y autorizar no lo cambian
     'compras_recepcion.php' => ['tabla' => 'notas_recepcion',  'docs' => [],                 'autorizado' => null,       'rechazado' => null,        'abiertos' => ['completa', 'parcial', 'devolucion']],
     'compras_pago.php'      => ['tabla' => 'ordenes_pago',     'docs' => ['op'],             'autorizado' => 'aprobada', 'rechazado' => null,        'abiertos' => ['pendiente']],
+    // Planillas y liquidaciones laborales: autorizar las aprueba (y genera su orden de pago)
+    'planillas.php'            => ['tabla' => 'planilla_periodos',   'docs' => ['pl', 'plp', 'plc', 'plv'], 'autorizado' => 'aprobada', 'rechazado' => null, 'abiertos' => ['borrador', 'procesada']],
+    'planillas_asignacion.php' => ['tabla' => 'planilla_asignacion', 'docs' => ['pa', 'pav'],              'autorizado' => 'aprobada', 'rechazado' => null, 'abiertos' => ['borrador']],
+    'planillas_beneficios.php' => ['tabla' => 'planilla_beneficios', 'docs' => ['pb', 'pbp', 'pbv'],       'autorizado' => 'aprobada', 'rechazado' => null, 'abiertos' => ['borrador']],
+    'liquidaciones.php'        => ['tabla' => 'liquidaciones',       'docs' => ['liq'],                    'autorizado' => 'aprobada', 'rechazado' => null, 'abiertos' => ['borrador']],
 ];
 
 // ── Delegación de aprobaciones (tabla delegaciones; se configura en Mi Perfil) ──

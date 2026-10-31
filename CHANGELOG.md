@@ -11,6 +11,12 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.18.0 — 2026-10-30
+**Flujo de aprobación en las planillas y las liquidaciones laborales**
+- **Flujo de aprobación en las planillas y las liquidaciones laborales**: Planillas de Sueldos, de Asignación y de Beneficios, y Liquidaciones, tienen ahora el panel Creado → Revisado → Autorizado en lugar del botón "Aprobar" de un solo paso, con las mismas reglas que los demás procesos (revisión antes de autorizar, jerarquía, nadie aprueba lo propio, delegaciones, avisos, recordatorios y escalamiento; quien la generó la corrige hasta la primera revisión). Autorizar la deja aprobada y genera su orden de pago, como antes; "Marcar pagada" solo es posible una vez aprobada. Una planilla anulada ya no muestra el flujo.
+- Los documentos impresos de las planillas firman con las personas reales del flujo; las aprobadas antes de esta versión conservan sus firmantes configurados.
+- Generar una planilla de sueldos registra quién la generó y avisa a quienes deben revisarla.
+
 ## 1.17.0 — 2026-10-30
 **Flujo de aprobación en cotizaciones y notas de recepción**
 - **Flujo de aprobación en todo el proceso de compra**: el **Resumen de Cotizaciones** y la **Nota de Recepción** tienen ahora el panel Creado → Revisado → Autorizado, como la solicitud, la orden de compra y la de pago (y los anticipos y liquidaciones, que ya lo tenían). Con las mismas reglas: revisión antes de autorizar, jerarquía del organigrama, nadie aprueba lo propio, delegaciones, avisos, recordatorios y escalamiento, y el creador edita hasta la primera revisión. La cotización autorizada queda aprobada y lista para crear la orden de compra (reemplaza el botón "Aprobar" de un solo paso) y puede rechazarse con motivo; en la nota de recepción, revisar y autorizar no cambian su estado (completa, parcial o devolución). El PDF del resumen de cotizaciones lleva las tres firmas del flujo.

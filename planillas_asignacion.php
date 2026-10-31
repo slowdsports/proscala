@@ -69,11 +69,15 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // 'aprobada' llega del flujo (validarFlujoAprobacion ya verificó quién autoriza); 'pagada', solo si ya se aprobó
     if ($_act === 'cambiar_estado') {
         $pid    = (int)$_POST['id'];
-        $estado = in_array($_POST['estado'], ['borrador','aprobada','pagada']) ? $_POST['estado'] : 'borrador';
-        $pdo->prepare("UPDATE planilla_asignacion SET estado=? WHERE id=?")->execute([$estado, $pid]);
-        jsonOk([], 'Estado actualizado.');
+        $estado = $_POST['estado'] ?? '';
+        if (!in_array($estado, ['aprobada', 'pagada'], true)) jsonErr('Estado no válido.');
+        $s = $pdo->prepare("UPDATE planilla_asignacion SET estado=? WHERE id=? AND estado=?");
+        $s->execute([$estado, $pid, $estado === 'pagada' ? 'aprobada' : 'borrador']);
+        if (!$s->rowCount()) jsonErr($estado === 'pagada' ? 'Solo una planilla aprobada se marca como pagada.' : 'La planilla ya no está pendiente de aprobación.');
+        jsonOk([], $estado === 'aprobada' ? 'Planilla autorizada.' : 'Planilla marcada como pagada.');
     }
 
     if ($_act === 'eliminar') {
@@ -153,6 +157,7 @@ include __DIR__ . '/includes/header.php';
 </div></div>
 
 <?php elseif ($action === 'ver' && $periodo): ?>
+<?php $flujoModulo = 'planillas_asignacion.php'; $flujoId = $periodo['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-list-check"></i>
@@ -163,11 +168,8 @@ include __DIR__ . '/includes/header.php';
     <?php endif; ?>
     <?= estadoBadge($periodo['estado']) ?>
     <div class="ms-auto d-flex gap-2">
-      <?php if ($periodo['estado'] === 'borrador'): ?>
-      <button class="btn btn-sm btn-success" onclick="cambiarEstadoPa(<?= $id ?>,'aprobada')">
-        <i class="fas fa-check"></i> Aprobar
-      </button>
-      <?php elseif ($periodo['estado'] === 'aprobada'): ?>
+      <?php // Aprobar: desde el panel del flujo (revisar y autorizar), arriba
+      if ($periodo['estado'] === 'aprobada'): ?>
       <button class="btn btn-sm btn-info text-white" onclick="cambiarEstadoPa(<?= $id ?>,'pagada')">
         <i class="fas fa-money-bill"></i> Marcar Pagada
       </button>

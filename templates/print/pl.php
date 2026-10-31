@@ -18,7 +18,7 @@ $title  = esPlanillaMensual($doc) ? 'PLANILLA MENSUAL' : 'PLANILLA QUINCENAL';
 $docNum = ($doc['numero'] ? "{$doc['numero']} — " : '') . "{$mes} {$doc['anio']} — {$quin}";
 
 // Firmas
-$fPL = loadFirmantes($pdo, 'pl');
+$fPL = firmasProceso($pdo, 'pl', 'planillas.php', $id, $doc['estado']);
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';

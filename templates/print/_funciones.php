@@ -22,6 +22,17 @@ function loadFirmantes(PDO $pdo, string $doc): array {
         WHERE f.documento = ? ORDER BY f.posicion");
     $s->execute([$doc]); return $s->fetchAll();
 }
+/**
+ * Firmas de un proceso que se sumó al flujo después de estar en uso (planillas): con pasos del flujo
+ * o aún pendiente, las personas reales (firmasFlujo); aprobado antes del flujo, los firmantes
+ * configurados de siempre, para no dejar en blanco quién lo revisó y autorizó.
+ */
+function firmasProceso(PDO $pdo, string $doc, string $modulo, int $id, string $estado): array {
+    $base = loadFirmantes($pdo, $doc);
+    if (!pasosFlujoDados($pdo, PROCESOS[$modulo]['tabla'], $id) && !in_array($estado, PROCESOS[$modulo]['abiertos'], true)) return $base;
+    return firmasFlujo($pdo, $base, $modulo, $id);
+}
+
 function sigBlock(array $fs, string $cls = 'cols-3', string $sty = ''): string {
     if (empty($fs)) return '';
     $attr = $sty ? " style=\"{$sty}\"" : '';

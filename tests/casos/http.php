@@ -239,6 +239,11 @@ try {
         try {
             $q = $gen('quincenal');
             afirmar(!empty($q['id']), 'no se generó la quincena: ' . ($q['message'] ?? ''));
+            // Con el flujo: no se aprueba sin revisión (ni quien la generó), ni se paga sin aprobar
+            afirmar(empty($enviar(['_action' => 'cambiar_estado', 'id' => $q['id'], 'estado' => 'aprobada'])['success']), 'se aprobó sin pasar por el flujo');
+            afirmar(empty($enviar(['_action' => 'cambiar_estado', 'id' => $q['id'], 'estado' => 'pagada'])['success']), 'se marcó pagada sin estar aprobada');
+            [, $html] = pedir("$baseUrl/planillas.php?action=ver&id={$q['id']}", $sesAdmin);
+            afirmar(str_contains($html, 'flujo-aprobacion') && !str_contains($html, "'aprobada','planilla_periodos'"), 'la planilla no muestra el flujo o conserva el botón Aprobar de un paso');
             afirmar(str_contains($gen('mensual')['message'] ?? '', 'ya tiene planilla quincenal'), 'con la quincena vigente, la mensual debía rechazarse');
             afirmar(empty($enviar(['_action' => 'anular', 'id' => $q['id'], 'motivo' => '']) ['success']), 'aceptó anular sin motivo');
             $a = $enviar(['_action' => 'anular', 'id' => $q['id'], 'motivo' => 'Prueba automática: se paga mensual']);
@@ -252,7 +257,7 @@ try {
             foreach ($pdo->query("SELECT id FROM planilla_periodos WHERE anio = 2039")->fetchAll(PDO::FETCH_COLUMN) as $id) {
                 $pdo->exec("DELETE pdp FROM planilla_detalle_proyectos pdp JOIN planilla_detalle pd ON pd.id = pdp.detalle_id WHERE pd.periodo_id = $id");
                 $pdo->exec("DELETE FROM planilla_periodos WHERE id = $id");
-                $pdo->exec("DELETE FROM registro_usuarios WHERE tabla = 'planilla_periodos' AND registro_id = $id");
+                foreach (['registro_usuarios', 'notificaciones', 'aprobaciones', 'recordatorios'] as $t) $pdo->exec("DELETE FROM $t WHERE tabla = 'planilla_periodos' AND registro_id = $id");
             }
             $pdo->exec("DELETE FROM auditoria WHERE modulo = 'planillas.php' AND ip IN ('127.0.0.1', '::1') AND (detalle LIKE '%anio=2039%' OR detalle LIKE '%Prueba automática: se paga mensual%')");
         }
