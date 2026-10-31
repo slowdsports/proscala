@@ -745,6 +745,18 @@ body.nav-cargando::before {
 .trace-step-num { font-size: .7rem; font-family: 'Courier New', monospace; font-weight: 700; }
 .trace-step-badge { font-size: .63rem; }
 .trace-arrow { display: flex; align-items: center; padding: 0 .4rem; color: var(--border); font-size: .75rem; flex-shrink: 0; }
+/* Paso con varios documentos (p. ej. una orden de compra por proveedor): cada uno es un enlace */
+.trace-step.multi { pointer-events: auto; }
+.trace-step.multi:hover { background: inherit; }
+.trace-item { display: flex; align-items: center; gap: .3rem; text-decoration: none; color: var(--primary-dark); border-radius: 6px; padding: 1px 6px; }
+.trace-item:hover { background: var(--primary-light); }
+.trace-step.active .trace-item { color: #fff; opacity: .75; }
+.trace-step.active .trace-item.actual { opacity: 1; background: rgba(255, 255, 255, .18); pointer-events: none; }
+.trace-step.active .trace-item:hover { background: rgba(255, 255, 255, .12); opacity: 1; }
+@media (max-width: 767px) {   /* cinco pasos no caben en una fila del celular */
+  .trace-chain { flex-wrap: wrap; }
+  .trace-step { flex: 1 1 33%; border-bottom: 1px solid var(--border); }
+}
 
 /* ── Doc links bar ────────────────────────────────────────────── */
 .doc-links-bar {

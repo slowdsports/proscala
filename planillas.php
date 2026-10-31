@@ -367,6 +367,7 @@ include __DIR__ . '/includes/header.php';
 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
 <div id="print-area">
   <?php if ($periodo['estado'] !== 'anulada') { $flujoModulo = 'planillas.php'; $flujoId = $periodo['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; } ?>
+<?php $cadModulo = 'planillas.php'; $cadId = $periodo['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
   <div class="print-header">
     <h4>Proscala — Planilla <?= esPlanillaMensual($periodo) ? 'Mensual' : 'Quincenal' ?></h4>
     <p><?= $meses[$periodo['mes']-1] . ' ' . $periodo['anio'] ?> | <?= htmlspecialchars(nombrePeriodoPlanilla($periodo)) ?></p>

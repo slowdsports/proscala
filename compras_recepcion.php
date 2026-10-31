@@ -114,6 +114,7 @@ include __DIR__ . '/includes/header.php';
 <?php elseif ($action==='ver' && $nr): ?>
 <?php // Creado → Revisado → Autorizado (config/aprobaciones.php); no cambia el estado de lo recibido
 $flujoModulo = 'compras_recepcion.php'; $flujoId = $nr['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
+<?php $cadModulo = 'compras_recepcion.php'; $cadId = $nr['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <div id="print-area">
 <div class="card mb-3">
   <div class="card-header">

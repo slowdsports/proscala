@@ -182,6 +182,7 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <?php elseif ($action === 'ver' && $prestamo): ?>
+<?php $cadModulo = 'prestamos.php'; $cadId = $prestamo['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-hand-holding-dollar"></i>

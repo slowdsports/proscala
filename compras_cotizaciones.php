@@ -194,6 +194,7 @@ include __DIR__ . '/includes/header.php';
 ?>
 <?php // Creado → Revisado → Autorizado (config/aprobaciones.php): autorizar la deja 'aprobada'
 $flujoModulo = 'compras_cotizaciones.php'; $flujoId = $co['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
+<?php $cadModulo = 'compras_cotizaciones.php'; $cadId = $co['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-file-lines"></i> <?= $co['numero'] ?> — Ref. SC: <?= $co['sc_num'] ?> — <?= estadoBadge($co['estado']) ?>

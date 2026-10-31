@@ -313,6 +313,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php elseif ($action === 'ver' && $liq): ?>
 <?php $flujoModulo = 'liquidaciones.php'; $flujoId = $liq['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
+<?php $cadModulo = 'liquidaciones.php'; $cadId = $liq['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 
 <div class="card mb-3">
   <div class="card-header">

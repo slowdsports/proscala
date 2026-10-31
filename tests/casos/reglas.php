@@ -394,3 +394,52 @@ prueba('Flujo de aprobación: todo proceso con flujo muestra su panel (compras y
         afirmar(isset(PROCESOS[$m]), "$m (compras / viáticos) no tiene flujo de aprobación");
     }
 });
+require_once RAIZ . '/config/cadena.php';
+/** Inserta una fila con los valores dados y relleno para las columnas obligatorias sin valor por omisión. */
+function insertarMinimo(PDO $pdo, string $tabla, array $v): int {
+    foreach ($pdo->query("SHOW COLUMNS FROM `$tabla`")->fetchAll() as $c) {
+        if (array_key_exists($c['Field'], $v) || $c['Extra'] === 'auto_increment' || $c['Null'] === 'YES' || $c['Default'] !== null) continue;
+        $t = strtolower($c['Type']);
+        $v[$c['Field']] = str_starts_with($t, 'date') || str_starts_with($t, 'timestamp') ? date('Y-m-d') : (preg_match('/int|decimal/', $t) ? 1
+            : (str_starts_with($t, 'enum') ? trim(explode(',', substr($t, 5))[0], "')") : 'ZZ ' . $c['Field']));
+    }
+    $pdo->prepare("INSERT INTO `$tabla` (`" . implode('`,`', array_keys($v)) . "`) VALUES (" . implode(',', array_fill(0, count($v), '?')) . ")")->execute(array_values($v));
+    return (int)$pdo->lastInsertId();
+}
+prueba('Cadena del proceso: la misma desde cualquier documento, con todas las órdenes y sin las anuladas', function () use ($pdo) {
+    $pdo->beginTransaction();
+    try {
+        $emp  = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $prov = (int)$pdo->query("SELECT id FROM proveedores ORDER BY id LIMIT 1")->fetchColumn();
+        $sc  = insertarMinimo($pdo, 'solicitud_compra', ['numero' => 'ZZSC-1', 'solicitante_id' => $emp, 'estado' => 'adjudicada']);
+        $co  = insertarMinimo($pdo, 'cotizaciones', ['numero' => 'ZZCO-1', 'solicitud_id' => $sc, 'estado' => 'aprobada']);
+        $ocA = insertarMinimo($pdo, 'ordenes_compra', ['numero' => 'ZZOC-1-A', 'solicitud_id' => $sc, 'cotizacion_id' => $co, 'proveedor_id' => $prov, 'estado' => 'emitida']);
+        $ocB = insertarMinimo($pdo, 'ordenes_compra', ['numero' => 'ZZOC-1-B', 'solicitud_id' => null, 'cotizacion_id' => $co, 'proveedor_id' => $prov, 'estado' => 'emitida']);
+        $nr  = insertarMinimo($pdo, 'notas_recepcion', ['numero' => 'ZZNR-1', 'orden_compra_id' => $ocA, 'proveedor_id' => $prov]);
+        $op  = insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-1', 'orden_compra_id' => $ocB, 'estado' => 'pendiente']);
+        insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-1-ANULADA', 'origen_tabla' => 'ordenes_compra', 'origen_id' => $ocA, 'estado' => 'anulada']);
+        $esperado = [['ZZSC-1'], ['ZZCO-1'], ['ZZOC-1-A', 'ZZOC-1-B'], ['ZZNR-1'], ['ZZOP-1']];
+        foreach (['compras_solicitud.php' => $sc, 'compras_cotizaciones.php' => $co, 'compras_orden.php' => $ocB,
+                  'compras_recepcion.php' => $nr, 'compras_pago.php' => $op] as $m => $id) {
+            iguales($esperado, array_map(fn($p) => array_column($p['docs'], 'numero'), cadenaProceso($pdo, $m, $id)), "cadena de compras desde $m");
+        }
+        // Viáticos: anticipo → liquidación → órdenes de pago (la del anticipo y la del reembolso)
+        $gv  = insertarMinimo($pdo, 'gastos_viaje', ['numero' => 'ZZGV-1', 'empleado_id' => $emp, 'tipo' => 'viaje', 'estado' => 'liquidada']);
+        $sg  = insertarMinimo($pdo, 'solicitud_gastos', ['numero' => 'ZZSG-1', 'empleado_id' => $emp, 'viaje_id' => $gv, 'estado' => 'aprobada']);
+        $op1 = insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-GV', 'origen_tabla' => 'gastos_viaje', 'origen_id' => $gv, 'estado' => 'pagada']);
+        insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-SG', 'solicitud_gastos_id' => $sg, 'estado' => 'pendiente']);
+        foreach (['gastos_viajes.php' => $gv, 'gastos_solicitud.php' => $sg, 'compras_pago.php' => $op1] as $m => $id) {
+            iguales([['ZZGV-1'], ['ZZSG-1'], ['ZZOP-GV', 'ZZOP-SG']], array_map(fn($p) => array_column($p['docs'], 'numero'), cadenaProceso($pdo, $m, $id)), "cadena de viáticos desde $m");
+        }
+        // Otros: proceso → su orden de pago
+        $cc = insertarMinimo($pdo, 'caja_chica', ['numero' => 'ZZCC-1', 'empleado_id' => $emp]);
+        $opc = insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-CC', 'origen_tabla' => 'caja_chica', 'origen_id' => $cc, 'estado' => 'pagada']);
+        iguales([['ZZCC-1'], ['ZZOP-CC']], array_map(fn($p) => array_column($p['docs'], 'numero'), cadenaProceso($pdo, 'compras_pago.php', $opc)), 'cadena de caja chica desde su orden de pago');
+    } finally { $pdo->rollBack(); }
+});
+
+prueba('Cadena del proceso: la muestran todos los módulos de compras, viáticos y los que generan orden de pago', function () {
+    foreach (array_unique(array_merge(array_keys(CADENA_COMPRAS), array_keys(CADENA_VIATICOS), array_keys(CADENA_ORIGENES))) as $m) {
+        afirmar(preg_match('/\$cadModulo\s*=\s*\'' . preg_quote($m, '/') . '\'.*?cadena_proceso\.php/s', (string)file_get_contents(RAIZ . "/$m")), "$m no muestra la cadena del proceso");
+    }
+});

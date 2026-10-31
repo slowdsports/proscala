@@ -49,7 +49,6 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sc = null; $detalle = [];
-$traza = ['co'=>null,'oc'=>null,'op'=>null];
 if (in_array($action,['ver','editar']) && $id) {
     $s=$pdo->prepare("SELECT sc.*,CONCAT(e.nombre,' ',e.apellidos) as sol_nombre,p.nombre as proy_nombre
         FROM solicitud_compra sc JOIN empleados e ON sc.solicitante_id=e.id
@@ -57,19 +56,6 @@ if (in_array($action,['ver','editar']) && $id) {
     $s->execute([$id]); $sc=$s->fetch();
     $s2=$pdo->prepare("SELECT * FROM solicitud_compra_detalle WHERE solicitud_id=?");
     $s2->execute([$id]); $detalle=$s2->fetchAll();
-    if ($action==='ver' && $sc) {
-        // Cotización
-        $t=$pdo->prepare("SELECT id,numero,estado FROM cotizaciones WHERE solicitud_id=? ORDER BY id DESC LIMIT 1");
-        $t->execute([$id]); $traza['co']=$t->fetch();
-        // Orden de compra
-        $t2=$pdo->prepare("SELECT id,numero,estado FROM ordenes_compra WHERE solicitud_id=? ORDER BY id DESC LIMIT 1");
-        $t2->execute([$id]); $traza['oc']=$t2->fetch();
-        // Orden de pago (vía OC)
-        if ($traza['oc']) {
-            $t3=$pdo->prepare("SELECT id,numero,estado FROM ordenes_pago WHERE orden_compra_id=? ORDER BY id DESC LIMIT 1");
-            $t3->execute([$traza['oc']['id']]); $traza['op']=$t3->fetch();
-        }
-    }
 }
 $empleados=$pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
 $proyectos=$pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo'")->fetchAll();
@@ -132,57 +118,8 @@ include __DIR__ . '/includes/header.php';
 <?php elseif ($action==='ver' && $sc): ?>
 <?php $flujoModulo = 'compras_solicitud.php'; $flujoId = $sc['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 
-<!-- Cadena de proceso -->
-<div class="trace-chain">
-  <div class="trace-step active">
-    <i class="fas fa-cart-plus"></i>
-    <span class="trace-step-label">Solicitud</span>
-    <span class="trace-step-num"><?= $sc['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($sc['estado']) ?></span>
-  </div>
-  <?php if($traza['co']): ?>
-  <a href="<?= BASE_URL ?>compras_cotizaciones.php?action=ver&id=<?= $traza['co']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-file-lines"></i>
-    <span class="trace-step-label">Cotización</span>
-    <span class="trace-step-num"><?= $traza['co']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['co']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-file-lines"></i>
-    <span class="trace-step-label">Cotización</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-  <?php if($traza['oc']): ?>
-  <a href="<?= BASE_URL ?>compras_orden.php?action=ver&id=<?= $traza['oc']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-file-circle-check"></i>
-    <span class="trace-step-label">Orden de Compra</span>
-    <span class="trace-step-num"><?= $traza['oc']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['oc']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-file-circle-check"></i>
-    <span class="trace-step-label">Orden de Compra</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-  <?php if($traza['op']): ?>
-  <a href="<?= BASE_URL ?>compras_pago.php?action=ver&id=<?= $traza['op']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-money-bill-transfer"></i>
-    <span class="trace-step-label">Orden de Pago</span>
-    <span class="trace-step-num"><?= $traza['op']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['op']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-money-bill-transfer"></i>
-    <span class="trace-step-label">Orden de Pago</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-</div>
+<?php // Cadena del proceso (config/cadena.php)
+$cadModulo = 'compras_solicitud.php'; $cadId = $sc['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 
 <div id="print-area">
 <div class="card mb-3">

@@ -158,6 +158,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php elseif ($action === 'ver' && $periodo): ?>
 <?php $flujoModulo = 'planillas_asignacion.php'; $flujoId = $periodo['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
+<?php $cadModulo = 'planillas_asignacion.php'; $cadId = $periodo['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-list-check"></i>

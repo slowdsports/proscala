@@ -166,22 +166,8 @@ include __DIR__ . '/includes/header.php';
 <?php $flujoModulo = 'gastos_solicitud.php'; $flujoId = $sg['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 <!-- ── VIEW ── -->
 
-<?php if ($viaje_link): ?>
-<div class="trace-chain mb-3">
-  <a href="<?= BASE_URL ?>gastos_viajes.php?action=ver&id=<?= $viaje_link['id'] ?>" class="trace-step linked">
-    <i class="fas <?= tipoAnticipoIcon($viaje_link['tipo']) ?>"></i>
-    <span class="trace-step-label">Anticipo<?= $viaje_link['tipo']==='compra' ? ' de Compra' : ' de Viaje' ?></span>
-    <span class="trace-step-num"><?= $viaje_link['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($viaje_link['estado']) ?></span>
-  </a>
-  <div class="trace-step active">
-    <i class="fas fa-file-invoice-dollar"></i>
-    <span class="trace-step-label">Liquidación de Gastos</span>
-    <span class="trace-step-num"><?= $sg['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($sg['estado']) ?></span>
-  </div>
-</div>
-<?php endif; ?>
+<?php // Cadena del proceso (config/cadena.php)
+$cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 
 <div id="print-area">
 <div class="card mb-3">

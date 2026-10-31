@@ -204,84 +204,8 @@ include __DIR__ . '/includes/header.php';
 <?php elseif ($action==='ver' && $op): ?>
 <?php $flujoModulo = 'compras_pago.php'; $flujoId = $op['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
 
-<!-- Cadena de proceso: viáticos o compras -->
-<?php if ($traza['gv'] || $traza['sg']): ?>
-<div class="trace-chain mb-3">
-  <?php if($traza['gv']): ?>
-  <a href="<?= BASE_URL ?>gastos_viajes.php?action=ver&id=<?= $traza['gv']['id'] ?>" class="trace-step linked">
-    <i class="fas <?= tipoAnticipoIcon($traza['gv']['tipo'] ?? 'viaje') ?>"></i>
-    <span class="trace-step-label">Anticipo<?= ($traza['gv']['tipo'] ?? '') === 'compra' ? ' de Compra' : ' de Viaje' ?></span>
-    <span class="trace-step-num"><?= $traza['gv']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['gv']['estado']) ?></span>
-  </a>
-  <?php endif; ?>
-  <?php if($traza['sg']): ?>
-  <a href="<?= BASE_URL ?>gastos_solicitud.php?action=ver&id=<?= $traza['sg']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-file-invoice-dollar"></i>
-    <span class="trace-step-label">Liquidación de Gastos</span>
-    <span class="trace-step-num"><?= $traza['sg']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['sg']['estado']) ?></span>
-  </a>
-  <?php endif; ?>
-  <div class="trace-step active">
-    <i class="fas fa-money-bill-transfer"></i>
-    <span class="trace-step-label">Orden de Pago</span>
-    <span class="trace-step-num"><?= $op['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($op['estado']) ?></span>
-  </div>
-</div>
-<?php else: ?>
-<div class="trace-chain">
-  <?php if($traza['sc']): ?>
-  <a href="<?= BASE_URL ?>compras_solicitud.php?action=ver&id=<?= $traza['sc']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-cart-plus"></i>
-    <span class="trace-step-label">Solicitud</span>
-    <span class="trace-step-num"><?= $traza['sc']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['sc']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-cart-plus"></i>
-    <span class="trace-step-label">Solicitud</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-  <?php if($traza['co']): ?>
-  <a href="<?= BASE_URL ?>compras_cotizaciones.php?action=ver&id=<?= $traza['co']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-file-lines"></i>
-    <span class="trace-step-label">Cotización</span>
-    <span class="trace-step-num"><?= $traza['co']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['co']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-file-lines"></i>
-    <span class="trace-step-label">Cotización</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-  <?php if($traza['oc']): ?>
-  <a href="<?= BASE_URL ?>compras_orden.php?action=ver&id=<?= $traza['oc']['id'] ?>" class="trace-step linked">
-    <i class="fas fa-file-circle-check"></i>
-    <span class="trace-step-label">Orden de Compra</span>
-    <span class="trace-step-num"><?= $traza['oc']['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($traza['oc']['estado']) ?></span>
-  </a>
-  <?php else: ?>
-  <div class="trace-step inactive">
-    <i class="fas fa-file-circle-check"></i>
-    <span class="trace-step-label">Orden de Compra</span>
-    <span class="trace-step-num">—</span>
-  </div>
-  <?php endif; ?>
-  <div class="trace-step active">
-    <i class="fas fa-money-bill-transfer"></i>
-    <span class="trace-step-label">Orden de Pago</span>
-    <span class="trace-step-num"><?= $op['numero'] ?></span>
-    <span class="trace-step-badge"><?= estadoBadge($op['estado']) ?></span>
-  </div>
-</div>
-<?php endif; ?>
+<?php // Cadena del proceso (config/cadena.php)
+$cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 
 <div id="print-area">
 <div class="card">

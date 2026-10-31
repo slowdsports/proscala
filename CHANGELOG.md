@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.19.0 — 2026-10-30
+**Cadena del proceso completa en todos los documentos**
+- **Cadena del proceso en todos los documentos** (`config/cadena.php`, `includes/cadena_proceso.php`): desde cualquier documento se ven todos los de su mismo proceso, con el actual resaltado y enlaces a los demás. Compras: Solicitud → Cotización → Orden(es) de Compra → **Nota(s) de Recepción** → Orden(es) de Pago; viáticos: Anticipo → Liquidación / Reembolso → Orden(es) de Pago; planillas, liquidaciones laborales, préstamos y caja chica: el proceso → su Orden de Pago. Ahora también en Cotizaciones, Nota de Recepción, Anticipos, las planillas, Liquidaciones, Préstamos y Caja Chica. Un paso con varios documentos los muestra todos (p. ej. una orden de compra por proveedor en la compra por artículo; antes solo aparecía una) y las órdenes de pago anuladas no se muestran. En el celular los pasos se acomodan en varias filas.
+- Pruebas automáticas: 41 (2 nuevas: la cadena es la misma desde cualquier documento, y la muestran todos los módulos).
+
 ## 1.18.0 — 2026-10-30
 **Flujo de aprobación en las planillas y las liquidaciones laborales**
 - **Flujo de aprobación en las planillas y las liquidaciones laborales**: Planillas de Sueldos, de Asignación y de Beneficios, y Liquidaciones, tienen ahora el panel Creado → Revisado → Autorizado en lugar del botón "Aprobar" de un solo paso, con las mismas reglas que los demás procesos (revisión antes de autorizar, jerarquía, nadie aprueba lo propio, delegaciones, avisos, recordatorios y escalamiento; quien la generó la corrige hasta la primera revisión). Autorizar la deja aprobada y genera su orden de pago, como antes; "Marcar pagada" solo es posible una vez aprobada. Una planilla anulada ya no muestra el flujo.

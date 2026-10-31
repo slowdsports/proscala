@@ -144,6 +144,7 @@ include __DIR__ . '/includes/header.php';
 
 <?php elseif ($action === 'ver' && $gv): ?>
 <?php $flujoModulo = 'gastos_viajes.php'; $flujoId = $gv['id']; include __DIR__ . '/includes/flujo_aprobacion.php'; ?>
+<?php $cadModulo = 'gastos_viajes.php'; $cadId = $gv['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <div id="print-area">
 <div class="card mb-3">
   <div class="card-header">

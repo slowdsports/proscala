@@ -289,6 +289,7 @@ include __DIR__ . '/includes/header.php';
   $pctConsumo = $cc['anticipo'] > 0 ? min(100, round($cc['total_gastos'] / $cc['anticipo'] * 100, 1)) : 100;
   $puedeL     = $cc['estado'] === 'abierta' && ($cc['anticipo'] <= 0 || $cc['total_gastos'] >= $cc['anticipo'] * 0.80);
 ?>
+<?php $cadModulo = 'caja_chica.php'; $cadId = $cc['id']; include __DIR__ . '/includes/cadena_proceso.php'; ?>
 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
 
 <div class="card mb-3">
