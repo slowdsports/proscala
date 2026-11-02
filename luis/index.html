@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f7fb">
+  <title>Calculadora de honorarios</title>
+  <style>
+    :root {
+      --primary: #6546d7;
+      --primary-dark: #5234c2;
+      --text: #202638;
+      --muted: #70798b;
+      --border: #e3e6ee;
+      --surface: #ffffff;
+      --background: #f6f7fb;
+      --soft: #f7f5ff;
+      --danger: #b42318;
+      --success: #16794b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 38px 16px;
+      background: var(--background);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .shell { width: 100%; max-width: 790px; margin: 0 auto; }
+    .topline { margin: 0 0 18px 2px; color: var(--primary); font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .card {
+      padding: 30px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 12px 36px rgba(27, 33, 54, .055);
+    }
+    h1 { margin: 0; font-size: clamp(23px, 4vw, 29px); letter-spacing: -.035em; }
+    .subtitle { margin: 9px 0 27px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .section-label { margin: 0 0 14px; font-size: 13px; font-weight: 750; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+    .field label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
+    .input-wrap { position: relative; }
+    .field input {
+      width: 100%; min-height: 47px; padding: 11px 42px 11px 13px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: #fff; color: var(--text); font: inherit; font-size: 15px;
+      outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .field input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(101,70,215,.12); }
+    .suffix { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+    .hint { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 25px; }
+    button {
+      min-height: 42px; padding: 10px 16px; border: 0; border-radius: 10px;
+      font: inherit; font-size: 13px; font-weight: 750; cursor: pointer;
+      transition: transform .12s, background .12s;
+    }
+    button:active { transform: translateY(1px); }
+    .primary { background: var(--primary); color: white; }
+    .primary:hover { background: var(--primary-dark); }
+    .secondary { background: #eff0f5; color: #394154; }
+    .secondary:hover { background: #e6e8ef; }
+    .results { padding-top: 23px; border-top: 1px solid var(--border); }
+    .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 15px; }
+    .results-head h2 { margin: 0; font-size: 16px; }
+    .currency { color: var(--muted); font-size: 11px; }
+    .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+    .result {
+      min-width: 0; padding: 15px; border: 1px solid #eceaf8;
+      border-radius: 12px; background: var(--soft);
+    }
+    .result span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 11px; font-weight: 650; }
+    .result strong { display: block; overflow-wrap: anywhere; font-size: clamp(17px, 3vw, 21px); font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+    .result.total { background: #f2efff; border-color: #e4ddff; }
+    .message { min-height: 20px; margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .message.error { color: var(--danger); }
+    .message.success { color: var(--success); }
+    .formula { margin: 22px 0 0; padding-top: 17px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; line-height: 1.65; }
+    .formula code { color: #4d3ba1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    footer { margin: 16px 4px 0; color: #8a91a0; font-size: 11px; text-align: center; }
+    @media (max-width: 560px) {
+      body { padding: 20px 12px; }
+      .card { padding: 21px 17px; border-radius: 15px; }
+      .fields, .result-grid { grid-template-columns: 1fr; }
+      .actions button { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topline">Herramienta financiera</div>
+    <section class="card">
+      <h1>Calculadora de honorarios</h1>
+      <p class="subtitle">
+        Ingresa dos datos que conozcas. La calculadora determinará automáticamente
+        los otros dos valores del desglose.
+      </p>
+
+      <p class="section-label">Datos de cálculo</p>
+      <div class="fields">
+        <div class="field">
+          <label for="rate">Porcentaje de retención</label>
+          <div class="input-wrap">
+            <input id="rate" type="number" min="0" max="99.999999" step="any" placeholder="12.5">
+            <span class="suffix">%</span>
+          </div>
+          <div class="hint">Porcentaje aplicado sobre el monto bruto.</div>
+        </div>
+        <div class="field">
+          <label for="net">Honorarios netos / líquidos</label>
+          <div class="input-wrap">
+            <input id="net" type="number" min="0" step="any" placeholder="8500.00">
+            <span class="suffix">L</span>
+          </div>
+          <div class="hint">Lo que recibirá la persona después de la retención.</div>
+        </div>
+        <div class="field">
+          <label for="gross">Monto bruto / total antes de retención</label>
+          <div class="input-wrap">
+            <input id="gross" type="number" min="0" step="any" placeholder="9714.29">
+            <span class="suffix">L</span>
+          </div>
+          <div class="hint">Monto completo antes de descontar la retención.</div>
+        </div>
+        <div class="field">
+          <label for="withholding">Retención</label>
+          <div class="input-wrap">
+            <input id="withholding" type="number" min="0" step="any" placeholder="1214.29">
+            <span class="suffix">L</span>
+          </div>
+          <div class="hint">Importe retenido sobre los honorarios brutos.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="calculate" type="button">Calcular desglose</button>
+        <button class="secondary" id="clear" type="button">Limpiar campos</button>
+      </div>
+
+      <section class="results" aria-live="polite">
+        <div class="results-head">
+          <h2>Resultado del cálculo</h2>
+          <span class="currency">Moneda: HNL (Lempiras)</span>
+        </div>
+        <div class="result-grid">
+          <div class="result"><span>Honorarios netos</span><strong id="outNet">—</strong></div>
+          <div class="result total"><span>Monto bruto / total</span><strong id="outGross">—</strong></div>
+          <div class="result"><span>Retención</span><strong id="outWithholding">—</strong></div>
+          <div class="result"><span>Porcentaje de retención</span><strong id="outRate">—</strong></div>
+        </div>
+        <div class="message" id="message">Ingresa exactamente dos valores conocidos y deja vacíos los otros dos.</div>
+      </section>
+
+      <p class="formula">
+        <strong>Fórmula base:</strong>
+        <code>Bruto = Neto ÷ (1 − porcentaje de retención)</code>.
+        La retención se calcula sobre el monto bruto. Los importes se muestran redondeados
+        a dos decimales.
+      </p>
+    </section>
+    <footer>Calculadora de honorarios · Funciona localmente en tu navegador</footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const fields = {
+        rate: document.getElementById("rate"),
+        net: document.getElementById("net"),
+        gross: document.getElementById("gross"),
+        withholding: document.getElementById("withholding")
+      };
+
+      const outputs = {
+        net: document.getElementById("outNet"),
+        gross: document.getElementById("outGross"),
+        withholding: document.getElementById("outWithholding"),
+        rate: document.getElementById("outRate")
+      };
+
+      const message = document.getElementById("message");
+
+      const money = value => new Intl.NumberFormat("es-HN", {
+        style: "currency",
+        currency: "HNL",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(value);
+
+      const percentage = value => `${new Intl.NumberFormat("es-HN", {
+        maximumFractionDigits: 6
+      }).format(value)}%`;
+
+      function readValues() {
+        const values = {};
+        for (const [key, input] of Object.entries(fields)) {
+          const raw = input.value.trim();
+          values[key] = raw === "" ? null : Number(raw);
+
+          if (values[key] !== null && !Number.isFinite(values[key])) {
+            throw new Error("Verifica los valores ingresados.");
+          }
+          if (values[key] !== null && values[key] < 0) {
+            throw new Error("No se permiten valores negativos.");
+          }
+        }
+        return values;
+      }
+
+      function calculate() {
+        try {
+          const v = readValues();
+          const known = Object.keys(v).filter(key => v[key] !== null);
+
+          if (known.length !== 2) {
+            throw new Error("Debes ingresar exactamente dos valores y dejar vacíos los otros dos.");
+          }
+
+          let { rate, net, gross, withholding } = v;
+          const has = key => v[key] !== null;
+
+          // Las relaciones son: bruto = neto + retención;
+          // retención = bruto × (porcentaje / 100).
+          if (has("rate") && has("net")) {
+            if (rate >= 100) throw new Error("El porcentaje debe ser menor que 100%.");
+            gross = net / (1 - rate / 100);
+            withholding = gross - net;
+          } else if (has("rate") && has("gross")) {
+            if (rate >= 100) throw new Error("El porcentaje debe ser menor que 100%.");
+            withholding = gross * rate / 100;
+            net = gross - withholding;
+          } else if (has("rate") && has("withholding")) {
+            if (rate <= 0 || rate >= 100) {
+              throw new Error("Para calcular con una retención en lempiras, el porcentaje debe ser mayor que 0% y menor que 100%.");
+            }
+            gross = withholding / (rate / 100);
+            net = gross - withholding;
+          } else if (has("net") && has("gross")) {
+            if (gross <= 0) throw new Error("El monto bruto debe ser mayor que cero.");
+            withholding = gross - net;
+            rate = withholding / gross * 100;
+          } else if (has("net") && has("withholding")) {
+            gross = net + withholding;
+            if (gross <= 0) throw new Error("El monto bruto debe ser mayor que cero.");
+            rate = withholding / gross * 100;
+          } else if (has("gross") && has("withholding")) {
+            if (gross <= 0) throw new Error("El monto bruto debe ser mayor que cero.");
+            net = gross - withholding;
+            rate = withholding / gross * 100;
+          }
+
+          if (![rate, net, gross, withholding].every(Number.isFinite)) {
+            throw new Error("No fue posible determinar todos los valores.");
+          }
+          if (rate < 0 || rate >= 100) {
+            throw new Error("El porcentaje calculado debe ser igual o mayor que 0% y menor que 100%.");
+          }
+          if (net < 0 || gross < 0 || withholding < 0) {
+            throw new Error("Los datos no son consistentes. El neto no puede superar el monto bruto.");
+          }
+          if (Math.abs(gross - net - withholding) > 0.0051) {
+            throw new Error("Los datos no son consistentes. Comprueba los importes ingresados.");
+          }
+
+          outputs.net.textContent = money(net);
+          outputs.gross.textContent = money(gross);
+          outputs.withholding.textContent = money(withholding);
+          outputs.rate.textContent = percentage(rate);
+          message.className = "message success";
+          message.textContent = "Cálculo realizado correctamente. Los importes se muestran redondeados a dos decimales.";
+        } catch (error) {
+          Object.values(outputs).forEach(output => output.textContent = "—");
+          message.className = "message error";
+          message.textContent = error.message;
+        }
+      }
+
+      function clearFields() {
+        Object.values(fields).forEach(input => input.value = "");
+        Object.values(outputs).forEach(output => output.textContent = "—");
+        message.className = "message";
+        message.textContent = "Ingresa exactamente dos valores conocidos y deja vacíos los otros dos.";
+        fields.rate.focus();
+      }
+
+      document.getElementById("calculate").addEventListener("click", calculate);
+      document.getElementById("clear").addEventListener("click", clearFields);
+
+      Object.values(fields).forEach(input => {
+        input.addEventListener("keydown", event => {
+          if (event.key === "Enter") calculate();
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
