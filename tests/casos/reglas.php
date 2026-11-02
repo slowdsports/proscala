@@ -418,7 +418,8 @@ prueba('Cadena del proceso: la misma desde cualquier documento, con todas las ó
         $nr  = insertarMinimo($pdo, 'notas_recepcion', ['numero' => 'ZZNR-1', 'orden_compra_id' => $ocA, 'proveedor_id' => $prov]);
         $op  = insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-1', 'orden_compra_id' => $ocB, 'estado' => 'pendiente']);
         insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-1-ANULADA', 'origen_tabla' => 'ordenes_compra', 'origen_id' => $ocA, 'estado' => 'anulada']);
-        $esperado = [['ZZSC-1'], ['ZZCO-1'], ['ZZOC-1-A', 'ZZOC-1-B'], ['ZZNR-1'], ['ZZOP-1']];
+        // La orden de pago va antes de la nota de recepción
+        $esperado = [['ZZSC-1'], ['ZZCO-1'], ['ZZOC-1-A', 'ZZOC-1-B'], ['ZZOP-1'], ['ZZNR-1']];
         foreach (['compras_solicitud.php' => $sc, 'compras_cotizaciones.php' => $co, 'compras_orden.php' => $ocB,
                   'compras_recepcion.php' => $nr, 'compras_pago.php' => $op] as $m => $id) {
             iguales($esperado, array_map(fn($p) => array_column($p['docs'], 'numero'), cadenaProceso($pdo, $m, $id)), "cadena de compras desde $m");
@@ -436,6 +437,20 @@ prueba('Cadena del proceso: la misma desde cualquier documento, con todas las ó
         $opc = insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-CC', 'origen_tabla' => 'caja_chica', 'origen_id' => $cc, 'estado' => 'pagada']);
         iguales([['ZZCC-1'], ['ZZOP-CC']], array_map(fn($p) => array_column($p['docs'], 'numero'), cadenaProceso($pdo, 'compras_pago.php', $opc)), 'cadena de caja chica desde su orden de pago');
     } finally { $pdo->rollBack(); }
+});
+
+prueba('Compras: la nota de recepción solo se registra sobre una orden de compra con orden de pago vigente', function () use ($pdo) {
+    $pdo->beginTransaction();
+    try {
+        $prov = (int)$pdo->query("SELECT id FROM proveedores ORDER BY id LIMIT 1")->fetchColumn();
+        $oc = insertarMinimo($pdo, 'ordenes_compra', ['numero' => 'ZZOC-NR', 'proveedor_id' => $prov, 'estado' => 'emitida']);
+        afirmar(!compraTieneOrdenPago($pdo, $oc), 'sin orden de pago no debe permitir la recepción');
+        insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-NR-A', 'origen_tabla' => 'ordenes_compra', 'origen_id' => $oc, 'estado' => 'anulada']);
+        afirmar(!compraTieneOrdenPago($pdo, $oc), 'una orden de pago anulada no cuenta');
+        insertarMinimo($pdo, 'ordenes_pago', ['numero' => 'ZZOP-NR', 'origen_tabla' => 'ordenes_compra', 'origen_id' => $oc, 'estado' => 'pendiente']);
+        afirmar(compraTieneOrdenPago($pdo, $oc), 'con la orden de pago automática sí se permite');
+    } finally { $pdo->rollBack(); }
+    afirmar(str_contains((string)file_get_contents(RAIZ . '/compras_recepcion.php'), 'compraTieneOrdenPago'), 'compras_recepcion.php no valida la orden de pago al guardar');
 });
 
 prueba('Cadena del proceso: la muestran todos los módulos de compras, viáticos y los que generan orden de pago', function () {

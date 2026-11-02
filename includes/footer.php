@@ -37,5 +37,5 @@
 <script data-pagina><?= $extraJs ?></script>
 <script>Nav.terminarCaptura();</script>
 <?php endif; ?>
-</body>
+<!--/email_off--></body>
 </html>

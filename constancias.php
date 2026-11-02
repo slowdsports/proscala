@@ -16,6 +16,14 @@ $TIPOS = [
 $empleados = $pdo->query("SELECT e.*, CONCAT(nombre,' ',apellidos) AS nombre_completo
     FROM empleados e WHERE activo=1 ORDER BY apellidos, nombre")->fetchAll();
 
+// Quien genera la constancia es quien la firma (templates/print/constancia.php)
+$firmante = $_SESSION['usuario_nombre'] ?? '';
+if (!empty($_SESSION['empleado_id'])) {
+    $s = $pdo->prepare("SELECT CONCAT(nombre,' ',apellidos) FROM empleados WHERE id = ?");
+    $s->execute([$_SESSION['empleado_id']]);
+    $firmante = $s->fetchColumn() ?: $firmante;
+}
+
 $config = getAllConfig($pdo);
 $org    = $config['nombre_organizacion'] ?? 'Proscala';
 $orgFull= $config['nombre_completo'] ?? '';
@@ -28,7 +36,8 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <p style="font-size:.85rem;color:var(--text-2);margin-bottom:1.5rem">
-  Genere constancias y cartas de referencia para los empleados. Cada documento se produce como PDF firmado.
+  Genere constancias y cartas de referencia para los empleados. Cada documento se produce como PDF
+  firmado por quien lo genera<?php if ($firmante): ?> (<strong><?= htmlspecialchars($firmante) ?></strong>)<?php endif; ?>.
 </p>
 
 <div class="row g-4">

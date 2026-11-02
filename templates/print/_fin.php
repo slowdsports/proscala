@@ -88,5 +88,5 @@ if (new URLSearchParams(location.search).get('auto') === '1') {
   window.addEventListener('load', () => setTimeout(downloadPdf, 400));
 }
 </script>
-</body>
+<!--/email_off--></body>
 </html>

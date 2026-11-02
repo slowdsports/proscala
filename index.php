@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Módulos del sistema (las etiquetas son los nombres que verá en el menú)
 $modulos = [
     ['fa-cart-shopping', '#1B6BA8', 'Compras', 'Del pedido al pago, con cada documento enlazado al anterior y el mismo número en todo el proceso.',
-        ['Solicitud de compra', 'Cotizaciones', 'Orden de compra', 'Nota de recepción', 'Orden de pago']],
+        ['Solicitud de compra', 'Cotizaciones', 'Orden de compra', 'Orden de pago', 'Nota de recepción']],
     ['fa-money-check-dollar', '#43A047', 'Planillas', 'Planillas quincenales con IHSS, RAP e ISR calculados, distribución por proyecto y recibos firmables.',
         ['Quincenal', 'Asignación', 'Décimo tercer y cuarto mes', 'Recibos']],
     ['fa-hand-holding-dollar', '#8b5cf6', 'Anticipos y liquidaciones', 'Viáticos y compras con anticipo, su liquidación con facturas y el reembolso que corresponda.',
@@ -114,7 +114,7 @@ $modulos = [
   <link rel="stylesheet" href="<?= recurso('assets/vendor/fontawesome/css/all.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/landing.css') ?>">
 </head>
-<body>
+<body><!--email_off--><?php /* Cloudflare: no ofuscar los correos (cdn-cgi/l/email-protection) */ ?>
 
 <a class="solo-lectores" href="#contenido">Ir al contenido</a>
 
@@ -457,5 +457,5 @@ $modulos = [
   });
 })();
 </script>
-</body>
+<!--/email_off--></body>
 </html>

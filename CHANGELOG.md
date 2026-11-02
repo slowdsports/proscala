@@ -11,6 +11,16 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.20.0 — 2026-11-02
+**Correcciones: dashboard, orden de las compras, constancias, correos y listas**
+- **Dashboard**: la gráfica "Gastos vs. Pagos" (que comparaba lo mismo dos veces) pasa a **Egresos por tipo, últimos 6 meses**: una barra por mes con lo pagado o aprobado en órdenes de pago, dividido en Compras, Viáticos y gastos, Planillas y Otros, con el total del mes al pasar el cursor. Nuevas tablas **Anticipos recientes** y **Solicitudes de gastos recientes** junto a las de compras y órdenes de pago; cada una solo aparece a quien tiene acceso a su módulo.
+- **Compras: la orden de pago va antes de la nota de recepción**. La cadena del proceso queda Solicitud → Cotización → Orden de Compra → Orden de Pago → Nota de Recepción, y la nota de recepción solo se registra sobre una orden de compra que ya tiene su orden de pago (no anulada): la lista de órdenes de compra de la recepción solo trae esas, al guardar se valida, y el botón "Nota Recepción" de la orden de compra se activa cuando existe la orden de pago.
+- **Constancias** firmadas por el empleado que las genera (nombre y cargo del usuario en sesión) en lugar de una firma fija.
+- **Correos visibles con Cloudflare**: las páginas marcan su contenido con `<!--email_off-->` para que Cloudflare no reemplace los correos por `[email protected]` (`cdn-cgi/l/email-protection`), que dejaba de verse al navegar entre páginas.
+- **Primer ingreso**: tras cambiar la contraseña inicial, el sistema lleva a la página de inicio del usuario (el dashboard) y no al sitio público.
+- **Listas**: por defecto se ordenan por la columna **Número**, del mayor al menor (orden natural), así el último proceso creado aparece primero.
+- Pruebas automáticas: 42 (1 nueva: la nota de recepción exige orden de pago vigente).
+
 ## 1.19.0 — 2026-10-30
 **Cadena del proceso completa en todos los documentos**
 - **Cadena del proceso en todos los documentos** (`config/cadena.php`, `includes/cadena_proceso.php`): desde cualquier documento se ven todos los de su mismo proceso, con el actual resaltado y enlaces a los demás. Compras: Solicitud → Cotización → Orden(es) de Compra → **Nota(s) de Recepción** → Orden(es) de Pago; viáticos: Anticipo → Liquidación / Reembolso → Orden(es) de Pago; planillas, liquidaciones laborales, préstamos y caja chica: el proceso → su Orden de Pago. Ahora también en Cotizaciones, Nota de Recepción, Anticipos, las planillas, Liquidaciones, Préstamos y Caja Chica. Un paso con varios documentos los muestra todos (p. ej. una orden de compra por proveedor en la compra por artículo; antes solo aparecía una) y las órdenes de pago anuladas no se muestran. En el celular los pasos se acomodan en varias filas.

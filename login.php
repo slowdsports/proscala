@@ -139,7 +139,7 @@ unset($_SESSION['aviso_login']);
   <link rel="stylesheet" href="<?= recurso('assets/vendor/bootstrap/bootstrap.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">
 </head>
-<body>
+<body><!--email_off--><?php /* Cloudflare: no ofuscar los correos (cdn-cgi/l/email-protection) */ ?>
 <div class="login-wrapper">
   <div class="login-card">
     <img src="<?= BASE_URL ?>assets/images/proscala.png" alt="Proscala" class="logo mb-2" style="height:70px;">
@@ -241,5 +241,5 @@ function togglePwd() {
   (campos.find(el => el.offsetParent && !el.value) || campos[2]).focus();
 })();
 </script>
-</body>
+<!--/email_off--></body>
 </html>

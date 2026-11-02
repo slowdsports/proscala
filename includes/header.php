@@ -57,7 +57,7 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <link rel="stylesheet" href="<?= recurso('assets/vendor/select2/select2-bootstrap-5-theme.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">
 </head>
-<body>
+<body><!--email_off--><?php /* Cloudflare: no ofuscar los correos (cdn-cgi/l/email-protection) */ ?>
 
 <!-- TOPBAR -->
 <nav id="topbar">

@@ -15,6 +15,14 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_act === 'guardar') {
         $nrId  = (int)($_POST['id'] ?? 0);
         $items = json_decode($_POST['items'] ?? '[]', true);
+        // Primero la orden de pago, por último la nota de recepción
+        $ocPost = (int)($_POST['orden_compra_id'] ?? 0);
+        if ($ocPost) {
+            $s = $pdo->prepare("SELECT orden_compra_id FROM notas_recepcion WHERE id = ?");
+            $s->execute([$nrId]);
+            if ((int)$s->fetchColumn() !== $ocPost && !compraTieneOrdenPago($pdo, $ocPost))
+                jsonErr('La orden de compra ' . numeroDe($pdo, 'ordenes_compra', $ocPost) . ' todavía no tiene orden de pago. Genere la orden de pago antes de la nota de recepción.');
+        }
         $pdo->beginTransaction();
         try {
             if ($nrId) {
@@ -65,7 +73,12 @@ if (in_array($action,['ver','editar']) && $id) {
 
 $proveedores = $pdo->query("SELECT id,nombre FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();
 $empleados   = $pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
-$ocList      = $pdo->query("SELECT id,numero FROM ordenes_compra WHERE estado IN ('emitida','parcial') ORDER BY numero DESC")->fetchAll();
+// Solo las órdenes de compra que ya tienen su orden de pago
+$ocList      = $pdo->query("SELECT oc.id,oc.numero FROM ordenes_compra oc WHERE oc.estado IN ('emitida','parcial')
+    AND EXISTS (SELECT 1 FROM ordenes_pago op WHERE op.estado <> 'anulada'
+                AND (op.orden_compra_id = oc.id OR (op.origen_tabla = 'ordenes_compra' AND op.origen_id = oc.id)))
+    ORDER BY oc.numero DESC")->fetchAll();
+$ocSinPago   = $ocId && $action === 'nuevo' && !compraTieneOrdenPago($pdo, $ocId);
 $lista = [];
 if ($action==='list') $lista=$pdo->query("SELECT nr.*,p.nombre as prov_nombre,oc.numero as oc_num FROM notas_recepcion nr JOIN proveedores p ON nr.proveedor_id=p.id LEFT JOIN ordenes_compra oc ON nr.orden_compra_id=oc.id WHERE " . filtroHistorico('nr') . " ORDER BY nr.id DESC")->fetchAll();
 
@@ -157,6 +170,14 @@ $flujoModulo = 'compras_recepcion.php'; $flujoId = $nr['id']; include __DIR__ . 
 <?php $nrE = $action === 'editar' ? $nr : null;   // edición (rangos superiores): el formulario trae la nota guardada ?>
 <div class="card"><div class="card-header"><i class="fas <?= $nrE ? 'fa-edit' : 'fa-plus' ?>"></i> <?= $nrE ? 'Editar nota de recepción ' . htmlspecialchars($nrE['numero']) : 'Nueva Nota de Recepción' ?></div>
 <div class="card-body">
+  <?php if ($ocSinPago): ?>
+  <div class="alert alert-warning d-flex align-items-center gap-2">
+    <i class="fas fa-triangle-exclamation"></i>
+    <div>La orden de compra <strong><?= htmlspecialchars(numeroDe($pdo, 'ordenes_compra', $ocId) ?? '') ?></strong> todavía no tiene orden de pago.
+      Primero se genera la orden de pago y por último la nota de recepción.
+      <a href="<?= BASE_URL ?>compras_pago.php?action=nuevo&oc_id=<?= $ocId ?>" class="alert-link">Generar orden de pago</a></div>
+  </div>
+  <?php endif; ?>
   <form id="form-nr" action="compras_recepcion.php" method="POST">
     <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
     <input type="hidden" name="_action" value="guardar">

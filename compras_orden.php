@@ -145,9 +145,11 @@ include __DIR__ . '/includes/header.php';
         <td>
           <a href="?action=ver&id=<?= $r['id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a>
           <?= botonEditar($pdo, 'compras_orden.php', (int)$r['id'], '?action=editar&id=' . $r['id'], true) ?>
-          <?php if($r['estado']==='emitida'): ?>
+          <?php if($r['estado']==='emitida'): // primero la orden de pago, por último la nota de recepción ?>
           <a href="<?= BASE_URL ?>compras_pago.php?action=nuevo&oc_id=<?= $r['id'] ?>" class="btn btn-sm btn-outline-success py-0 px-2 ms-1" title="Crear Orden de Pago"><i class="fas fa-money-bill"></i></a>
+          <?php if (compraTieneOrdenPago($pdo, (int)$r['id'])): ?>
           <a href="<?= BASE_URL ?>compras_recepcion.php?action=nuevo&oc_id=<?= $r['id'] ?>" class="btn btn-sm btn-outline-info py-0 px-2 ms-1" title="Nota de Recepción"><i class="fas fa-boxes-stacked"></i></a>
+          <?php endif; ?>
           <?php endif; ?>
         </td>
       </tr>
@@ -168,9 +170,13 @@ $cadModulo = 'compras_orden.php'; $cadId = $oc['id']; include __DIR__ . '/includ
   <div class="card-header">
     <i class="fas fa-file-circle-check"></i> ORDEN DE COMPRA <?= $oc['numero'] ?> — <?= estadoBadge($oc['estado']) ?>
     <div class="ms-auto d-flex gap-2 no-print">
-      <?php if($oc['estado']==='emitida'): ?>
+      <?php if($oc['estado']==='emitida'): // primero la orden de pago, por último la nota de recepción ?>
       <a href="<?= BASE_URL ?>compras_pago.php?action=nuevo&oc_id=<?= $oc['id'] ?>" class="btn btn-sm btn-success"><i class="fas fa-money-bill"></i> Generar OP</a>
+      <?php if (compraTieneOrdenPago($pdo, (int)$oc['id'])): ?>
       <a href="<?= BASE_URL ?>compras_recepcion.php?action=nuevo&oc_id=<?= $oc['id'] ?>" class="btn btn-sm btn-info text-white"><i class="fas fa-boxes-stacked"></i> Nota Recepción</a>
+      <?php else: ?>
+      <span class="btn btn-sm btn-outline-secondary disabled" title="Primero genere la orden de pago"><i class="fas fa-boxes-stacked"></i> Nota Recepción</span>
+      <?php endif; ?>
       <?php endif; ?>
       <?= botonEditar($pdo, 'compras_orden.php', (int)$oc['id'], '?action=editar&id=' . $oc['id']) ?>
       <a href="<?= BASE_URL ?>print.php?tipo=oc&id=<?= $oc['id'] ?>" target="_blank" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF</a>

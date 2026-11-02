@@ -1,7 +1,8 @@
 <?php
 // ── Cadena del proceso (includes/cadena_proceso.php) ─────────────────
 // Desde cualquier documento, todos los que forman su mismo proceso, paso por paso:
-//   compras   → Solicitud → Cotización → Orden(es) de Compra → Nota(s) de Recepción → Orden(es) de Pago
+//   compras   → Solicitud → Cotización → Orden(es) de Compra → Orden(es) de Pago → Nota(s) de Recepción
+//               (para comprar, primero debe existir la orden de pago; la recepción es lo último)
 //   viáticos  → Anticipo → Liquidación / Reembolso → Orden(es) de Pago
 //   otros     → el proceso (planilla, liquidación laboral, préstamo, caja chica) → su Orden de Pago
 // Un paso puede tener varios documentos (p. ej. una orden de compra por proveedor en la compra por
@@ -10,8 +11,8 @@
 
 // Pasos de cada cadena: módulo => [etiqueta, ícono]
 const CADENA_COMPRAS  = ['compras_solicitud.php' => ['Solicitud', 'fa-cart-plus'], 'compras_cotizaciones.php' => ['Cotización', 'fa-file-lines'],
-                         'compras_orden.php' => ['Orden de Compra', 'fa-file-circle-check'], 'compras_recepcion.php' => ['Nota de Recepción', 'fa-boxes-stacked'],
-                         'compras_pago.php' => ['Orden de Pago', 'fa-money-bill-transfer']];
+                         'compras_orden.php' => ['Orden de Compra', 'fa-file-circle-check'], 'compras_pago.php' => ['Orden de Pago', 'fa-money-bill-transfer'],
+                         'compras_recepcion.php' => ['Nota de Recepción', 'fa-boxes-stacked']];
 const CADENA_VIATICOS = ['gastos_viajes.php' => ['Anticipo', 'fa-plane'], 'gastos_solicitud.php' => ['Liquidación / Reembolso', 'fa-file-invoice-dollar'],
                          'compras_pago.php' => ['Orden de Pago', 'fa-money-bill-transfer']];
 // Procesos que solo generan su orden de pago: módulo => [origen_tabla de ordenes_pago, etiqueta, ícono]

@@ -242,14 +242,16 @@ Resumen de la organización: empleados activos, gastos y anticipos pendientes, �
 El proceso completo sigue este orden:
 
 ```
-Solicitud de compra → Resumen de cotizaciones → Orden de compra → Nota de recepción → Orden de pago
+Solicitud de compra → Resumen de cotizaciones → Orden de compra → Orden de pago → Nota de recepción
 ```
+
+Para comprar, primero debe existir la orden de pago: la nota de recepción es el último paso y solo se puede registrar sobre una orden de compra que ya tiene su orden de pago (no anulada).
 
 1. **Solicitud de Compra.** Describa qué necesita, para qué proyecto, la urgencia, la justificación y el detalle de artículos con precio estimado. Sigue el flujo de aprobación.
 2. **Resumen de Cotizaciones.** Registre lo que cotizó cada proveedor en un cuadro comparativo: una fila por artículo (vienen de la solicitud y se pueden agregar más) y una columna por proveedor, con el precio unitario de cada uno (vacío si no lo cotizó). El sistema marca el menor precio de cada artículo y recomienda dos opciones: el **proveedor único** más barato entre los que cotizaron todo, y la **compra por artículo** (cada artículo al mejor precio, con el ahorro y cuántas órdenes de compra requiere). Seleccione el proveedor, justifique la selección y descargue el **PDF del resumen**. Al aprobarla, cree la orden de compra de cada proveedor con sus precios cotizados.
 3. **Orden de Compra.** Se emite al proveedor seleccionado, con detalle, descuentos e impuestos (ISV y turismo). Sigue el flujo de aprobación; al autorizarse se genera la orden de pago. Al imprimirla incluye la firma del proveedor.
-4. **Nota de Recepción.** Registre lo recibido: completo, parcial o con devolución, artículo por artículo.
-5. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
+4. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
+5. **Nota de Recepción.** Registre lo recibido: completo, parcial o con devolución, artículo por artículo.
 
 **Proveedores.** El catálogo de proveedores con RTN, contacto y datos bancarios para las órdenes de pago.
 

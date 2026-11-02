@@ -21,8 +21,16 @@ $TITULOS_CONST = [
 $title  = $TITULOS_CONST[$tipo];
 $docNum = date('Y') . '-' . str_pad($id, 4, '0', STR_PAD_LEFT);
 
-// Firmas
-$fCONST = loadFirmantes($pdo, 'constancia');
+// Firma: el empleado que genera la constancia (el usuario en sesión), con su cargo
+$fCONST = null;
+if (!empty($_SESSION['empleado_id'])) {
+    $s = $pdo->prepare("SELECT CONCAT(nombre,' ',apellidos) AS emp_nombre, cargo AS etiqueta FROM empleados WHERE id = ?");
+    $s->execute([$_SESSION['empleado_id']]);
+    $fCONST = $s->fetch() ?: null;
+}
+// Usuario sin empleado vinculado: su nombre de usuario
+$fCONST ??= ['emp_nombre' => $_SESSION['usuario_nombre'] ?? '', 'etiqueta' => ''];
+if (trim((string)$fCONST['etiqueta']) === '') $fCONST['etiqueta'] = 'Recursos Humanos';
 
 require __DIR__ . '/_inicio.php';
 require __DIR__ . '/_pagina_inicio.php';
@@ -114,10 +122,7 @@ require __DIR__ . '/_pagina_inicio.php';
     <p class="letter-close">Atentamente,</p>
   </div>
 
-  <?php
-  $constSig = !empty($fCONST) ? [$fCONST[0]] : [['etiqueta' => 'Director Ejecutivo', 'emp_nombre' => '']];
-  echo sigBlock($constSig, 'cols-1');
-  ?>
+  <?= sigBlock([$fCONST], 'cols-1') ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
 <?php require __DIR__ . '/_fin.php';

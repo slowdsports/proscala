@@ -1275,12 +1275,22 @@ function initDataTable(selector, opts = {}) {
   const textoVacio = $vacia.first().text().trim();
   $vacia.remove();
   const idioma = Object.assign({}, window.DATATABLES_ES || {}, textoVacio ? { emptyTable: textoVacio } : {});   // assets/vendor/datatables/es-MX.js
+  // Orden por defecto (si la página no da uno): la columna "Número", del mayor al menor, para que
+  // el último proceso creado salga primero. Orden natural: SC26-0201 va antes que SC26-0099.
+  const porDefecto = {};
+  const colNumero = $tabla.find('thead th').toArray().findIndex(th => th.textContent.trim() === 'Número');
+  if (!('order' in opts) && colNumero >= 0) {
+    $.fn.dataTable.ext.type.order['numero-proceso-pre'] ??= d =>
+      String(d ?? '').replace(/<[^>]*>/g, '').trim().replace(/\d+/g, n => n.padStart(12, '0'));
+    porDefecto.order = [[colNumero, 'desc']];
+    porDefecto.columnDefs = [{ targets: colNumero, type: 'numero-proceso' }, ...(opts.columnDefs || [])];
+  }
   const dt = $tabla.DataTable(Object.assign({
     language: idioma,
     pageLength: 20,
     responsive: true,
     dom: '<"d-flex justify-content-between align-items-center mb-2"lf>rt<"d-flex justify-content-between align-items-center mt-2"ip>',
-  }, opts));
+  }, opts, porDefecto));
   // ?buscar=texto (desde la búsqueda global): la lista llega filtrada
   const buscar = new URLSearchParams(location.search).get('buscar');
   if (buscar) dt.search(buscar).draw();

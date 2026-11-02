@@ -393,7 +393,7 @@ table.items tfoot tr:last-child td {
 .signatures.cols-1 { grid-template-columns: 1fr; max-width: 260px; margin-left: auto; margin-right: auto; }
 </style>
 </head>
-<body>
+<body><!--email_off--><?php /* Cloudflare: no ofuscar los correos (cdn-cgi/l/email-protection) */ ?>
 
 <!-- Screen-only toolbar -->
 <div class="print-toolbar no-print" id="toolbar">

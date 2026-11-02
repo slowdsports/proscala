@@ -150,7 +150,7 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
   <link rel="stylesheet" href="<?= recurso('assets/vendor/bootstrap/bootstrap.min.css') ?>">
   <link rel="stylesheet" href="<?= recurso('assets/css/proscala.css') ?>">
 </head>
-<body>
+<body><!--email_off--><?php /* Cloudflare: no ofuscar los correos (cdn-cgi/l/email-protection) */ ?>
 <div class="login-wrapper">
   <div class="login-card">
     <img src="<?= BASE_URL ?>assets/images/proscala.png" alt="Proscala" class="logo mb-2" style="height:70px;">
@@ -232,5 +232,5 @@ if ($enlace && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? ''
   if (e && !document.getElementById('email').value) document.getElementById('email').value = e;
 })();
 </script>
-</body>
+<!--/email_off--></body>
 </html>

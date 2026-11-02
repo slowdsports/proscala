@@ -277,3 +277,14 @@ function enlacesOrdenPago(PDO $pdo, string $modulo, int $id): array {
     return array_map(fn($op) => ['titulo' => 'Orden de pago', 'numero' => $op['numero'],
         'url' => 'compras_pago.php?action=ver&id=' . $op['id'], 'estado' => $op['estado']], $s->fetchAll());
 }
+
+/**
+ * En compras, la orden de pago va antes de la nota de recepción: ¿la orden de compra ya tiene
+ * una orden de pago vigente (no anulada), manual o automática?
+ */
+function compraTieneOrdenPago(PDO $pdo, int $ocId): bool {
+    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE estado <> 'anulada'
+        AND (orden_compra_id = ? OR (origen_tabla = 'ordenes_compra' AND origen_id = ?)) LIMIT 1");
+    $s->execute([$ocId, $ocId]);
+    return (bool)$s->fetchColumn();
+}

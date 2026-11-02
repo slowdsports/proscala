@@ -476,7 +476,8 @@ bindAjaxForm('form-pass', r => {
 
 JS, [
     '__CSRF_JS__' => $csrfJs,
-    '__TRAS_CAMBIAR_CLAVE__' => ($me['debe_cambiar_password'] ? "setTimeout(()=>Nav.ir('" . BASE_URL . "'), 1200);" : ''),
+    // Primer ingreso: tras cambiar la contraseña, a su página de inicio (BASE_URL es el sitio público)
+    '__TRAS_CAMBIAR_CLAVE__' => ($me['debe_cambiar_password'] ? 'setTimeout(()=>Nav.ir(' . json_encode(BASE_URL . paginaInicio()) . '), 1200);' : ''),
 ]);
 include __DIR__ . '/includes/footer.php';
 ?>
