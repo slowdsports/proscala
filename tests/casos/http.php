@@ -430,6 +430,34 @@ try {
         }
     });
 
+    prueba('Prueba de correo: solo el super administrador la abre y envía', function () use ($pdo, $pdoMaster, $empresa, $baseUrl, $admin, $sesAdmin) {
+        $s = $pdoMaster->prepare("SELECT email FROM accesos WHERE empresa_id = ? AND superadmin = 1");
+        $s->execute([$empresa['id']]);
+        $supers = array_map('strtolower', $s->fetchAll(PDO::FETCH_COLUMN));
+        $sesSuper = '';
+        foreach ($pdo->query("SELECT id, email FROM usuarios WHERE activo = 1 AND debe_cambiar_password = 0")->fetchAll() as $u) {
+            if (in_array(strtolower($u['email']), $supers, true)) { $sesSuper = sesionDePrueba($pdo, $empresa, (int)$u['id']); break; }
+        }
+        if (!$sesSuper) throw new Omitir('la empresa de prueba no tiene un super administrador activo');
+        [$cod, $html] = pedir("$baseUrl/prueba_correo.php", $sesSuper);
+        afirmar($cod === 200 && str_contains($html, 'Configuración del correo saliente') && !erroresPhp($html), "prueba_correo.php (HTTP $cod) " . erroresPhp($html));
+        afirmar(!str_contains($html, (string)(credenciales()['correo']['clave'] ?? '') ?: "\0"), 'la página muestra la contraseña del correo');
+
+        $adminEsSuper = in_array(strtolower((string)$pdo->query("SELECT email FROM usuarios WHERE id = $admin")->fetchColumn()), $supers, true);
+        if (!$adminEsSuper) {
+            [$cod] = pedir("$baseUrl/prueba_correo.php", $sesAdmin);
+            iguales(302, $cod, 'un administrador que no es super administrador no la abre');
+        }
+        // Se envía solo si el servidor local guarda los correos en archivo (no se mandan correos reales)
+        if ((credenciales()['correo']['metodo'] ?? '') !== 'archivo') return;
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+            'header' => "Cookie: PROSCALA=$sesSuper\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+            'content' => http_build_query(['csrf_token' => 'tokenprueba', '_action' => 'enviar', 'para' => 'zz.prueba@prueba.local', 'asunto' => 'ZZ prueba'])]]);
+        $r = json_decode((string)@file_get_contents("$baseUrl/prueba_correo.php", false, $ctx), true) ?: [];
+        afirmar(!empty($r['success']) && str_contains(implode("\n", $r['traza'] ?? []), 'storage'), 'no se guardó el correo de prueba: ' . ($r['message'] ?? 'sin respuesta'));
+        foreach (glob(RAIZ . '/storage/correos/*zz_prueba_prueba_local*.html') as $f) @unlink($f);
+    });
+
     prueba('Página principal, inicio de sesión y recuperar contraseña (sin sesión)', function () use ($baseUrl) {
         foreach (['' => 'Iniciar sesión', 'login.php' => 'RTN de la empresa', 'recuperar.php' => 'Enviar enlace'] as $p => $texto) {
             [$cod, $html] = pedir("$baseUrl/$p");

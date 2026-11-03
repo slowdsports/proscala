@@ -7,12 +7,15 @@
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 
 /**
  * Envía un correo HTML. Devuelve true o el motivo del fallo (el detalle técnico va al log).
  * $responderA: a quién va la respuesta (p. ej. quien llenó el formulario de la página principal).
+ * $traza: si se pasa un arreglo, recibe el diálogo con el servidor SMTP y el error técnico
+ *         (prueba_correo.php); PHPMailer oculta el usuario y la contraseña.
  */
-function enviarCorreo(string $para, string $asunto, string $html, string $texto = '', string $responderA = '') {
+function enviarCorreo(string $para, string $asunto, string $html, string $texto = '', string $responderA = '', ?array &$traza = null) {
     $cfg = credenciales()['correo'] ?? null;
     if (!$cfg || empty($cfg['metodo'])) return 'El correo saliente no está configurado en el servidor.';
     $texto = $texto ?: trim(html_entity_decode(strip_tags(preg_replace('/<br\s*\/?>|<\/p>|<\/h\d>/i', "\n", $html)), ENT_QUOTES, 'UTF-8'));
@@ -22,6 +25,7 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
         if (!is_dir($dir)) mkdir($dir, 0700, true);
         $f = $dir . '/' . date('Ymd_His') . '_' . preg_replace('/[^a-z0-9]+/i', '_', $para) . '.html';
         file_put_contents($f, "<!-- Para: $para | Asunto: $asunto" . ($responderA ? " | Responder a: $responderA" : '') . " -->\n" . $html);
+        if ($traza !== null) $traza[] = "Método 'archivo': no se envió; se guardó en $f";
         return true;
     }
 
@@ -29,6 +33,10 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
     try {
         $m->CharSet = 'UTF-8';
         $m->Timeout = 15;
+        if ($traza !== null) {
+            $m->SMTPDebug   = SMTP::DEBUG_SERVER;
+            $m->Debugoutput = function ($linea) use (&$traza) { $traza[] = rtrim($linea); };
+        }
         if ($cfg['metodo'] === 'smtp') {
             $m->isSMTP();
             $m->Host       = $cfg['host'];
@@ -51,6 +59,7 @@ function enviarCorreo(string $para, string $asunto, string $html, string $texto 
         return true;
     } catch (Throwable $e) {
         error_log('Proscala: no se pudo enviar el correo a ' . $para . ': ' . ($m->ErrorInfo ?: $e->getMessage()));
+        if ($traza !== null) $traza[] = 'ERROR: ' . ($m->ErrorInfo ?: $e->getMessage());
         return 'No se pudo enviar el correo. Intente más tarde o avise al administrador.';
     }
 }

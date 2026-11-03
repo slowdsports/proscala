@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.24.0 — 2026-11-03
+**Prueba de correo (herramienta de desarrollador)**
+- Nueva página **Prueba de correo** (`prueba_correo.php`), en el menú *Super Administrador* y solo para el super administrador: muestra la configuración del correo saliente del servidor actual (sin la contraseña) y su entorno (PHP, OpenSSL, `mail()`), prueba la conexión al servidor SMTP sin enviar nada y envía un correo de prueba a la dirección indicada.
+- Muestra el resultado con el diálogo completo con el servidor SMTP y el error técnico, para diagnosticar fallos (usuario y contraseña ocultos). `enviarCorreo()` acepta un parámetro opcional para devolver ese diálogo.
+
 ## 1.23.1 — 2026-11-03
 **Las listas desplegables muestran el valor guardado al editar**
 - **Corrección**: al editar un registro (p. ej. el banco de un proveedor), algunas listas con buscador aparecían vacías aunque el valor guardado sí estaba elegido (se veía al abrirlas). Ahora toda lista con buscador se actualiza sola cuando el formulario se llena o se reinicia por código, en todo el sistema (`assets/js/proscala.js`).

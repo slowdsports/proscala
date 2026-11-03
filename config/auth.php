@@ -127,6 +127,8 @@ const MODULOS = [
 
 // Solo el Administrador: quien gestiona usuarios o permisos podría darse acceso total
 const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
+// Solo el super administrador (ni siquiera el admin de la empresa); prueba_correo.php: herramienta de desarrollador
+const PAGINAS_SUPERADMIN = ['empresas.php', 'prueba_correo.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
 // validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
@@ -156,7 +158,7 @@ function moduloLabel(?string $archivo): string {
         // index.php: inicio de sesión hasta la versión 1.5 (eventos anteriores de la bitácora)
         $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
-                 'empresas.php' => 'Empresas', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
+                 'empresas.php' => 'Empresas', 'prueba_correo.php' => 'Prueba de correo', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
                  'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'buscar.php' => 'Búsqueda'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
@@ -327,7 +329,7 @@ function verificarRegistrosPropios(PDO $pdo, string $script): void {
 
 function puedeAcceder(string $pagina): bool {
     if (in_array($pagina, PAGINAS_LIBRES, true)) return true;
-    if ($pagina === 'empresas.php') return esSuperadmin();
+    if (in_array($pagina, PAGINAS_SUPERADMIN, true)) return esSuperadmin();
     if (tieneAccesoTotal()) return true;
     if (in_array($pagina, MODULOS_SOLO_ADMIN, true)) return false;
     // Módulos de procesos de quien le delegó sus aprobaciones (config/aprobaciones.php)

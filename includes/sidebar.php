@@ -41,7 +41,8 @@ function sidebarModulos(string $title, array $items, string $cur): string {
 
   <!-- SUPER ADMINISTRADOR -->
   <?= sidebarSection('Super Administrador',
-    sidebarItem('empresas.php', 'fa-building', 'Empresas', $cur)) ?>
+    sidebarItem('empresas.php', 'fa-building', 'Empresas', $cur),
+    sidebarItem('prueba_correo.php', 'fa-envelope-circle-check', 'Prueba de correo', $cur)) ?>
 
   <div style="height:2rem;"></div>
 </nav>
