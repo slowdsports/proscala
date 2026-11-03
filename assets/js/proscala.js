@@ -446,6 +446,24 @@ function initSelect2(context) {
   });
   initSelect2.observar();
 }
+// Select2 solo muestra la opción elegida cuando se le avisa: si el código asigna select.value,
+// selectedIndex u option.selected (p. ej. al llenar el modal de editar), o reinicia el formulario,
+// el recuadro seguía vacío aunque la lista tuviera el valor. Aquí se sincroniza solo, sin disparar
+// 'change' (como al asignar el valor sin Select2: los onchange del módulo no se ejecutan).
+(function sincronizarSelect2() {
+  const avisar = sel => { if (sel?.classList.contains('select2-hidden-accessible') && window.jQuery) jQuery(sel).trigger('change.select2'); };
+  const envolver = (proto, prop, select) => {
+    const d = Object.getOwnPropertyDescriptor(proto, prop);
+    if (!d?.set) return;
+    Object.defineProperty(proto, prop, { ...d, set(v) { d.set.call(this, v); avisar(select(this)); } });
+  };
+  envolver(HTMLSelectElement.prototype, 'value', el => el);
+  envolver(HTMLSelectElement.prototype, 'selectedIndex', el => el);
+  envolver(HTMLOptionElement.prototype, 'selected', el => el.parentElement?.closest('select'));
+  // reset() no pasa por esas propiedades: se sincroniza cuando el navegador terminó de reiniciar
+  document.addEventListener('reset', e => setTimeout(() => e.target.querySelectorAll?.('select.select2-hidden-accessible').forEach(avisar)), true);
+})();
+
 // Reaplica a selects agregados dinámicamente (filas nuevas, modales, etc.)
 initSelect2.observador = null;
 initSelect2.observar = function () {

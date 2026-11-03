@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.23.1 — 2026-11-03
+**Las listas desplegables muestran el valor guardado al editar**
+- **Corrección**: al editar un registro (p. ej. el banco de un proveedor), algunas listas con buscador aparecían vacías aunque el valor guardado sí estaba elegido (se veía al abrirlas). Ahora toda lista con buscador se actualiza sola cuando el formulario se llena o se reinicia por código, en todo el sistema (`assets/js/proscala.js`).
+- En Proveedores, un banco guardado que ya no está en el catálogo de bancos se conserva en la lista al editar.
+
 ## 1.23.0 — 2026-11-03
 **Expediente digital de los proveedores**
 - **Expediente del proveedor** (`proveedores.php?action=expediente`), como el de los empleados: sus datos y sus documentos clasificados por categoría (Identificación / DNI, RTN, Antecedentes penales y policiales, Hoja de vida, Títulos y certificados, Contrato de servicios y adendas, Escritura / registro mercantil y permisos, Solvencias y constancias, Cuenta bancaria, Otros). Se sube desde la computadora, con la cámara del celular o arrastrando los archivos.
