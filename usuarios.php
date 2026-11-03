@@ -114,7 +114,10 @@ include __DIR__ . '/includes/header.php';
     <tbody>
       <?php foreach($usuarios as $u): ?>
       <tr>
-        <td><?= htmlspecialchars($u['nombre']) ?></td>
+        <td><?= htmlspecialchars($u['nombre']) ?>
+          <?php if ($u['proveedor_id']): // usuario de un consultor: sus datos y su acceso se gestionan en Proveedores ?>
+          <div style="font-size:.72rem;color:var(--text-3)"><i class="fas fa-truck"></i> Consultor (<a href="<?= BASE_URL ?>proveedores.php">Proveedores</a>)</div>
+          <?php endif; ?></td>
         <td><?= htmlspecialchars($u['email']) ?></td>
         <td><span class="badge bg-<?= $u['rol'] === 'admin' ? 'danger' : 'primary' ?>"><?= htmlspecialchars(rolLabel($u['rol'])) ?></span><?php if (in_array(strtolower($u['email']), $superadmins, true)): ?> <span class="badge bg-dark"><i class="fas fa-crown"></i> Super Admin</span><?php endif; ?></td>
         <td><?= $u['ultimo_acceso']?date('d/m/Y H:i',strtotime($u['ultimo_acceso'])):'—' ?></td>

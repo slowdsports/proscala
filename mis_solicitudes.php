@@ -9,25 +9,29 @@ require_once __DIR__ . '/config/functions.php';
 requireLogin();
 $pagina = 'Mis solicitudes';
 
-// Por módulo: fecha, resumen, monto y la columna del empleado a cuyo nombre está (alias t)
+// Por módulo: fecha, resumen, monto y la columna del empleado a cuyo nombre está (alias t); 'proveedor':
+// la del proveedor, para el consultor con usuario (proveedores.php)
 const MIS_SOLICITUDES = [
     'compras_solicitud.php' => ['fecha' => 't.fecha', 'resumen' => 't.descripcion', 'monto' => 't.presupuesto_estimado', 'empleado' => 'solicitante_id', 'nuevo' => '?action=nuevo'],
-    'gastos_viajes.php'     => ['fecha' => 't.fecha_salida', 'resumen' => "CONCAT(IF(t.tipo = 'compra', 'Compra: ', 'Viaje a '), t.destino)", 'monto' => 't.viaticos_anticipados', 'empleado' => 'empleado_id', 'nuevo' => '?action=nuevo'],
-    'gastos_solicitud.php'  => ['fecha' => 't.fecha', 'resumen' => 't.descripcion', 'monto' => 't.monto_total', 'empleado' => 'empleado_id', 'nuevo' => '?action=nuevo'],
+    'gastos_viajes.php'     => ['fecha' => 't.fecha_salida', 'resumen' => "CONCAT(IF(t.tipo = 'compra', 'Compra: ', 'Viaje a '), t.destino)", 'monto' => 't.viaticos_anticipados', 'empleado' => 'empleado_id', 'proveedor' => 'proveedor_id', 'nuevo' => '?action=nuevo'],
+    'gastos_solicitud.php'  => ['fecha' => 't.fecha', 'resumen' => 't.descripcion', 'monto' => 't.monto_total', 'empleado' => 'empleado_id', 'proveedor' => 'proveedor_id', 'nuevo' => '?action=nuevo'],
     'vacaciones.php'        => ['fecha' => 't.fecha_inicio', 'resumen' => "CONCAT(t.dias, ' días hábiles, del ', DATE_FORMAT(t.fecha_inicio, '%d/%m/%Y'), ' al ', DATE_FORMAT(t.fecha_fin, '%d/%m/%Y'))", 'monto' => 'NULL', 'empleado' => 'empleado_id', 'nuevo' => ''],
     'permisos.php'          => ['fecha' => 't.fecha_inicio', 'resumen' => "CONCAT(UPPER(LEFT(t.tipo, 1)), SUBSTRING(t.tipo, 2), ': ', t.motivo)", 'monto' => 'NULL', 'empleado' => 'empleado_id', 'nuevo' => ''],
     'compras_orden.php'     => ['fecha' => 't.fecha', 'resumen' => "(SELECT nombre FROM proveedores WHERE id = t.proveedor_id)", 'monto' => 't.total', 'empleado' => null, 'nuevo' => ''],
-    'compras_pago.php'      => ['fecha' => 't.fecha', 'resumen' => 't.concepto', 'monto' => 't.monto', 'empleado' => 'empleado_id', 'nuevo' => ''],
+    'compras_pago.php'      => ['fecha' => 't.fecha', 'resumen' => 't.concepto', 'monto' => 't.monto', 'empleado' => 'empleado_id', 'proveedor' => 'proveedor_id', 'nuevo' => ''],
 ];
 
 $uid = (int)$_SESSION['usuario_id'];
 $empleadoId = (int)($_SESSION['empleado_id'] ?? 0) ?: -1;
+$proveedorId = (int)($_SESSION['proveedor_id'] ?? 0) ?: -1;
 $filas = [];
 foreach (MIS_SOLICITUDES as $modulo => $q) {
     $tabla = PROCESOS[$modulo]['tabla'];
     $suyo = "t.id IN (SELECT registro_id FROM registro_usuarios WHERE tabla = ? AND usuario_id = ? AND participacion = 'creador')"
-          . ($q['empleado'] ? " OR t.`{$q['empleado']}` = ?" : '');
+          . ($q['empleado'] ? " OR t.`{$q['empleado']}` = ?" : '')
+          . (isset($q['proveedor']) ? " OR t.`{$q['proveedor']}` = ?" : '');
     $params = $q['empleado'] ? [$tabla, $uid, $empleadoId] : [$tabla, $uid];
+    if (isset($q['proveedor'])) $params[] = $proveedorId;
     $s = $pdo->prepare("SELECT t.id, t.numero, t.estado, {$q['fecha']} AS fecha, {$q['resumen']} AS resumen, {$q['monto']} AS monto
                         FROM `$tabla` t WHERE ($suyo) ORDER BY t.id DESC LIMIT 200");
     $s->execute($params);

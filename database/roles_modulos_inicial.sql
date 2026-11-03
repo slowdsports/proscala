@@ -45,7 +45,10 @@ INSERT IGNORE INTO rol_modulos (rol, modulo) VALUES
 ('recursos_humanos', 'dashboard.php'),
 ('recursos_humanos', 'empleados.php'), ('recursos_humanos', 'catalogos.php'), ('recursos_humanos', 'planillas.php'), ('recursos_humanos', 'planillas_asignacion.php'), ('recursos_humanos', 'planillas_beneficios.php'),
 ('recursos_humanos', 'vacaciones.php'), ('recursos_humanos', 'permisos.php'), ('recursos_humanos', 'asistencia.php'), ('recursos_humanos', 'prestamos.php'), ('recursos_humanos', 'constancias.php'), ('recursos_humanos', 'liquidaciones.php'),
-('recursos_humanos', 'memorandos.php');
+('recursos_humanos', 'memorandos.php'),
+
+-- Consultor: sus anticipos de viaje y sus liquidaciones / reembolsos (solo los propios)
+('consultor', 'gastos_viajes.php'), ('consultor', 'gastos_solicitud.php');
 
 -- Empleado: sin módulos (solo Mi Perfil) hasta que el administrador le asigne alguno
 -- (que solo vea sus propias solicitudes lo fija la tabla roles en empresa_seed.sql)

@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.22.0 — 2026-11-03
+**Consultores con usuario: piden sus propios anticipos y liquidaciones**
+- **Proveedores: categoría Consultores**. Al elegirla, el formulario pide el número de identidad y ofrece **"Darle usuario para entrar al sistema"**: su usuario es el correo del proveedor; con contraseña inicial (mínimo 8 caracteres, letras y números) la cambia al entrar, y sin ella recibe por correo el enlace para crearla (con botón para reenviarlo). La lista muestra si el consultor tiene acceso, si está pendiente de activar o si se le quitó. Quitar el acceso, dar de baja al proveedor o cambiarle la categoría desactiva su usuario.
+- **Puesto Consultor** en Roles y Permisos (bajo Administración, "solo sus propias solicitudes"), con los módulos Anticipos y Liquidaciones / Reembolsos; su jerarquía y permisos se ajustan como los de cualquier puesto.
+- El consultor entra a **Mis solicitudes**, pide anticipos y liquidaciones siempre a su nombre (no puede elegir a otro beneficiario), ve solo los suyos, recibe los avisos de sus procesos y de sus órdenes de pago, y firma como "Elaborado por" en sus documentos.
+- En Usuarios del Sistema se distingue el usuario de un consultor. La alta rápida de proveedores también ofrece la categoría Consultor (el acceso se da después en Proveedores).
+- **Base de datos**: `proveedores.identidad`, la categoría `consultor` y `usuarios.proveedor_id`; el puesto Consultor se crea una sola vez. Requiere ejecutar `actualizar_bd.php` (estructura 1.22.0).
+- Pruebas automáticas: 44 (1 nueva: del alta del consultor con acceso a que pide su anticipo y solo ve lo suyo).
+
 ## 1.21.0 — 2026-11-03
 **Anticipos y liquidaciones para proveedores o consultores**
 - **Anticipos a proveedores o consultores**: en Anticipos y en Liquidaciones / Reembolsos el beneficiario puede ser un **empleado** o un **proveedor / consultor** (para consultores que no son empleados y necesitan viáticos). La lista de proveedores permite dar de alta uno nuevo sin salir del formulario. La liquidación de un anticipo toma siempre el beneficiario del anticipo, y al elegir al proveedor se liga sola a su anticipo pendiente, igual que con un empleado.

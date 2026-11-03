@@ -42,7 +42,9 @@ INSERT INTO roles (clave, nombre, depende_de, aprueba, aprueba_colegas, solo_pro
 ('contabilidad',        'Contabilidad',        'administracion',      1, 0, 0, 5),
 ('finanzas',            'Finanzas',            'administracion',      1, 0, 0, 6),
 ('recursos_humanos',    'Recursos Humanos',    'administracion',      0, 0, 0, 7),
-('empleado',            'Empleado',            'administracion',      0, 0, 1, 8);
+('empleado',            'Empleado',            'administracion',      0, 0, 1, 8),
+-- Consultores contratistas (proveedores de categoría Consultor): solo sus anticipos y liquidaciones
+('consultor',           'Consultor',           'administracion',      0, 0, 1, 9);
 
 INSERT INTO cat_bancos (nombre) VALUES
 ('BAC'),('Atlántida'),('FICOHSA'),('Davivienda'),('Banrural'),('Occidente');

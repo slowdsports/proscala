@@ -44,7 +44,8 @@ if ($tipo === 'proveedor') {
         if (!$ya['activo']) $pdo->prepare("UPDATE proveedores SET activo = 1 WHERE id = ?")->execute([$ya['id']]);
         $respuesta((int)$ya['id'], $ya['nombre'], "El proveedor «{$ya['nombre']}» ya estaba registrado: quedó seleccionado.");
     }
-    $categoria = in_array($_POST['categoria'] ?? '', ['bienes', 'servicios', 'ambos'], true) ? $_POST['categoria'] : 'ambos';
+    // Un consultor queda sin usuario: el acceso al sistema se le da después en Proveedores
+    $categoria = isset(CATEGORIAS_PROVEEDOR[$_POST['categoria'] ?? '']) ? $_POST['categoria'] : 'ambos';
     $codigo = generarNumero($pdo, 'proveedores', 'codigo', 'PROV');
     $pdo->prepare("INSERT INTO proveedores (codigo, nombre, rtn, contacto, telefono, email, categoria, activo) VALUES (?,?,?,?,?,?,?,1)")
         ->execute([$codigo, $nombre, $rtn, trim($_POST['contacto'] ?? ''), trim($_POST['telefono'] ?? ''), trim($_POST['email'] ?? ''), $categoria]);

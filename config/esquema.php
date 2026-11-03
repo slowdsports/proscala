@@ -150,6 +150,31 @@ function cambiosGastosProveedor(PDO $db): array {
 }
 
 /**
+ * 1.22.0 · Consultores contratistas con acceso al sistema: la categoría "consultor" de proveedores
+ * (las columnas proveedores.identidad y usuarios.proveedor_id las agrega el esquema) y, una sola vez
+ * (marca paso_rol_consultor: si después se borra el puesto, no vuelve), el puesto Consultor bajo
+ * Administración con sus anticipos y liquidaciones. Devuelve las sentencias que faltan.
+ */
+function cambiosConsultores(PDO $db): array {
+    $sql = [];
+    $tipo = (string)$db->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                                AND TABLE_NAME = 'proveedores' AND COLUMN_NAME = 'categoria'")->fetchColumn();
+    if ($tipo !== '' && !str_contains($tipo, "'consultor'")) {
+        $sql[] = "ALTER TABLE `proveedores` MODIFY `categoria` enum('bienes','servicios','ambos','consultor') DEFAULT 'ambos'";
+    }
+    if (!$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_rol_consultor'")->fetchColumn()) {
+        $padre = $db->query("SELECT clave FROM roles WHERE clave = 'administracion'")->fetchColumn() ? "'administracion'" : 'NULL';
+        $orden = (int)$db->query("SELECT COALESCE(MAX(orden), 0) + 1 FROM roles")->fetchColumn();
+        $sql[] = "INSERT IGNORE INTO roles (clave, nombre, depende_de, aprueba, aprueba_colegas, solo_propios, orden)
+                  VALUES ('consultor', 'Consultor', $padre, 0, 0, 1, $orden)";
+        $sql[] = "INSERT IGNORE INTO rol_modulos (rol, modulo) VALUES ('consultor', 'gastos_viajes.php'), ('consultor', 'gastos_solicitud.php')";
+        $sql[] = "INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
+                  ('paso_rol_consultor', '1', 'actualizar_bd.php ya creó el puesto Consultor (consultores con acceso al sistema)')";
+    }
+    return $sql;
+}
+
+/**
  * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: anula (no borra) las planillas
  * quincenales de octubre de 2026 para pagar ese mes con una planilla mensual. Se conservan con su
  * detalle, como constancia; sus órdenes de pago aún no pagadas se anulan y las ya pagadas quedan

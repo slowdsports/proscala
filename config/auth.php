@@ -193,12 +193,13 @@ const ACCIONES_BITACORA = [
 // "solo sus solicitudes" (roles.solo_propios) solo ve y edita las que creó o
 // editó (registro_usuarios) y las hechas a su nombre (columna empleado).
 //   tabla    → tabla del registro            empleado → columna del empleado al que corresponde
+//   proveedor → columna del proveedor (consultor con usuario) al que corresponde, si la hay
 //   docs     → tipos de print.php del registro (su id es el del registro)
 //   refs     → parámetros que apuntan a otra solicitud (también deben ser propias)
 const SOLICITUDES = [
     'compras_solicitud.php' => ['tabla' => 'solicitud_compra', 'empleado' => 'solicitante_id', 'docs' => ['sc', 'proceso'], 'refs' => []],
-    'gastos_viajes.php'     => ['tabla' => 'gastos_viaje',     'empleado' => 'empleado_id',    'docs' => ['gv', 'gva'],      'refs' => []],
-    'gastos_solicitud.php'  => ['tabla' => 'solicitud_gastos', 'empleado' => 'empleado_id',    'docs' => ['sg'],             'refs' => ['viaje_id' => 'gastos_viajes.php']],
+    'gastos_viajes.php'     => ['tabla' => 'gastos_viaje',     'empleado' => 'empleado_id',    'docs' => ['gv', 'gva'],      'refs' => [], 'proveedor' => 'proveedor_id'],
+    'gastos_solicitud.php'  => ['tabla' => 'solicitud_gastos', 'empleado' => 'empleado_id',    'docs' => ['sg'],             'refs' => ['viaje_id' => 'gastos_viajes.php'], 'proveedor' => 'proveedor_id'],
     'vacaciones.php'        => ['tabla' => 'vacaciones',       'empleado' => 'empleado_id',    'docs' => ['vac'],            'refs' => []],
     'permisos.php'          => ['tabla' => 'permisos',         'empleado' => 'empleado_id',    'docs' => ['per'],            'refs' => []],
 ];
@@ -235,9 +236,12 @@ function soloRegistrosPropios(): bool {
 function filtroPropios(string $modulo, string $alias): array {
     if (!soloRegistrosPropios() || !isset(SOLICITUDES[$modulo])) return ['1=1', []];
     $def = SOLICITUDES[$modulo];
+    $params = [$def['tabla'], (int)$_SESSION['usuario_id'], (int)($_SESSION['empleado_id'] ?? 0) ?: -1];
+    // Consultor: también lo que está a nombre de su proveedor
+    $deProveedor = '';
+    if (isset($def['proveedor'])) { $deProveedor = " OR {$alias}.{$def['proveedor']} = ?"; $params[] = (int)($_SESSION['proveedor_id'] ?? 0) ?: -1; }
     return ["({$alias}.id IN (SELECT registro_id FROM registro_usuarios WHERE tabla = ? AND usuario_id = ?)
-              OR {$alias}.{$def['empleado']} = ?)",
-            [$def['tabla'], (int)$_SESSION['usuario_id'], (int)($_SESSION['empleado_id'] ?? 0) ?: -1]];
+              OR {$alias}.{$def['empleado']} = ?$deProveedor)", $params];
 }
 
 function esRegistroPropio(PDO $pdo, string $modulo, int $id): bool {
@@ -278,6 +282,8 @@ function joinBeneficiarioGasto(string $alias): string {
 }
 /** Beneficiario elegido en el formulario: [empleado_id, proveedor_id], uno de los dos (si falta, responde el error). */
 function beneficiarioGastoDelFormulario(PDO $pdo): array {
+    // Un consultor (usuario de un proveedor) solo pide a su propio nombre
+    if (!empty($_SESSION['proveedor_id'])) return [null, (int)$_SESSION['proveedor_id']];
     $esProveedor = ($_POST['beneficiario_tipo'] ?? 'empleado') === 'proveedor';
     $id = (int)($_POST[$esProveedor ? 'proveedor_id' : 'empleado_id'] ?? 0);
     $s = $pdo->prepare('SELECT 1 FROM ' . ($esProveedor ? 'proveedores' : 'empleados') . ' WHERE id = ?');
@@ -386,7 +392,7 @@ function requireLogin() {
     }
     // Refresca rol y estado desde la BD: un cambio de rol, una baja o la
     // desactivación de la empresa aplican de inmediato.
-    $s = $GLOBALS['pdo']->prepare("SELECT rol, activo, email, debe_cambiar_password, empleado_id FROM usuarios WHERE id=?");
+    $s = $GLOBALS['pdo']->prepare("SELECT rol, activo, email, debe_cambiar_password, empleado_id, proveedor_id FROM usuarios WHERE id=?");
     $s->execute([$_SESSION['usuario_id']]);
     $u = $s->fetch();
     if (!$u || !$u['activo']) cerrarSesionYSalir();
@@ -402,6 +408,7 @@ function requireLogin() {
     $_SESSION['es_superadmin']  = (bool)$a['superadmin'];
     $_SESSION['empresa_nombre'] = $a['nombre'];
     $_SESSION['empleado_id']    = $u['empleado_id'] ? (int)$u['empleado_id'] : null;
+    $_SESSION['proveedor_id']   = $u['proveedor_id'] ? (int)$u['proveedor_id'] : null;   // consultor (proveedores.php)
     cargarPermisos($GLOBALS['pdo'], $u['rol']);
 
     $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
@@ -574,10 +581,11 @@ function sincronizarUsuarioEmpleado(PDO $pdo, PDO $pdoMaster, int $empresaId, in
     }
 
     if ($email === '') return 'Sin correo';
-    $s = $pdo->prepare("SELECT id, empleado_id FROM usuarios WHERE email=?");
+    $s = $pdo->prepare("SELECT id, empleado_id, proveedor_id FROM usuarios WHERE email=?");
     $s->execute([$email]);
     if ($x = $s->fetch()) {
         if ($x['empleado_id']) return "El correo $email ya es el usuario de otro empleado";
+        if ($x['proveedor_id']) return "El correo $email ya es el usuario de un consultor (Proveedores)";
         $pdo->prepare("UPDATE usuarios SET empleado_id=? WHERE id=?")->execute([$empleadoId, $x['id']]);
         return 'vinculado';
     }
@@ -594,6 +602,72 @@ function sincronizarUsuarioEmpleado(PDO $pdo, PDO $pdoMaster, int $empresaId, in
         return 'No se pudo crear: ' . $ex->getMessage();
     }
     return enviarActivacion($pdo, $pdoMaster, $empresaId, (int)$pdo->lastInsertId()) === true ? 'creado' : 'creado_sin_correo';
+}
+
+// ── Usuarios de consultores ───────────────────────────────────────
+// Un proveedor de categoría Consultor puede tener un usuario (usuarios.proveedor_id) con el puesto
+// Consultor: entra con su correo y solo ve y pide sus anticipos y liquidaciones (SOLICITUDES →
+// proveedor). Sin contraseña inicial recibe el enlace de activación por correo; con ella, debe
+// cambiarla al entrar. Quitar el acceso, darlo de baja o cambiarle la categoría desactiva el usuario.
+const CATEGORIAS_PROVEEDOR = ['bienes' => 'Bienes', 'servicios' => 'Servicios', 'ambos' => 'Ambos', 'consultor' => 'Consultores'];
+const ROL_CONSULTOR = 'consultor';
+
+/**
+ * Deja el usuario del consultor $proveedorId como corresponde. Devuelve [true, mensaje] o
+ * [false, motivo]. $clave: contraseña inicial ('' = enlace de activación o la que ya tiene).
+ */
+function sincronizarUsuarioProveedor(PDO $pdo, PDO $pdoMaster, int $empresaId, int $proveedorId, bool $acceso, string $clave = ''): array {
+    $s = $pdo->prepare("SELECT id, nombre, email, categoria, activo FROM proveedores WHERE id = ?");
+    $s->execute([$proveedorId]);
+    if (!$p = $s->fetch()) return [false, 'Proveedor no encontrado.'];
+    $s = $pdo->prepare("SELECT id, email, activo, pendiente_activacion FROM usuarios WHERE proveedor_id = ?");
+    $s->execute([$proveedorId]);
+    $u = $s->fetch() ?: null;
+
+    if (!$acceso || $p['categoria'] !== 'consultor' || !$p['activo']) {
+        if ($u && $u['activo']) {
+            $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE id = ?")->execute([$u['id']]);
+            return [true, 'Se desactivó su usuario del sistema.'];
+        }
+        return [true, ''];
+    }
+    $email = trim((string)$p['email']);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return [false, 'Para darle acceso al sistema, escriba un correo válido: es su usuario.'];
+    if ($clave !== '') {
+        if (mb_strlen($clave) < MIN_PASSWORD) return [false, 'La contraseña inicial debe tener al menos ' . MIN_PASSWORD . ' caracteres.'];
+        if (!preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $clave) || !preg_match('/\d/', $clave)) return [false, 'La contraseña inicial debe combinar letras y números.'];
+    }
+    // Con contraseña puesta aquí: la cambia al entrar (como las que pone el Administrador)
+    $conClave = fn(int $id) => $pdo->prepare("UPDATE usuarios SET password = ?, pendiente_activacion = 0, debe_cambiar_password = 1 WHERE id = ?")
+        ->execute([password_hash($clave, PASSWORD_BCRYPT), $id]);
+
+    if ($u) {
+        if (strcasecmp($email, $u['email']) !== 0) {
+            if (emailEnUso($pdoMaster, $email, $empresaId, $u['email'])) return [false, "El correo $email ya pertenece a otro usuario de la empresa."];
+            $pdo->prepare("UPDATE usuarios SET email = ? WHERE id = ?")->execute([$email, $u['id']]);
+            $pdoMaster->prepare("UPDATE accesos SET email = ? WHERE email = ? AND empresa_id = ?")->execute([$email, $u['email'], $empresaId]);
+        }
+        $pdo->prepare("UPDATE usuarios SET nombre = ?, activo = 1 WHERE id = ?")->execute([$p['nombre'], $u['id']]);
+        if ($clave !== '') { $conClave((int)$u['id']); return [true, 'Usuario actualizado con la nueva contraseña inicial (deberá cambiarla al entrar).']; }
+        return [true, $u['activo'] ? 'Usuario actualizado.' : 'Se reactivó su usuario del sistema.'];
+    }
+
+    if (emailEnUso($pdoMaster, $email, $empresaId)) return [false, "El correo $email ya pertenece a otro usuario de la empresa."];
+    $rol = isset(roles()[ROL_CONSULTOR]) ? ROL_CONSULTOR : 'empleado';
+    $pdoMaster->prepare("INSERT INTO accesos (email, empresa_id) VALUES (?,?)")->execute([$email, $empresaId]);
+    try {
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, pendiente_activacion, rol, proveedor_id, activo) VALUES (?,?,?,1,?,?,1)")
+            ->execute([$p['nombre'], $email, claveSinActivar(), $rol, $proveedorId]);
+    } catch (PDOException $ex) {
+        $pdoMaster->prepare("DELETE FROM accesos WHERE email = ? AND empresa_id = ?")->execute([$email, $empresaId]);
+        return [false, 'No se pudo crear el usuario: ' . $ex->getMessage()];
+    }
+    $nuevo = (int)$pdo->lastInsertId();
+    registrarEvento($pdo, 'INSERT', ['tabla' => 'usuarios', 'registro_id' => $nuevo, 'detalle' => "Usuario del consultor {$p['nombre']} ($email), puesto " . rolLabel($rol)]);
+    if ($clave !== '') { $conClave($nuevo); return [true, "Se creó su usuario ($email) con la contraseña inicial; deberá cambiarla al entrar."]; }
+    $envio = enviarActivacion($pdo, $pdoMaster, $empresaId, $nuevo);
+    return [true, $envio === true ? "Se creó su usuario y se envió a $email el enlace para crear su contraseña."
+                                  : "Se creó su usuario, pero no se pudo enviar el correo de activación ($envio). Póngale una contraseña inicial o reenvíelo."];
 }
 
 // RTN hondureño: 14 dígitos. Acepta guiones o espacios al escribirlo.

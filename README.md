@@ -253,7 +253,9 @@ Para comprar, primero debe existir la orden de pago: la nota de recepción es el
 4. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
 5. **Nota de Recepción.** Registre lo recibido: completo, parcial o con devolución, artículo por artículo.
 
-**Proveedores.** El catálogo de proveedores con RTN, contacto y datos bancarios para las órdenes de pago.
+**Proveedores.** El catálogo de proveedores con RTN, contacto y datos bancarios para las órdenes de pago. Categorías: Bienes, Servicios, Ambos y **Consultores**.
+
+**Consultores contratistas.** Registre al consultor en Proveedores con la categoría **Consultores**: además de sus datos y su cuenta bancaria, se anota su número de identidad y, con el interruptor **"Darle usuario para entrar al sistema"**, se le crea un usuario con el puesto **Consultor**. Su usuario es su **correo** (entra con el RTN de la empresa y ese correo). Si deja vacía la contraseña inicial, recibe por correo el enlace para crear la suya; si la escribe, deberá cambiarla al entrar. El consultor solo ve y pide **sus** anticipos y liquidaciones / reembolsos, siempre a su nombre, y sigue el flujo de aprobación según el organigrama. Quitar el acceso, dar de baja al proveedor o cambiarle la categoría desactiva su usuario.
 
 Desde la solicitud de compra puede imprimir el **proceso completo** (solicitud, orden de compra y orden de pago en un solo documento).
 
@@ -316,6 +318,8 @@ Aquí se define cómo se organiza su empresa en el sistema:
 - **Módulos**: marque qué módulos abre cada puesto y pulse **Guardar Permisos**.
 
 El **Administrador** tiene acceso total. Los módulos Usuarios y Roles y Permisos son exclusivos del Administrador.
+
+El puesto **Consultor** (bajo Administración, con "solo sus propias solicitudes" y los módulos Anticipos y Liquidaciones / Reembolsos) es el de los consultores contratistas a los que se les da acceso desde **Proveedores**. Como cualquier puesto, ajuste aquí de quién depende (quién aprueba sus solicitudes) y qué módulos abre.
 
 > **Consejo:** revise que cada puesto que aprueba tenga al menos un usuario activo. La columna **"Sus procesos los aprueban"** muestra, para cada puesto, quién puede aprobar sus procesos. Si un puesto superior no tiene usuarios, los procesos de sus subordinados solo los podrán aprobar los puestos más arriba o el Administrador.
 

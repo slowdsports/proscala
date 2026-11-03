@@ -22,6 +22,7 @@ $docNum = $doc['numero'];
 // Firmas
 $fGV = loadFirmantes($pdo, 'gv');
 if (!empty($doc['firmante1_id'])) $fGV = firmante1Documento($pdo, $fGV, $doc['firmante1_id']);
+elseif ($doc['proveedor_id']) $fGV[0] = ['posicion' => 1, 'etiqueta' => $fGV[0]['etiqueta'] ?? 'Solicitado por', 'emp_nombre' => $doc['emp_nombre']];   // lo pidió el consultor
 $fGV = firmasFlujo($pdo, $fGV, 'gastos_viajes.php', $id);
 
 require __DIR__ . '/_inicio.php';

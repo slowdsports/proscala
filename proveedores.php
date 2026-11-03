@@ -10,32 +10,61 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $_act = $_POST['_action'] ?? '';
     if ($_act === 'guardar') {
         $pid = (int)($_POST['id'] ?? 0);
+        $categoria = isset(CATEGORIAS_PROVEEDOR[$_POST['categoria'] ?? '']) ? $_POST['categoria'] : 'ambos';
         $d = ['nombre'=>trim($_POST['nombre']),
               'rtn'=>trim($_POST['rtn']??''),'contacto'=>trim($_POST['contacto']??''),
               'telefono'=>trim($_POST['telefono']??''),'email'=>trim($_POST['email']??''),
-              'direccion'=>trim($_POST['direccion']??''),'categoria'=>$_POST['categoria']??'ambos',
+              'direccion'=>trim($_POST['direccion']??''),'categoria'=>$categoria,
               'banco'=>trim($_POST['banco']??'')?:null,
               'banco_cuenta'=>trim($_POST['banco_cuenta']??'')?:null,
               'banco_tipo'=>in_array($_POST['banco_tipo']??'',['ahorros','cheques'])?$_POST['banco_tipo']:null,
-              'activo'=>isset($_POST['activo'])?1:0];
+              'activo'=>isset($_POST['activo'])?1:0,
+              'identidad'=>$categoria === 'consultor' ? (trim($_POST['identidad'] ?? '') ?: null) : null];
+        // Consultor: su usuario del sistema (config/auth.php, sincronizarUsuarioProveedor)
+        $acceso = $categoria === 'consultor' && isset($_POST['acceso_sistema']);
+        $clave  = $acceso ? (string)($_POST['clave_inicial'] ?? '') : '';
+        $pdo->beginTransaction();
         try {
             if ($pid) {
-                $pdo->prepare("UPDATE proveedores SET nombre=?,rtn=?,contacto=?,telefono=?,email=?,direccion=?,categoria=?,banco=?,banco_cuenta=?,banco_tipo=?,activo=? WHERE id=?")
+                $pdo->prepare("UPDATE proveedores SET nombre=?,rtn=?,contacto=?,telefono=?,email=?,direccion=?,categoria=?,banco=?,banco_cuenta=?,banco_tipo=?,activo=?,identidad=? WHERE id=?")
                     ->execute([...array_values($d), $pid]);
-                jsonOk([],'Proveedor actualizado.');
+                $msg = 'Proveedor actualizado.';
             } else {
                 $codigo = generarNumero($pdo, 'proveedores', 'codigo', 'PROV');
-                $pdo->prepare("INSERT INTO proveedores (codigo,nombre,rtn,contacto,telefono,email,direccion,categoria,banco,banco_cuenta,banco_tipo,activo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+                $pdo->prepare("INSERT INTO proveedores (codigo,nombre,rtn,contacto,telefono,email,direccion,categoria,banco,banco_cuenta,banco_tipo,activo,identidad) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
                     ->execute([$codigo, ...array_values($d)]);
-                jsonOk(['id'=>$pdo->lastInsertId()],'Proveedor creado.');
+                $pid = (int)$pdo->lastInsertId();
+                $msg = $categoria === 'consultor' ? 'Consultor creado.' : 'Proveedor creado.';
             }
-        } catch(PDOException $e){ jsonErr($e->getMessage()); }
+            [$ok, $msgUsuario] = sincronizarUsuarioProveedor($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], $pid, $acceso, $clave);
+            if (!$ok) { $pdo->rollBack(); jsonErr($msgUsuario); }
+            $pdo->commit();
+            jsonOk(['id' => $pid], trim("$msg $msgUsuario"));
+        } catch(PDOException $e){ if ($pdo->inTransaction()) $pdo->rollBack(); jsonErr($e->getMessage()); }
     }
-    if ($_act === 'eliminar') { $pdo->prepare("UPDATE proveedores SET activo=0 WHERE id=?")->execute([(int)$_POST['id']]); jsonOk([],'Proveedor dado de baja.'); }
+    if ($_act === 'eliminar') {
+        $pdo->prepare("UPDATE proveedores SET activo=0 WHERE id=?")->execute([(int)$_POST['id']]);
+        [, $msgUsuario] = sincronizarUsuarioProveedor($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], (int)$_POST['id'], false);
+        jsonOk([], trim("Proveedor dado de baja. $msgUsuario"));
+    }
+    // Reenviar al consultor el enlace para crear su contraseña
+    if ($_act === 'reenviar_activacion') {
+        $s = $pdo->prepare("SELECT id, email, pendiente_activacion FROM usuarios WHERE proveedor_id = ? AND activo = 1");
+        $s->execute([(int)($_POST['id'] ?? 0)]);
+        $u = $s->fetch();
+        if (!$u) jsonErr('El consultor no tiene un usuario activo.');
+        if (!$u['pendiente_activacion']) jsonErr('El consultor ya activó su cuenta.');
+        $GLOBALS['_bitacora_explicita'] = true;   // enviarActivacion ya lo registra
+        $envio = enviarActivacion($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], (int)$u['id']);
+        if ($envio !== true) jsonErr('No se pudo enviar el correo: ' . $envio);
+        jsonOk([], "Se envió a {$u['email']} un nuevo enlace de activación (vence en " . DIAS_ACTIVACION . ' días).');
+    }
     jsonErr('Acción desconocida.');
 }
 
-$proveedores = $pdo->query("SELECT * FROM proveedores ORDER BY nombre")->fetchAll();
+// Con el usuario del consultor, si lo tiene
+$proveedores = $pdo->query("SELECT p.*, u.id AS usuario_id, u.activo AS usuario_activo, u.pendiente_activacion, u.ultimo_acceso, u.rol AS usuario_rol
+    FROM proveedores p LEFT JOIN usuarios u ON u.proveedor_id = p.id ORDER BY p.nombre")->fetchAll();
 include __DIR__ . '/includes/header.php';
 ?>
 <div class="page-header">
@@ -60,7 +89,16 @@ include __DIR__ . '/includes/header.php';
           <span style="color:var(--text-3)">—</span>
           <?php endif; ?>
         </td>
-        <td><span class="badge bg-secondary"><?= ucfirst($p['categoria']) ?></span></td>
+        <td>
+          <span class="badge <?= $p['categoria'] === 'consultor' ? 'bg-info text-dark' : 'bg-secondary' ?>"><?= CATEGORIAS_PROVEEDOR[$p['categoria']] ?? ucfirst($p['categoria']) ?></span>
+          <?php if ($p['usuario_id']): // usuario del consultor ?>
+          <div style="font-size:.72rem;color:var(--text-3);margin-top:2px">
+            <?php if (!$p['usuario_activo']): ?><i class="fas fa-user-slash"></i> Sin acceso
+            <?php elseif ($p['pendiente_activacion']): ?><i class="fas fa-envelope"></i> Acceso pendiente de activar
+            <?php else: ?><i class="fas fa-user-check text-success"></i> Con acceso · <?= htmlspecialchars(rolLabel($p['usuario_rol'])) ?><?php endif; ?>
+          </div>
+          <?php endif; ?>
+        </td>
         <td><?= $p['activo']?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-danger">Inactivo</span>' ?></td>
         <td>
           <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='editProv(<?= json_encode($p) ?>)'><i class="fas fa-edit"></i></button>
@@ -94,12 +132,50 @@ include __DIR__ . '/includes/header.php';
             <div class="col-12"><label class="form-label">Dirección</label><input type="text" name="direccion" id="p-dir" class="form-control"></div>
             <div class="col-md-3">
               <label class="form-label">Categoría</label>
-              <select name="categoria" id="p-cat" class="form-select">
-                <option value="bienes">Bienes</option><option value="servicios">Servicios</option><option value="ambos" selected>Ambos</option>
+              <select name="categoria" id="p-cat" class="form-select" onchange="toggleConsultor()">
+                <?php foreach (CATEGORIAS_PROVEEDOR as $v => $n): ?><option value="<?= $v ?>" <?= $v === 'ambos' ? 'selected' : '' ?>><?= $n ?></option><?php endforeach; ?>
               </select>
             </div>
             <div class="col-md-2 d-flex align-items-end pb-1">
               <div class="form-check"><input type="checkbox" name="activo" class="form-check-input" id="p-activo" checked><label class="form-check-label" for="p-activo">Activo</label></div>
+            </div>
+
+            <!-- Consultor: datos personales y su usuario del sistema (sincronizarUsuarioProveedor) -->
+            <div class="col-12 grp-consultor" hidden>
+              <hr style="border-color:var(--border);margin:.25rem 0 .75rem">
+              <div style="font-size:.78rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em" class="mb-2">Consultor · Acceso al sistema</div>
+              <div class="row g-3">
+                <div class="col-md-4"><label class="form-label">N° de Identidad</label><input type="text" name="identidad" id="p-identidad" class="form-control" maxlength="20" placeholder="0801-1990-12345"></div>
+                <div class="col-md-8 d-flex align-items-end pb-1">
+                  <div class="form-check form-switch">
+                    <input type="checkbox" name="acceso_sistema" class="form-check-input" id="p-acceso" onchange="toggleConsultor()">
+                    <label class="form-check-label" for="p-acceso">Darle usuario para entrar al sistema y pedir sus anticipos y liquidaciones</label>
+                  </div>
+                </div>
+                <div class="col-12 grp-acceso" hidden>
+                  <div class="row g-3">
+                    <div class="col-md-5">
+                      <label class="form-label">Usuario</label>
+                      <input type="text" class="form-control" id="p-usuario" readonly placeholder="El correo de arriba">
+                      <div class="form-text">Entra con este correo y el RTN de la empresa.</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Contraseña inicial <small class="text-muted">(opcional)</small></label>
+                      <div class="input-group">
+                        <input type="password" name="clave_inicial" id="p-clave" class="form-control" autocomplete="new-password" minlength="<?= MIN_PASSWORD ?>">
+                        <button type="button" class="btn btn-outline-secondary" title="Mostrar" onclick="const i=document.getElementById('p-clave');i.type=i.type==='password'?'text':'password'"><i class="fas fa-eye"></i></button>
+                      </div>
+                      <div class="form-text">Mínimo <?= MIN_PASSWORD ?> caracteres, letras y números; la cambia al entrar. Vacía: recibe por correo el enlace para crearla.</div>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label">Puesto</label>
+                      <input type="text" class="form-control" readonly value="<?= htmlspecialchars(rolLabel(ROL_CONSULTOR)) ?>">
+                      <div class="form-text">Sus permisos y a quién reporta: <?= tieneAccesoTotal() ? '<a href="roles.php">Roles y Permisos</a>' : 'Roles y Permisos' ?>.</div>
+                    </div>
+                    <div class="col-12" id="p-estado-usuario" style="font-size:.82rem"></div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Datos bancarios -->
@@ -139,6 +215,36 @@ include __DIR__ . '/includes/header.php';
 $extraJs = <<<'JS'
 
 initDataTable('#tbl-prov');
+
+// Categoría Consultor: identidad y acceso al sistema; con acceso, su usuario es el correo
+function toggleConsultor() {
+  const esConsultor = document.getElementById('p-cat').value === 'consultor';
+  const acceso = esConsultor && document.getElementById('p-acceso').checked;
+  document.querySelector('#form-prov .grp-consultor').hidden = !esConsultor;
+  document.querySelector('#form-prov .grp-acceso').hidden = !acceso;
+  document.getElementById('p-email').required = acceso;
+  document.getElementById('p-usuario').value = document.getElementById('p-email').value;
+}
+document.getElementById('p-email').addEventListener('input', toggleConsultor);
+
+// Estado del usuario del consultor que se edita (y el botón para reenviarle la activación)
+function estadoUsuario(p) {
+  const el = document.getElementById('p-estado-usuario');
+  if (!p || !p.usuario_id) { el.innerHTML = ''; return; }
+  if (p.usuario_activo != 1) el.innerHTML = '<span class="text-muted"><i class="fas fa-user-slash"></i> Su usuario está desactivado; al guardar con el acceso marcado se reactiva.</span>';
+  else if (p.pendiente_activacion == 1) el.innerHTML = '<span class="text-warning-emphasis"><i class="fas fa-envelope"></i> Aún no activa su cuenta.</span> '
+    + `<button type="button" class="btn btn-sm btn-outline-secondary py-0 ms-1" onclick="reenviarActivacionProv(${p.id})"><i class="fas fa-paper-plane"></i> Reenviar enlace</button>`;
+  else el.innerHTML = '<span class="text-success"><i class="fas fa-user-check"></i> Tiene acceso.</span> '
+    + (p.ultimo_acceso ? 'Último ingreso: ' + p.ultimo_acceso : 'Aún no ha ingresado.') + ' Escriba una contraseña inicial solo si quiere reemplazar la suya.';
+}
+async function reenviarActivacionProv(id) {
+  const fd = new FormData();
+  fd.append('_action', 'reenviar_activacion'); fd.append('id', id);
+  fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+  try { const r = await post('proveedores.php', fd); Toast.show(r.message, r.success ? 'success' : 'error'); }
+  catch (e) { Toast.show(e.message, 'error'); }
+}
+
 function editProv(p){
   document.getElementById('p-id').value=p.id;
   document.getElementById('p-codigo-display').textContent=p.codigo||'';
@@ -156,6 +262,11 @@ function editProv(p){
   document.getElementById('p-banco-cuenta').value=p.banco_cuenta||'';
   document.getElementById('p-banco-tipo').value=p.banco_tipo||'';
   $('#p-banco-tipo').trigger('change');
+  document.getElementById('p-identidad').value=p.identidad||'';
+  document.getElementById('p-acceso').checked=!!p.usuario_id && p.usuario_activo==1;
+  document.getElementById('p-clave').value='';
+  estadoUsuario(p);
+  toggleConsultor();
   document.getElementById('prov-modal-title').textContent='Editar: '+p.nombre;
   new bootstrap.Modal(document.getElementById('modal-prov')).show();
 }
@@ -164,6 +275,9 @@ document.getElementById('modal-prov').addEventListener('show.bs.modal', function
   document.getElementById('p-id').value=0;
   document.getElementById('form-prov').reset();
   document.getElementById('p-codigo-wrap').style.display='none';
+  $('#p-cat').val('ambos').trigger('change.select2');
+  estadoUsuario(null);
+  toggleConsultor();
   document.getElementById('prov-modal-title').textContent='Nuevo Proveedor';
 });
 async function saveProv(){

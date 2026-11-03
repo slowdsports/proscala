@@ -350,6 +350,79 @@ try {
         }
     });
 
+    prueba('Consultor: Proveedores le da usuario y puesto Consultor; entra, pide su anticipo a su nombre y solo ve lo suyo', function () use ($baseUrl, $sesAdmin, $pdo, $pdoMaster, $empresa) {
+        if (!isset(roles(true)[ROL_CONSULTOR])) throw new Omitir('la base no tiene el puesto Consultor (actualizar_bd.php)');
+        $enviar = function (string $modulo, array $datos, string $ses) use ($baseUrl) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$ses\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba', '_action' => 'guardar', 'id' => 0])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/$modulo", false, $ctx), true) ?: [];
+        };
+        $sufijo = bin2hex(random_bytes(4));
+        $email = "zz.consultor.$sufijo@prueba.local";
+        $provId = $gvId = $uid = 0;
+        $ajeno = (int)$pdo->query("SELECT id FROM gastos_viaje WHERE proveedor_id IS NULL ORDER BY id DESC LIMIT 1")->fetchColumn();
+        try {
+            $datosProv = ['nombre' => "ZZ Consultor $sufijo", 'email' => $email, 'categoria' => 'consultor', 'activo' => 1, 'identidad' => '0801199012345', 'acceso_sistema' => 1];
+            $r = $enviar('proveedores.php', $datosProv + ['clave_inicial' => 'corta'], $sesAdmin);
+            afirmar(empty($r['success']) && !$pdo->query("SELECT 1 FROM proveedores WHERE email = '$email'")->fetchColumn(), 'aceptó una contraseña inicial corta (o guardó el proveedor igual)');
+            $r = $enviar('proveedores.php', $datosProv + ['clave_inicial' => 'Consultor2039'], $sesAdmin);
+            $provId = (int)($r['id'] ?? 0);
+            afirmar(!empty($r['success']) && $provId, 'no se creó el consultor: ' . ($r['message'] ?? 'sin respuesta'));
+            $u = $pdo->query("SELECT * FROM usuarios WHERE proveedor_id = $provId")->fetch();
+            $uid = (int)($u['id'] ?? 0);
+            afirmar($u && $u['rol'] === ROL_CONSULTOR && $u['email'] === $email && $u['activo'] && $u['debe_cambiar_password'] && password_verify('Consultor2039', $u['password']),
+                'el usuario del consultor no quedó con su correo, el puesto Consultor y la contraseña inicial por cambiar');
+            afirmar((bool)$pdoMaster->query("SELECT 1 FROM accesos WHERE email = '$email' AND empresa_id = {$empresa['id']}")->fetchColumn(), 'sin acceso en la base central');
+            [$cod, $html] = pedir("$baseUrl/proveedores.php", $sesAdmin);
+            afirmar(str_contains($html, 'Consultores') && str_contains($html, 'Con acceso') && !erroresPhp($html), 'la lista de proveedores no muestra el consultor con acceso');
+
+            // Entra como el consultor (ya cambió su contraseña)
+            $pdo->exec("UPDATE usuarios SET debe_cambiar_password = 0 WHERE id = $uid");
+            $ses = sesionDePrueba($pdo, $empresa, $uid);
+            [$cod, $html] = pedir("$baseUrl/gastos_viajes.php?action=nuevo", $ses);
+            afirmar($cod === 200 && str_contains($html, "ZZ Consultor $sufijo") && !str_contains($html, '-- Seleccione el empleado --</option><option') && !erroresPhp($html), "el formulario del consultor (HTTP $cod) no lo fija a su nombre");
+            $r = $enviar('gastos_viajes.php', ['tipo' => 'viaje', 'beneficiario_tipo' => 'empleado', 'empleado_id' => 1, 'destino' => 'ZZ viaje del consultor',
+                'fecha_salida' => '2039-03-01', 'fecha_regreso' => '2039-03-02', 'monto_alimentacion' => 0, 'items' => json_encode([['descripcion' => 'Bus', 'cuenta_id' => '', 'monto' => 300]])], $ses);
+            $gvId = (int)($r['id'] ?? 0);
+            afirmar(!empty($r['success']) && $gvId, 'el consultor no pudo pedir su anticipo: ' . ($r['message'] ?? 'sin respuesta'));
+            iguales([null, $provId], array_map(fn($v) => $v === null ? null : (int)$v, array_values($pdo->query("SELECT empleado_id, proveedor_id FROM gastos_viaje WHERE id = $gvId")->fetch())),
+                'el anticipo queda a nombre del consultor aunque el formulario diga otra cosa');
+            [$cod, $html] = pedir("$baseUrl/gastos_viajes.php", $ses);
+            afirmar($cod === 200 && str_contains($html, 'ZZ viaje del consultor'), 'el consultor no ve su anticipo');
+            if ($ajeno) {
+                $num = (string)$pdo->query("SELECT numero FROM gastos_viaje WHERE id = $ajeno")->fetchColumn();
+                afirmar($num === '' || !str_contains($html, ">$num<"), 'el consultor ve anticipos ajenos');
+                [$cod] = pedir("$baseUrl/gastos_viajes.php?action=ver&id=$ajeno", $ses);
+                afirmar($cod !== 200, "el consultor abrió un anticipo ajeno (HTTP $cod)");
+            }
+            [$cod, $html] = pedir("$baseUrl/mis_solicitudes.php", $ses);
+            afirmar($cod === 200 && str_contains($html, 'ZZ viaje del consultor') && !erroresPhp($html), 'Mis solicitudes del consultor no muestra su anticipo');
+            [$cod] = pedir("$baseUrl/proveedores.php", $ses);
+            afirmar($cod !== 200, 'el consultor abrió Proveedores');
+            [$cod] = pedir("$baseUrl/gastos_solicitud.php?action=nuevo", $ses);
+            iguales(200, $cod, 'el consultor abre Liquidaciones / Reembolsos');
+
+            // Quitarle el acceso desactiva su usuario
+            $r = $enviar('proveedores.php', ['id' => $provId, 'acceso_sistema' => null] + $datosProv, $sesAdmin);
+            afirmar(!empty($r['success']), 'no se guardó al quitar el acceso');
+            iguales(0, (int)$pdo->query("SELECT activo FROM usuarios WHERE id = $uid")->fetchColumn(), 'quitar el acceso desactiva el usuario');
+        } finally {
+            if ($gvId) {
+                $proc = (int)$pdo->query("SELECT proceso_id FROM gastos_viaje WHERE id = $gvId")->fetchColumn();
+                $pdo->exec("DELETE FROM gastos_viaje_detalle WHERE viaje_id = $gvId");
+                $pdo->exec("DELETE FROM gastos_viaje WHERE id = $gvId");
+                foreach (['registro_usuarios', 'notificaciones', 'aprobaciones', 'recordatorios'] as $t) $pdo->exec("DELETE FROM $t WHERE tabla = 'gastos_viaje' AND registro_id = $gvId");
+                if ($proc) $pdo->exec("DELETE FROM procesos_viaticos WHERE id = $proc");
+            }
+            if ($uid) { $pdo->exec("DELETE FROM notificaciones WHERE usuario_id = $uid"); $pdo->exec("DELETE FROM auditoria WHERE usuario_id = $uid"); $pdo->exec("DELETE FROM usuarios WHERE id = $uid"); }
+            $pdoMaster->exec("DELETE FROM accesos WHERE email = '$email'");
+            $pdoMaster->exec("DELETE FROM recuperaciones WHERE email = '$email'");
+            if ($provId) $pdo->exec("DELETE FROM proveedores WHERE id = $provId");
+            $pdo->exec("DELETE FROM auditoria WHERE ip IN ('127.0.0.1', '::1') AND (detalle LIKE '%ZZ Consultor $sufijo%' OR detalle LIKE '%$email%' OR detalle LIKE 'GV creado%') AND created_at >= NOW() - INTERVAL 10 MINUTE");
+        }
+    });
+
     prueba('Página principal, inicio de sesión y recuperar contraseña (sin sesión)', function () use ($baseUrl) {
         foreach (['' => 'Iniciar sesión', 'login.php' => 'RTN de la empresa', 'recuperar.php' => 'Enviar enlace'] as $p => $texto) {
             [$cod, $html] = pedir("$baseUrl/$p");

@@ -49,6 +49,7 @@ function comoUsuario(PDO $pdo, int $usuarioId): void {
     $_SESSION['usuario_rol'] = $u['rol'];
     $_SESSION['usuario_email'] = $u['email'];
     $_SESSION['empleado_id'] = $u['empleado_id'] ? (int)$u['empleado_id'] : null;
+    $_SESSION['proveedor_id'] = $u['proveedor_id'] ? (int)$u['proveedor_id'] : null;
     $_SESSION['es_superadmin'] = false;
     roles(true);
     cargarPermisos($pdo, $u['rol']);

@@ -815,11 +815,12 @@ CREATE TABLE `proveedores` (
   `codigo` varchar(20) DEFAULT NULL,
   `nombre` varchar(200) NOT NULL,
   `rtn` varchar(20) DEFAULT NULL,
+  `identidad` varchar(20) DEFAULT NULL,
   `contacto` varchar(100) DEFAULT NULL,
   `telefono` varchar(20) DEFAULT NULL,
   `email` varchar(150) DEFAULT NULL,
   `direccion` text DEFAULT NULL,
-  `categoria` enum('bienes','servicios','ambos') DEFAULT 'ambos',
+  `categoria` enum('bienes','servicios','ambos','consultor') DEFAULT 'ambos',
   `activo` tinyint(1) DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `banco` varchar(100) DEFAULT NULL,
@@ -993,6 +994,7 @@ CREATE TABLE `usuarios` (
   `bloqueado_en` datetime DEFAULT NULL,
   `rol` varchar(30) NOT NULL DEFAULT 'empleado',
   `empleado_id` int(11) DEFAULT NULL,
+  `proveedor_id` int(11) DEFAULT NULL,
   `activo` tinyint(1) DEFAULT 1,
   `ultimo_acceso` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -1000,7 +1002,8 @@ CREATE TABLE `usuarios` (
   `notificar_correo` tinyint(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
-  UNIQUE KEY `uq_usuarios_empleado` (`empleado_id`)
+  UNIQUE KEY `uq_usuarios_empleado` (`empleado_id`),
+  UNIQUE KEY `uq_usuarios_proveedor` (`proveedor_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `vacaciones` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

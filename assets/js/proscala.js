@@ -713,7 +713,7 @@ const AltaRapida = {
     proveedor: { label: 'proveedor', icono: 'fa-truck', campos: [
       ['nombre', 'Nombre *', 'col-12'], ['rtn', 'RTN', 'col-md-6'], ['telefono', 'Teléfono', 'col-md-6'],
       ['contacto', 'Contacto', 'col-md-6'], ['email', 'Email', 'col-md-6', 'email'],
-      ['categoria', 'Categoría', 'col-md-6', { ambos: 'Bienes y servicios', bienes: 'Bienes', servicios: 'Servicios' }]] },
+      ['categoria', 'Categoría', 'col-md-6', { ambos: 'Bienes y servicios', bienes: 'Bienes', servicios: 'Servicios', consultor: 'Consultor' }]] },
     banco:        { label: 'banco',        icono: 'fa-building-columns', campos: [['nombre', 'Nombre *', 'col-12']] },
     cargo:        { label: 'cargo',        icono: 'fa-briefcase',        campos: [['nombre', 'Nombre *', 'col-12']] },
     departamento: { label: 'departamento', icono: 'fa-sitemap',          campos: [['nombre', 'Nombre *', 'col-12']] },

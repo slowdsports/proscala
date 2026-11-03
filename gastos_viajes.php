@@ -92,7 +92,7 @@ if (in_array($action,['ver','editar']) && $id) {
 }
 
 $empleados = $pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
-$proveedores = $pdo->query("SELECT id,nombre FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();
+$proveedores = $pdo->query("SELECT id,nombre,categoria FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();   // includes/beneficiario_gasto.php
 $proyectos = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo' ORDER BY nombre")->fetchAll();
 $cuentas   = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 $listaViajes = [];

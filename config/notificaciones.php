@@ -83,18 +83,20 @@ function conDelegados(PDO $pdo, array $ids, array $excluir = []): array {
 function interesadosProceso(PDO $pdo, string $modulo, int $id): array {
     $tabla = PROCESOS[$modulo]['tabla'];
     $registro = $id;
-    $empleado = null;
+    $empleado = $proveedor = null;   // proveedor: el consultor con usuario (proveedores.php)
     if ($tabla === 'ordenes_pago') {
-        $s = $pdo->prepare("SELECT origen_tabla, origen_id, empleado_id FROM ordenes_pago WHERE id = ?");
+        $s = $pdo->prepare("SELECT origen_tabla, origen_id, empleado_id, proveedor_id FROM ordenes_pago WHERE id = ?");
         $s->execute([$id]);
         if ($op = $s->fetch()) {
-            $empleado = $op['empleado_id'];
+            [$empleado, $proveedor] = [$op['empleado_id'], $op['proveedor_id']];
             if ($op['origen_tabla']) [$tabla, $registro] = [$op['origen_tabla'], (int)$op['origen_id']];
         }
     } elseif ($col = SOLICITUDES[$modulo]['empleado'] ?? null) {
-        $s = $pdo->prepare("SELECT `$col` FROM `$tabla` WHERE id = ?");
+        $colProv = SOLICITUDES[$modulo]['proveedor'] ?? null;
+        $s = $pdo->prepare("SELECT `$col`" . ($colProv ? ", `$colProv`" : '') . " FROM `$tabla` WHERE id = ?");
         $s->execute([$id]);
-        $empleado = $s->fetchColumn() ?: null;
+        $f = $s->fetch(PDO::FETCH_NUM) ?: [null, null];
+        [$empleado, $proveedor] = [$f[0] ?: null, $f[1] ?? null];
     }
     $s = $pdo->prepare("SELECT usuario_id FROM registro_usuarios WHERE tabla = ? AND registro_id = ? AND participacion = 'creador'");
     $s->execute([$tabla, $registro]);
@@ -102,6 +104,11 @@ function interesadosProceso(PDO $pdo, string $modulo, int $id): array {
     if ($empleado) {
         $s = $pdo->prepare("SELECT id FROM usuarios WHERE empleado_id = ? AND activo = 1");
         $s->execute([$empleado]);
+        $ids[] = (int)$s->fetchColumn();
+    }
+    if ($proveedor) {
+        $s = $pdo->prepare("SELECT id FROM usuarios WHERE proveedor_id = ? AND activo = 1");
+        $s->execute([$proveedor]);
         $ids[] = (int)$s->fetchColumn();
     }
     return $ids;

@@ -27,6 +27,7 @@ $docNum = $doc['numero'];
 // Firmas
 $fSG = loadFirmantes($pdo, 'sg');
 if (!empty($doc['firmante1_id'])) $fSG = firmante1Documento($pdo, $fSG, $doc['firmante1_id']);
+elseif ($doc['proveedor_id']) $fSG[0] = ['posicion' => 1, 'etiqueta' => $fSG[0]['etiqueta'] ?? 'Solicitado por', 'emp_nombre' => $doc['emp_nombre']];   // lo pidió el consultor
 $fSG = firmasFlujo($pdo, $fSG, 'gastos_solicitud.php', $id);
 
 // Liquidación con viáticos de alimentación: segunda página con su voucher

@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.21.0';
+const VERSION_BD = '1.22.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -80,6 +80,13 @@ $PASOS = [
         'descripcion' => 'Anticipos y liquidaciones/reembolsos a nombre de un proveedor o consultor: el empleado deja de ser obligatorio (1.21.0)',
         'pendiente' => fn(PDO $db) => (bool)cambiosGastosProveedor($db),
         'aplicar' => function (PDO $db) { foreach (cambiosGastosProveedor($db) as $sql) $db->exec($sql); },
+    ],
+    [
+        // Después de las columnas del esquema (proveedores.identidad, usuarios.proveedor_id): config/esquema.php
+        'base' => 'empresa',
+        'descripcion' => 'Consultores con acceso al sistema: categoría "Consultor" en proveedores y el puesto Consultor (sus anticipos y liquidaciones) (1.22.0)',
+        'pendiente' => fn(PDO $db) => (bool)cambiosConsultores($db),
+        'aplicar' => function (PDO $db) { foreach (cambiosConsultores($db) as $sql) $db->exec($sql); },
     ],
 ];
 
