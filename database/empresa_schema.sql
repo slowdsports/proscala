@@ -836,6 +836,14 @@ CREATE TABLE `proveedores` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `codigo` (`codigo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `proveedor_proyectos` (
+  `proveedor_id` int(11) NOT NULL,
+  `proyecto_id` int(11) NOT NULL,
+  PRIMARY KEY (`proveedor_id`,`proyecto_id`),
+  KEY `idx_pp_proyecto` (`proyecto_id`),
+  CONSTRAINT `fk_pp_proveedor` FOREIGN KEY (`proveedor_id`) REFERENCES `proveedores` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pp_proyecto` FOREIGN KEY (`proyecto_id`) REFERENCES `proyectos` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `proyectos` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `codigo` varchar(30) NOT NULL,

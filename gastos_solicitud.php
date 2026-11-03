@@ -32,7 +32,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'proveedor_id' => $proveedorId,
             'firmante1_id' => $firmante1Id,
             'descripcion'  => trim($_POST['descripcion']),
-            'proyecto_id'  => $_POST['proyecto_id'] ?: null,
+            'proyecto_id'  => proyectoDelFormulario($pdo, 'solicitud_gastos', $sgId),   // consultor: solo los suyos
             'viaje_id'     => $_POST['viaje_id'] ?: null,
             'notas'        => trim($_POST['notas'] ?? ''),
         ];
@@ -100,7 +100,6 @@ if (in_array($action,['ver','editar']) && $id) {
 // ── Auxiliares ────────────────────────────────────────────────────
 $empleados = $pdo->query("SELECT id, CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
 $proveedores = $pdo->query("SELECT id,nombre,categoria FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();   // includes/beneficiario_gasto.php
-$proyectos = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo' ORDER BY nombre")->fetchAll();
 $cuentas   = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 // Roles que solo ven sus solicitudes: también solo pueden ligar sus propios anticipos
 [$fpGv, $fpGvParams] = filtroPropios('gastos_viajes.php', 'gv');
@@ -263,12 +262,7 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
         </div>
         <div class="col-md-4">
           <label class="form-label">Proyecto</label>
-          <select name="proyecto_id" class="form-select">
-            <option value="">-- General --</option>
-            <?php foreach ($proyectos as $p): ?>
-            <option value="<?= $p['id'] ?>" <?= ($sg['proyecto_id']??0)==$p['id']?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option>
-            <?php endforeach; ?>
-          </select>
+          <select name="proyecto_id" class="form-select" <?= proyectoGeneralPermitido($pdo) ? '' : 'required' ?>><?= opcionesProyecto($pdo, $sg['proyecto_id'] ?? null) ?></select>
         </div>
         <div class="col-md-8">
           <label class="form-label">Anticipo Relacionado <small class="text-muted">(liquidación de un anticipo de viaje o de compra)</small></label>

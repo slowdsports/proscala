@@ -407,7 +407,10 @@ try {
         $provId = $gvId = $uid = 0;
         $ajeno = (int)$pdo->query("SELECT id FROM gastos_viaje WHERE proveedor_id IS NULL ORDER BY id DESC LIMIT 1")->fetchColumn();
         try {
-            $datosProv = ['nombre' => "ZZ Consultor $sufijo", 'email' => $email, 'categoria' => 'consultor', 'activo' => 1, 'identidad' => '0801199012345', 'acceso_sistema' => 1];
+            // Proyectos: se le asigna el primero; el segundo no lo puede usar
+            $proys = $pdo->query("SELECT id, nombre FROM proyectos WHERE estado = 'activo' ORDER BY id LIMIT 2")->fetchAll();
+            $datosProv = ['nombre' => "ZZ Consultor $sufijo", 'email' => $email, 'categoria' => 'consultor', 'activo' => 1, 'identidad' => '0801199012345', 'acceso_sistema' => 1,
+                          'proyectos' => $proys ? [$proys[0]['id']] : []];
             $r = $enviar('proveedores.php', $datosProv + ['clave_inicial' => 'corta'], $sesAdmin);
             afirmar(empty($r['success']) && !$pdo->query("SELECT 1 FROM proveedores WHERE email = '$email'")->fetchColumn(), 'aceptó una contraseña inicial corta (o guardó el proveedor igual)');
             $r = $enviar('proveedores.php', $datosProv + ['clave_inicial' => 'Consultor2039'], $sesAdmin);
@@ -426,8 +429,24 @@ try {
             $ses = sesionDePrueba($pdo, $empresa, $uid);
             [$cod, $html] = pedir("$baseUrl/gastos_viajes.php?action=nuevo", $ses);
             afirmar($cod === 200 && str_contains($html, "ZZ Consultor $sufijo") && !str_contains($html, '-- Seleccione el empleado --</option><option') && !erroresPhp($html), "el formulario del consultor (HTTP $cod) no lo fija a su nombre");
-            $r = $enviar('gastos_viajes.php', ['tipo' => 'viaje', 'beneficiario_tipo' => 'empleado', 'empleado_id' => 1, 'destino' => 'ZZ viaje del consultor',
-                'fecha_salida' => '2039-03-01', 'fecha_regreso' => '2039-03-02', 'monto_alimentacion' => 0, 'items' => json_encode([['descripcion' => 'Bus', 'cuenta_id' => '', 'monto' => 300]])], $ses);
+            $anticipo = ['tipo' => 'viaje', 'beneficiario_tipo' => 'empleado', 'empleado_id' => 1, 'destino' => 'ZZ viaje del consultor',
+                'fecha_salida' => '2039-03-01', 'fecha_regreso' => '2039-03-02', 'monto_alimentacion' => 0, 'items' => json_encode([['descripcion' => 'Bus', 'cuenta_id' => '', 'monto' => 300]])];
+            if ($proys) {
+                iguales([(int)$proys[0]['id']], array_map('intval', $pdo->query("SELECT proyecto_id FROM proveedor_proyectos WHERE proveedor_id = $provId")->fetchAll(PDO::FETCH_COLUMN)),
+                    'Proveedores no guardó los proyectos del consultor');
+                $opcion = fn($p) => '>' . htmlspecialchars($p['nombre']) . '</option>';
+                afirmar(str_contains($html, $opcion($proys[0])) && !str_contains($html, '-- General --'), 'el formulario no le ofrece solo su proyecto (o le ofrece General)');
+                afirmar(str_contains(pedir("$baseUrl/gastos_solicitud.php?action=nuevo", $ses)[1], $opcion($proys[0])), 'la liquidación no le ofrece su proyecto');
+                if (isset($proys[1])) {
+                    afirmar(!str_contains($html, $opcion($proys[1])), 'el formulario le ofrece un proyecto que no tiene asignado');
+                    $r = $enviar('gastos_viajes.php', $anticipo + ['proyecto_id' => $proys[1]['id']], $ses);
+                    afirmar(empty($r['success']) && str_contains($r['message'] ?? '', 'no está asignado'), 'aceptó un proyecto que no tiene asignado');
+                }
+                $r = $enviar('gastos_viajes.php', $anticipo + ['proyecto_id' => ''], $ses);
+                afirmar(empty($r['success']) && str_contains($r['message'] ?? '', 'Seleccione el proyecto'), 'aceptó el anticipo sin proyecto teniendo proyectos asignados');
+                $anticipo['proyecto_id'] = $proys[0]['id'];
+            }
+            $r = $enviar('gastos_viajes.php', $anticipo, $ses);
             $gvId = (int)($r['id'] ?? 0);
             afirmar(!empty($r['success']) && $gvId, 'el consultor no pudo pedir su anticipo: ' . ($r['message'] ?? 'sin respuesta'));
             iguales([null, $provId], array_map(fn($v) => $v === null ? null : (int)$v, array_values($pdo->query("SELECT empleado_id, proveedor_id FROM gastos_viaje WHERE id = $gvId")->fetch())),

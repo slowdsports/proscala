@@ -11,6 +11,14 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.26.0 — 2026-11-03
+**Proyectos de cada consultor**
+- En **Proveedores**, la sección *Consultor* tiene la lista **Proyectos a los que tiene acceso**, donde se eligen uno o varios proyectos. El expediente del consultor también los muestra (tabla nueva `proveedor_proyectos`).
+- En sus anticipos, liquidaciones / reembolsos y solicitudes de compra, el consultor solo ve los proyectos que tiene asignados. Si tiene alguno, debe elegirlo, porque "General" ya no aparece. Si no tiene ninguno, solo puede elegir General.
+- El servidor también lo valida: rechaza un proyecto que no le está asignado, aunque se envíe a mano. Al editar una solicitud se conserva el proyecto que ya tenía.
+- Los demás usuarios siguen viendo todos los proyectos activos.
+- Requiere ejecutar `actualizar_bd.php` (estructura 1.26.0).
+
 ## 1.25.1 — 2026-11-03
 **Botones que no respondían al llegar a una página sin recargar**
 - **Corrección**: al abrir una página desde el menú o un enlace (sin recargar el navegador), los botones cuya función es asíncrona fallaban con "… is not defined". Por ejemplo: Guardar en Proveedores, Guardar permisos y puestos en Roles, Guardar en Usuarios, Proyectos, Activos, Presupuesto y Catálogos, Crear en Vacaciones, Permisos, Préstamos y planillas. Con F5 sí funcionaban. Afectaba 29 funciones en 20 páginas; ahora todas las funciones de la página quedan disponibles desde el inicio, aunque otra parte de su código falle (`Nav.ejecutarScripts` en `assets/js/proscala.js`).

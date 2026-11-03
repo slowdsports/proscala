@@ -16,7 +16,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $items = json_decode($_POST['items'] ?? '[]', true);
         $total = array_sum(array_column($items,'total'));
         $d = ['fecha'=>$_POST['fecha'],'solicitante_id'=>(int)$_POST['solicitante_id'],
-              'proyecto_id'=>$_POST['proyecto_id']?:null,'descripcion'=>trim($_POST['descripcion']),
+              'proyecto_id'=>proyectoDelFormulario($pdo,'solicitud_compra',$scId),'descripcion'=>trim($_POST['descripcion']),
               'justificacion'=>trim($_POST['justificacion']??''),'urgencia'=>$_POST['urgencia']??'normal',
               'presupuesto_estimado'=>$total,'notas'=>trim($_POST['notas']??'')];
         $pdo->beginTransaction();
@@ -58,7 +58,6 @@ if (in_array($action,['ver','editar']) && $id) {
     $s2->execute([$id]); $detalle=$s2->fetchAll();
 }
 $empleados=$pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
-$proyectos=$pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo'")->fetchAll();
 $lista=[];
 if($action==='list') {
     [$fp, $fpParams] = filtroPropios('compras_solicitud.php', 'sc');   // roles que solo ven sus solicitudes
@@ -180,7 +179,7 @@ $cadModulo = 'compras_solicitud.php'; $cadId = $sc['id']; include __DIR__ . '/in
       <div class="row g-3">
         <div class="col-md-2"><label class="form-label">Fecha *</label><input type="text" name="fecha" class="form-control date-input" required value="<?= $sc['fecha']??date('Y-m-d') ?>"></div>
         <div class="col-md-4"><label class="form-label">Solicitante *</label><select name="solicitante_id" class="form-select" required><option value="">--</option><?php foreach($empleados as $e): ?><option value="<?= $e['id'] ?>" <?= ($sc['solicitante_id']??$_SESSION['empleado_id']??0)==$e['id']?'selected':'' ?>><?= htmlspecialchars($e['nombre']) ?></option><?php endforeach; ?></select></div>
-        <div class="col-md-3"><label class="form-label">Proyecto</label><select name="proyecto_id" class="form-select"><option value="">-- General --</option><?php foreach($proyectos as $p): ?><option value="<?= $p['id'] ?>" <?= ($sc['proyecto_id']??0)==$p['id']?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select></div>
+        <div class="col-md-3"><label class="form-label">Proyecto</label><select name="proyecto_id" class="form-select" <?= proyectoGeneralPermitido($pdo) ? '' : 'required' ?>><?= opcionesProyecto($pdo, $sc['proyecto_id'] ?? null) ?></select></div>
         <div class="col-md-3"><label class="form-label">Urgencia</label><select name="urgencia" class="form-select"><option value="normal">Normal</option><option value="urgente">Urgente</option><option value="muy_urgente">Muy Urgente</option></select></div>
         <div class="col-12"><label class="form-label">Descripción General *</label><input type="text" name="descripcion" class="form-control" required value="<?= htmlspecialchars($sc['descripcion']??'') ?>"></div>
         <div class="col-12"><label class="form-label">Justificación</label><textarea name="justificacion" class="form-control" rows="2"><?= htmlspecialchars($sc['justificacion']??'') ?></textarea></div>

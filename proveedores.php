@@ -38,6 +38,12 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pid = (int)$pdo->lastInsertId();
                 $msg = $categoria === 'consultor' ? 'Consultor creado.' : 'Proveedor creado.';
             }
+            // Consultor: proyectos que puede elegir en sus solicitudes (proyectosDisponibles)
+            $pdo->prepare("DELETE FROM proveedor_proyectos WHERE proveedor_id = ?")->execute([$pid]);
+            if ($categoria === 'consultor') {
+                $insProy = $pdo->prepare("INSERT IGNORE INTO proveedor_proyectos (proveedor_id, proyecto_id) SELECT ?, id FROM proyectos WHERE id = ?");
+                foreach ((array)($_POST['proyectos'] ?? []) as $proyId) $insProy->execute([$pid, (int)$proyId]);
+            }
             [$ok, $msgUsuario] = sincronizarUsuarioProveedor($pdo, $pdoMaster, (int)$_SESSION['empresa_id'], $pid, $acceso, $clave);
             if (!$ok) { $pdo->rollBack(); jsonErr($msgUsuario); }
             $pdo->commit();
@@ -66,8 +72,13 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Con el usuario del consultor, si lo tiene
 $proveedores = $pdo->query("SELECT p.*, u.id AS usuario_id, u.activo AS usuario_activo, u.pendiente_activacion, u.ultimo_acceso, u.rol AS usuario_rol,
-        (SELECT COUNT(*) FROM adjuntos a WHERE a.tabla = 'proveedores' AND a.registro_id = p.id AND a.rechazo_id IS NULL) AS docs_expediente
+        (SELECT COUNT(*) FROM adjuntos a WHERE a.tabla = 'proveedores' AND a.registro_id = p.id AND a.rechazo_id IS NULL) AS docs_expediente,
+        (SELECT GROUP_CONCAT(pp.proyecto_id) FROM proveedor_proyectos pp WHERE pp.proveedor_id = p.id) AS proyectos_ids
     FROM proveedores p LEFT JOIN usuarios u ON u.proveedor_id = p.id ORDER BY p.nombre")->fetchAll();
+// Proyectos que se pueden asignar a un consultor (los cerrados se muestran solo si ya los tiene)
+$proyectosAsignables = $pdo->query("SELECT id, codigo, nombre, estado FROM proyectos
+    WHERE estado = 'activo' OR id IN (SELECT proyecto_id FROM proveedor_proyectos) ORDER BY nombre")->fetchAll();
+$nombreProyecto = array_column($proyectosAsignables, 'nombre', 'id');
 $prov = null;
 if ($action === 'expediente') {
     foreach ($proveedores as $p) if ((int)$p['id'] === $id) $prov = $p;
@@ -97,6 +108,9 @@ include __DIR__ . '/includes/header.php';
       <div class="col-md-3"><strong>Código:</strong> <span class="font-mono"><?= htmlspecialchars($prov['codigo'] ?? '—') ?></span></div>
       <div class="col-md-3"><strong>RTN:</strong> <?= htmlspecialchars($prov['rtn'] ?: '—') ?></div>
       <?php if ($prov['categoria'] === 'consultor'): ?><div class="col-md-3"><strong>Identidad:</strong> <?= htmlspecialchars($prov['identidad'] ?: '—') ?></div><?php endif; ?>
+      <?php if ($prov['categoria'] === 'consultor'): $_proys = array_filter(array_map(fn($i) => $nombreProyecto[$i] ?? null, explode(',', (string)$prov['proyectos_ids']))); ?>
+      <div class="col-12"><strong>Proyectos:</strong> <?= $_proys ? htmlspecialchars(implode(', ', $_proys)) : '<span class="text-muted">Ninguno (solo General)</span>' ?></div>
+      <?php endif; ?>
       <div class="col-md-3"><strong>Contacto:</strong> <?= htmlspecialchars($prov['contacto'] ?: '—') ?></div>
       <div class="col-md-3"><strong>Teléfono:</strong> <?= htmlspecialchars($prov['telefono'] ?: '—') ?></div>
       <div class="col-md-3"><strong>Correo:</strong> <?= htmlspecialchars($prov['email'] ?: '—') ?></div>
@@ -191,6 +205,15 @@ include __DIR__ . '/includes/header.php';
                     <input type="checkbox" name="acceso_sistema" class="form-check-input" id="p-acceso" onchange="toggleConsultor()">
                     <label class="form-check-label" for="p-acceso">Darle usuario para entrar al sistema y pedir sus anticipos y liquidaciones</label>
                   </div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="p-proyectos">Proyectos a los que tiene acceso</label>
+                  <select name="proyectos[]" id="p-proyectos" class="form-select" multiple data-placeholder="Sin proyectos: en sus solicitudes solo puede elegir General">
+                    <?php foreach ($proyectosAsignables as $py): ?>
+                    <option value="<?= $py['id'] ?>"><?= htmlspecialchars($py['codigo'] . ' · ' . $py['nombre']) . ($py['estado'] !== 'activo' ? ' (' . $py['estado'] . ')' : '') ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <div class="form-text">En sus anticipos, liquidaciones y solicitudes solo verá y podrá elegir estos proyectos.</div>
                 </div>
                 <div class="col-12 grp-acceso" hidden>
                   <div class="row g-3">
@@ -309,6 +332,8 @@ function editProv(p){
   document.getElementById('p-banco-tipo').value=p.banco_tipo||'';
   $('#p-banco-tipo').trigger('change');
   document.getElementById('p-identidad').value=p.identidad||'';
+  const proyIds = String(p.proyectos_ids || '').split(',');
+  [...document.getElementById('p-proyectos').options].forEach(o => o.selected = proyIds.includes(o.value));
   document.getElementById('p-acceso').checked=!!p.usuario_id && p.usuario_activo==1;
   document.getElementById('p-clave').value='';
   estadoUsuario(p);

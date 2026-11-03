@@ -295,6 +295,64 @@ function beneficiarioGastoDelFormulario(PDO $pdo): array {
     return $esProveedor ? [null, $id] : [$id, null];
 }
 
+// ── Proyectos de una solicitud ─────────────────────────────────────
+// Un consultor (usuario de un proveedor) solo elige los proyectos que se le asignaron en
+// Proveedores (proveedor_proyectos); si tiene alguno, debe elegirlo (no hay "General").
+// Los demás usuarios eligen cualquier proyecto activo.
+
+/** Ids de los proyectos asignados al consultor de la sesión; null si el usuario no es consultor. */
+function proyectosDelConsultor(PDO $pdo): ?array {
+    $prov = (int)($_SESSION['proveedor_id'] ?? 0);
+    if (!$prov) return null;
+    $s = $pdo->prepare("SELECT proyecto_id FROM proveedor_proyectos WHERE proveedor_id = ?");
+    $s->execute([$prov]);
+    return array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/** Proyectos para la lista del formulario. $actual: el ya guardado en el registro, se muestra aunque ya no esté disponible. */
+function proyectosDisponibles(PDO $pdo, $actual = null): array {
+    $asignados = proyectosDelConsultor($pdo);
+    $filtro = $asignados === null ? "estado = 'activo'"
+        : ($asignados ? "estado = 'activo' AND id IN (" . implode(',', $asignados) . ')' : '0');
+    $s = $pdo->prepare("SELECT id, nombre FROM proyectos WHERE ($filtro) OR id = ? ORDER BY nombre");
+    $s->execute([(int)$actual]);
+    return $s->fetchAll();
+}
+
+/** ¿La lista ofrece "General" (sin proyecto)? No a un consultor con proyectos asignados. */
+function proyectoGeneralPermitido(PDO $pdo): bool {
+    return !proyectosDelConsultor($pdo);
+}
+
+/** <option> de la lista de proyectos de una solicitud (con "General" o, para un consultor con proyectos, "Seleccione"). */
+function opcionesProyecto(PDO $pdo, $actual = null, string $general = '-- General --'): string {
+    $html = '<option value="">' . htmlspecialchars(proyectoGeneralPermitido($pdo) ? $general : '-- Seleccione el proyecto --') . '</option>';
+    foreach (proyectosDisponibles($pdo, $actual) as $p) {
+        $html .= '<option value="' . (int)$p['id'] . '"' . ((int)$actual === (int)$p['id'] ? ' selected' : '') . '>' . htmlspecialchars($p['nombre']) . '</option>';
+    }
+    return $html;
+}
+
+/** Proyecto elegido en el formulario, validado para el usuario (si no puede usarlo, responde el error). */
+function proyectoDelFormulario(PDO $pdo, string $tabla, int $registroId) {
+    $id = (int)($_POST['proyecto_id'] ?? 0) ?: null;
+    if (proyectosDelConsultor($pdo) === null) return $id;
+    $actual = null;
+    if ($registroId) {
+        $s = $pdo->prepare("SELECT proyecto_id FROM `$tabla` WHERE id = ?");
+        $s->execute([$registroId]);
+        $actual = $s->fetchColumn() ?: null;
+    }
+    if ($id === null) {
+        if (!proyectoGeneralPermitido($pdo)) jsonErr('Seleccione el proyecto.');
+        return null;
+    }
+    if (!in_array($id, array_map('intval', array_column(proyectosDisponibles($pdo, $actual), 'id')), true)) {
+        jsonErr('Ese proyecto no está asignado a usted. Pida al administrador que se lo asigne en Proveedores.');
+    }
+    return $id;
+}
+
 // Bloquea abrir, editar, aprobar o imprimir solicitudes ajenas (roles con "solo sus solicitudes")
 function verificarRegistrosPropios(PDO $pdo, string $script): void {
     $denegar = function (string $detalle) use ($pdo, $script) {

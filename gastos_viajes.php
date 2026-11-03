@@ -28,7 +28,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'empleado_id'        => $empleadoId,
             'proveedor_id'       => $proveedorId,
             'firmante1_id'       => $firmante1Id,
-            'proyecto_id'        => $_POST['proyecto_id'] ?: null,
+            'proyecto_id'        => proyectoDelFormulario($pdo, 'gastos_viaje', $gvId),   // consultor: solo los suyos
             'destino'            => trim($_POST['destino']),
             'proposito'          => trim($_POST['proposito'] ?? ''),
             'fecha_salida'       => $_POST['fecha_salida'],
@@ -93,7 +93,6 @@ if (in_array($action,['ver','editar']) && $id) {
 
 $empleados = $pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
 $proveedores = $pdo->query("SELECT id,nombre,categoria FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();   // includes/beneficiario_gasto.php
-$proyectos = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo' ORDER BY nombre")->fetchAll();
 $cuentas   = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 $listaViajes = [];
 if ($action === 'list') {
@@ -264,12 +263,7 @@ include __DIR__ . '/includes/header.php';
         <?php $benefFila = $gv; $benefIdEmpleado = 'sel-empleado'; include __DIR__ . '/includes/beneficiario_gasto.php'; ?>
         <div class="col-md-4">
           <label class="form-label">Proyecto</label>
-          <select name="proyecto_id" class="form-select">
-            <option value="">-- General --</option>
-            <?php foreach ($proyectos as $p): ?>
-            <option value="<?= $p['id'] ?>" <?= ($gv['proyecto_id']??0)==$p['id']?'selected':'' ?>><?= htmlspecialchars($p['nombre']) ?></option>
-            <?php endforeach; ?>
-          </select>
+          <select name="proyecto_id" class="form-select" <?= proyectoGeneralPermitido($pdo) ? '' : 'required' ?>><?= opcionesProyecto($pdo, $gv['proyecto_id'] ?? null) ?></select>
         </div>
         <div class="col-md-8">
           <label class="form-label" id="lbl-destino">Destino *</label>
