@@ -11,6 +11,10 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.25.1 — 2026-11-03
+**Botones que no respondían al llegar a una página sin recargar**
+- **Corrección**: al abrir una página desde el menú o un enlace (sin recargar el navegador), los botones cuya función es asíncrona fallaban con "… is not defined". Por ejemplo: Guardar en Proveedores, Guardar permisos y puestos en Roles, Guardar en Usuarios, Proyectos, Activos, Presupuesto y Catálogos, Crear en Vacaciones, Permisos, Préstamos y planillas. Con F5 sí funcionaban. Afectaba 29 funciones en 20 páginas; ahora todas las funciones de la página quedan disponibles desde el inicio, aunque otra parte de su código falle (`Nav.ejecutarScripts` en `assets/js/proscala.js`).
+
 ## 1.25.0 — 2026-11-03
 **Sin registros duplicados por varios clics, y botones que muestran lo que hace el servidor**
 - **Seguridad (servidor)**: si un usuario envía exactamente lo mismo dos veces seguidas en el mismo módulo en menos de 10 segundos (p. ej. varios clics en Guardar o Crear), el segundo envío se rechaza sin ejecutar nada, con el aviso "Esta acción ya se envió hace unos segundos y no se repitió", y queda en la bitácora como *Envío repetido bloqueado* (`config/envios.php`, tabla nueva `envios_recientes`).

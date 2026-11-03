@@ -658,10 +658,17 @@ const Nav = {
       if (main.contains(s)) s.remove();
     }
     if (!codigo.length) return;
+    // Dentro de un bloque, solo las "function" simples pasan a ser globales, y recién cuando la
+    // ejecución llega a ellas: las "async function" (saveProv…) quedaban fuera de los onclick, y
+    // un error antes de una función la dejaba sin publicar. Al entrar al bloque ya existan todas:
+    // se publican desde la primera línea.
+    const texto = codigo.join('\n;\n');
+    const nombres = new Set([...texto.matchAll(/^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(/gm)].map(m => m[1]));
+    const publicar = [...nombres].map(n => `try { if (typeof ${n} === 'function') window.${n} = ${n}; } catch (_) {}`).join('\n');
     this.iniciarCaptura(true);
     try {
       const el = document.createElement('script');
-      el.textContent = '{\n' + codigo.join('\n;\n') + '\n}';
+      el.textContent = '{\n' + publicar + '\n' + texto + '\n}';
       document.body.appendChild(el).remove();
     } finally {
       this.terminarCaptura();
