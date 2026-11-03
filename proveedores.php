@@ -4,6 +4,8 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/functions.php';
 requireLogin();
 $pagina = 'Proveedores';
+$action = $_GET['action'] ?? 'list';   // list | expediente (documentos del proveedor: config/adjuntos.php → EXPEDIENTES)
+$id     = (int)($_GET['id'] ?? 0);
 
 if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -63,14 +65,49 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Con el usuario del consultor, si lo tiene
-$proveedores = $pdo->query("SELECT p.*, u.id AS usuario_id, u.activo AS usuario_activo, u.pendiente_activacion, u.ultimo_acceso, u.rol AS usuario_rol
+$proveedores = $pdo->query("SELECT p.*, u.id AS usuario_id, u.activo AS usuario_activo, u.pendiente_activacion, u.ultimo_acceso, u.rol AS usuario_rol,
+        (SELECT COUNT(*) FROM adjuntos a WHERE a.tabla = 'proveedores' AND a.registro_id = p.id AND a.rechazo_id IS NULL) AS docs_expediente
     FROM proveedores p LEFT JOIN usuarios u ON u.proveedor_id = p.id ORDER BY p.nombre")->fetchAll();
+$prov = null;
+if ($action === 'expediente') {
+    foreach ($proveedores as $p) if ((int)$p['id'] === $id) $prov = $p;
+    if (!$prov) { header('Location: ' . BASE_URL . 'proveedores.php'); exit; }
+}
 include __DIR__ . '/includes/header.php';
 ?>
 <div class="page-header">
   <h1><i class="fas fa-truck"></i> Proveedores</h1>
+  <?php if ($prov): ?>
+  <a href="?" class="btn-proscala-outline"><i class="fas fa-arrow-left"></i> Volver</a>
+  <?php else: ?>
   <button class="btn-proscala" data-bs-toggle="modal" data-bs-target="#modal-prov"><i class="fas fa-plus"></i> Nuevo Proveedor</button>
+  <?php endif; ?>
 </div>
+
+<?php if ($prov): // Expediente del proveedor: sus datos y sus documentos por categoría ?>
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="fas <?= $prov['categoria'] === 'consultor' ? 'fa-user-tie' : 'fa-truck' ?>"></i> <?= htmlspecialchars($prov['nombre']) ?>
+    <span class="badge <?= $prov['categoria'] === 'consultor' ? 'bg-info text-dark' : 'bg-secondary' ?> ms-2"><?= CATEGORIAS_PROVEEDOR[$prov['categoria']] ?? ucfirst($prov['categoria']) ?></span>
+    <?= $prov['activo'] ? '' : '<span class="badge bg-danger ms-1">Inactivo</span>' ?>
+    <button class="btn btn-sm btn-outline-primary ms-auto" onclick='editProv(<?= json_encode($prov, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i> Editar datos</button>
+  </div>
+  <div class="card-body">
+    <div class="row g-2" style="font-size:.85rem">
+      <div class="col-md-3"><strong>Código:</strong> <span class="font-mono"><?= htmlspecialchars($prov['codigo'] ?? '—') ?></span></div>
+      <div class="col-md-3"><strong>RTN:</strong> <?= htmlspecialchars($prov['rtn'] ?: '—') ?></div>
+      <?php if ($prov['categoria'] === 'consultor'): ?><div class="col-md-3"><strong>Identidad:</strong> <?= htmlspecialchars($prov['identidad'] ?: '—') ?></div><?php endif; ?>
+      <div class="col-md-3"><strong>Contacto:</strong> <?= htmlspecialchars($prov['contacto'] ?: '—') ?></div>
+      <div class="col-md-3"><strong>Teléfono:</strong> <?= htmlspecialchars($prov['telefono'] ?: '—') ?></div>
+      <div class="col-md-3"><strong>Correo:</strong> <?= htmlspecialchars($prov['email'] ?: '—') ?></div>
+      <div class="col-md-6"><strong>Cuenta bancaria:</strong> <?= $prov['banco'] ? htmlspecialchars(trim($prov['banco'] . ' ' . ($prov['banco_cuenta'] ?? '') . ($prov['banco_tipo'] ? ' · ' . ucfirst($prov['banco_tipo']) : ''))) : '—' ?></div>
+      <?php if ($prov['direccion']): ?><div class="col-12"><strong>Dirección:</strong> <?= htmlspecialchars($prov['direccion']) ?></div><?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php $adjModulo = 'proveedores.php'; $adjId = $prov['id']; include __DIR__ . '/includes/adjuntos.php'; ?>
+
+<?php else: ?>
 <div class="card"><div class="card-body p-0">
   <table id="tbl-prov" class="table-proscala w-100">
     <thead><tr><th>Código</th><th>Nombre</th><th>RTN</th><th>Contacto</th><th>Teléfono</th><th>Cuenta Bancaria</th><th>Categoría</th><th>Estado</th><th></th></tr></thead>
@@ -78,7 +115,8 @@ include __DIR__ . '/includes/header.php';
       <?php foreach($proveedores as $p): ?>
       <tr>
         <td class="font-mono"><?= htmlspecialchars($p['codigo']??'') ?></td>
-        <td><?= htmlspecialchars($p['nombre']) ?></td>
+        <td><?= htmlspecialchars($p['nombre']) ?>
+          <?php if ($p['docs_expediente']): ?><a href="?action=expediente&id=<?= $p['id'] ?>" class="badge bg-light text-dark border ms-1 text-decoration-none" title="Documentos en su expediente"><i class="fas fa-folder-open"></i> <?= (int)$p['docs_expediente'] ?></a><?php endif; ?></td>
         <td><?= $p['rtn'] ?></td><td><?= htmlspecialchars($p['contacto']??'') ?></td>
         <td><?= $p['telefono'] ?></td>
         <td style="font-size:.8rem">
@@ -101,7 +139,8 @@ include __DIR__ . '/includes/header.php';
         </td>
         <td><?= $p['activo']?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-danger">Inactivo</span>' ?></td>
         <td>
-          <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='editProv(<?= json_encode($p) ?>)'><i class="fas fa-edit"></i></button>
+          <a href="?action=expediente&id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Expediente: documentos del proveedor"><i class="fas fa-folder-open"></i></a>
+          <button class="btn btn-sm btn-outline-primary py-0 px-2 ms-1" onclick='editProv(<?= json_encode($p, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
           <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" onclick="deleteRecord('proveedores.php',<?= $p['id'] ?>,()=>Nav.recargar())"><i class="fas fa-ban"></i></button>
         </td>
       </tr>
@@ -109,6 +148,7 @@ include __DIR__ . '/includes/header.php';
     </tbody>
   </table>
 </div></div>
+<?php endif; ?>
 
 <div class="modal fade" id="modal-prov" tabindex="-1">
   <div class="modal-dialog modal-lg">
@@ -201,6 +241,9 @@ include __DIR__ . '/includes/header.php';
               </select>
             </div>
           </div>
+          <?php // Documentos del expediente: se suben al guardar (los ya subidos, en su expediente)
+          $adjModulo = 'proveedores.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
+          <div id="p-ver-expediente" class="small mt-2" hidden></div>
         </form>
       </div>
       <div class="modal-footer">
@@ -267,6 +310,10 @@ function editProv(p){
   document.getElementById('p-clave').value='';
   estadoUsuario(p);
   toggleConsultor();
+  const verExp = document.getElementById('p-ver-expediente');
+  verExp.hidden = false;
+  verExp.innerHTML = `<i class="fas fa-folder-open"></i> ${p.docs_expediente > 0 ? 'Tiene ' + p.docs_expediente + ' documento' + (p.docs_expediente == 1 ? '' : 's') + ' en su expediente.' : 'Su expediente aún no tiene documentos.'} `
+    + `<a href="proveedores.php?action=expediente&id=${p.id}">Ver expediente</a>`;
   document.getElementById('prov-modal-title').textContent='Editar: '+p.nombre;
   new bootstrap.Modal(document.getElementById('modal-prov')).show();
 }
@@ -278,10 +325,13 @@ document.getElementById('modal-prov').addEventListener('show.bs.modal', function
   $('#p-cat').val('ambos').trigger('change.select2');
   estadoUsuario(null);
   toggleConsultor();
+  document.getElementById('p-ver-expediente').hidden = true;
   document.getElementById('prov-modal-title').textContent='Nuevo Proveedor';
 });
 async function saveProv(){
-  const r=await post('proveedores.php',new FormData(document.getElementById('form-prov')));
+  const form = document.getElementById('form-prov');
+  AdjuntosForm.anotar(form);   // los documentos elegidos se suben al proveedor guardado
+  const r=await post('proveedores.php',new FormData(form));
   if(r.success){Toast.show(r.message,'success');setTimeout(()=>Nav.recargar(),1000);}
   else Toast.show(r.message,'error');
 }

@@ -253,7 +253,7 @@ Para comprar, primero debe existir la orden de pago: la nota de recepción es el
 4. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
 5. **Nota de Recepción.** Registre lo recibido: completo, parcial o con devolución, artículo por artículo.
 
-**Proveedores.** El catálogo de proveedores con RTN, contacto y datos bancarios para las órdenes de pago. Categorías: Bienes, Servicios, Ambos y **Consultores**.
+**Proveedores.** El catálogo de proveedores con RTN, contacto y datos bancarios para las órdenes de pago. Categorías: Bienes, Servicios, Ambos y **Consultores**. Cada proveedor tiene su **expediente** (botón de la carpeta): sus documentos clasificados por categoría (DNI, RTN, antecedentes penales y policiales, hoja de vida, títulos, contrato, escritura y permisos, solvencias, cuenta bancaria…). También se pueden elegir al crearlo o editarlo, y se suben al guardar.
 
 **Consultores contratistas.** Registre al consultor en Proveedores con la categoría **Consultores**: además de sus datos y su cuenta bancaria, se anota su número de identidad y, con el interruptor **"Darle usuario para entrar al sistema"**, se le crea un usuario con el puesto **Consultor**. Su usuario es su **correo** (entra con el RTN de la empresa y ese correo). Si deja vacía la contraseña inicial, recibe por correo el enlace para crear la suya; si la escribe, deberá cambiarla al entrar. El consultor solo ve y pide **sus** anticipos y liquidaciones / reembolsos, siempre a su nombre, y sigue el flujo de aprobación según el organigrama. Quitar el acceso, dar de baja al proveedor o cambiarle la categoría desactiva su usuario.
 

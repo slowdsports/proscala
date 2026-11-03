@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.23.0 — 2026-11-03
+**Expediente digital de los proveedores**
+- **Expediente del proveedor** (`proveedores.php?action=expediente`), como el de los empleados: sus datos y sus documentos clasificados por categoría (Identificación / DNI, RTN, Antecedentes penales y policiales, Hoja de vida, Títulos y certificados, Contrato de servicios y adendas, Escritura / registro mercantil y permisos, Solvencias y constancias, Cuenta bancaria, Otros). Se sube desde la computadora, con la cámara del celular o arrastrando los archivos.
+- En la lista de proveedores, el botón de la carpeta abre el expediente y una etiqueta muestra cuántos documentos tiene. Al crear o editar un proveedor se pueden elegir documentos que se suben al guardar, y el formulario enlaza a su expediente.
+- Solo lo ve quien tiene el módulo Proveedores (información personal: el consultor no ve su propio expediente).
+- Pruebas automáticas: la del expediente cubre ahora empleados y proveedores (y elige un usuario que ya cambió su contraseña inicial para probar el acceso denegado).
+
 ## 1.22.0 — 2026-11-03
 **Consultores con usuario: piden sus propios anticipos y liquidaciones**
 - **Proveedores: categoría Consultores**. Al elegirla, el formulario pide el número de identidad y ofrece **"Darle usuario para entrar al sistema"**: su usuario es el correo del proveedor; con contraseña inicial (mínimo 8 caracteres, letras y números) la cambia al entrar, y sin ella recibe por correo el enlace para crearla (con botón para reenviarlo). La lista muestra si el consultor tiene acceso, si está pendiente de activar o si se le quitó. Quitar el acceso, dar de baja al proveedor o cambiarle la categoría desactiva su usuario.

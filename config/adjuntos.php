@@ -26,6 +26,12 @@ const EXPEDIENTES = [
         'Antecedentes penales y policiales', 'Constancias y referencias', 'Evaluaciones de desempeño',
         'Acciones de personal (memorandos, amonestaciones)', 'Salud y seguros', 'Planillas y pagos', 'Otros',
     ]],
+    // Proveedores y consultores (proveedores.php?action=expediente)
+    'proveedores.php' => ['tabla' => 'proveedores', 'titulo' => 'Expediente del proveedor', 'categorias' => [
+        'Identificación (DNI)', 'RTN', 'Antecedentes penales y policiales', 'Hoja de vida', 'Títulos y certificados',
+        'Contrato de servicios y adendas', 'Escritura, registro mercantil y permisos', 'Solvencias y constancias',
+        'Cuenta bancaria', 'Otros',
+    ]],
 ];
 
 /** Tabla donde se guardan los registros del módulo (proceso o expediente), o null si no admite adjuntos. */
