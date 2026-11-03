@@ -317,6 +317,13 @@ CREATE TABLE `empleados` (
   KEY `idx_activo` (`activo`),
   UNIQUE KEY `codigo` (`codigo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `envios_recientes` (
+  `usuario_id` int(11) NOT NULL,
+  `modulo` varchar(60) NOT NULL,
+  `huella` char(64) NOT NULL,
+  `enviado_at` datetime NOT NULL,
+  PRIMARY KEY (`usuario_id`,`modulo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `firmantes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `documento` varchar(20) NOT NULL,

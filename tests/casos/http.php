@@ -302,6 +302,43 @@ try {
         }
     });
 
+    prueba('Envío repetido: el mismo envío en pocos segundos se rechaza sin ejecutarse; uno distinto o tras un error, no', function () use ($baseUrl, $sesAdmin, $pdo, $admin) {
+        $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba'])]]);
+            $cuerpo = (string)@file_get_contents("$baseUrl/alta_rapida.php", false, $ctx);
+            preg_match('/^HTTP\/\S+ (\d+)/', $http_response_header[0] ?? '', $m);
+            return ['http' => (int)($m[1] ?? 0)] + (json_decode($cuerpo, true) ?: []);
+        };
+        $a = 'ZZ Banco repetido ' . bin2hex(random_bytes(4));
+        $b = "$a B";
+        $inicio = $pdo->query("SELECT NOW()")->fetchColumn();
+        try {
+            $r = $enviar(['tipo' => 'banco', 'nombre' => $a]);
+            afirmar(!empty($r['success']), 'no creó el banco: ' . ($r['message'] ?? 'sin respuesta'));
+            $rep = $enviar(['tipo' => 'banco', 'nombre' => $a]);
+            afirmar($rep['http'] === 409 && !empty($rep['duplicado']), "el envío repetido no se rechazó (HTTP {$rep['http']})");
+            $s = $pdo->prepare("SELECT COUNT(*) FROM auditoria WHERE accion = 'DUPLICADO' AND usuario_id = ? AND modulo = 'alta_rapida.php' AND created_at >= ?");
+            $s->execute([$admin, $inicio]);
+            afirmar($s->fetchColumn() > 0, 'el rechazo no quedó en la bitácora');
+
+            afirmar(!empty($enviar(['tipo' => 'banco', 'nombre' => $b])['success']), 'rechazó un envío distinto');
+            // Un envío que falla se libera: repetirlo vuelve a ejecutarse (y responde su propio error)
+            $e1 = $enviar(['tipo' => 'banco', 'nombre' => '  ']);
+            $e2 = $enviar(['tipo' => 'banco', 'nombre' => '  ']);
+            afirmar(empty($e1['success']) && empty($e2['duplicado']) && ($e2['message'] ?? '') === ($e1['message'] ?? ''), 'el envío fallido quedó bloqueado');
+            // Solo se compara con el último: A → B → A no es un duplicado
+            afirmar(!empty($enviar(['tipo' => 'banco', 'nombre' => $a])['success']), 'A → otro → A se tomó como duplicado');
+        } finally {
+            $s = $pdo->prepare("DELETE FROM cat_bancos WHERE nombre IN (?, ?)");
+            $s->execute([$a, $b]);
+            $s = $pdo->prepare("DELETE FROM auditoria WHERE usuario_id = ? AND modulo = 'alta_rapida.php' AND created_at >= ?");
+            $s->execute([$admin, $inicio]);
+            $pdo->prepare("DELETE FROM envios_recientes WHERE usuario_id = ? AND modulo = 'alta_rapida.php'")->execute([$admin]);
+        }
+    });
+
     prueba('Anticipo a un proveedor o consultor: se guarda sin empleado, su liquidación lo hereda y la orden de pago es para el proveedor', function () use ($baseUrl, $sesAdmin, $pdo) {
         $enviar = function (string $modulo, array $datos) use ($baseUrl, $sesAdmin) {
             $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,

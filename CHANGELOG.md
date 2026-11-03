@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.25.0 — 2026-11-03
+**Sin registros duplicados por varios clics, y botones que muestran lo que hace el servidor**
+- **Seguridad (servidor)**: si un usuario envía exactamente lo mismo dos veces seguidas en el mismo módulo en menos de 10 segundos (p. ej. varios clics en Guardar o Crear), el segundo envío se rechaza sin ejecutar nada, con el aviso "Esta acción ya se envió hace unos segundos y no se repitió", y queda en la bitácora como *Envío repetido bloqueado* (`config/envios.php`, tabla nueva `envios_recientes`).
+  - Solo se compara con el último envío del usuario en ese módulo: un envío distinto, o volver a un valor anterior (A → B → A), sí se ejecuta.
+  - Si el envío anterior falló (p. ej. faltaba un dato), se puede corregir y reintentar de inmediato.
+  - Funciona aunque las peticiones lleguen al mismo tiempo, y los 10 segundos cuentan desde que terminó la anterior.
+- **Botones**: al hacer clic en Guardar, Crear, Editar, Eliminar, Autorizar, etc., el botón se deshabilita y cambia a "Agregando…", "Guardando cambios…", "Editando…", "Eliminando…", "Autorizando…"… mientras el servidor procesa. Solo dice "Agregado" / "Cambios guardados" / "Listo" cuando el servidor confirma que se hizo; si falla, vuelve a su texto de inmediato y se muestra el motivo. Presionar Enter en el formulario mientras procesa no lo reenvía (`assets/js/proscala.js`, `BotonEnvio`).
+- Requiere ejecutar `actualizar_bd.php` (crea la tabla `envios_recientes`). Mientras no se ejecute, el sistema funciona sin el bloqueo del servidor.
+
 ## 1.24.0 — 2026-11-03
 **Prueba de correo (herramienta de desarrollador)**
 - Nueva página **Prueba de correo** (`prueba_correo.php`), en el menú *Super Administrador* y solo para el super administrador: muestra la configuración del correo saliente del servidor actual (sin la contraseña) y su entorno (PHP, OpenSSL, `mail()`), prueba la conexión al servidor SMTP sin enviar nada y envía un correo de prueba a la dirección indicada.

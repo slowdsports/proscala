@@ -188,6 +188,7 @@ const ACCIONES_BITACORA = [
     'RESPALDO'        => ['Respaldo descargado', 'dark'],
     'ACTIVACION'      => ['Enlace de activación', 'info'],
     'EXPORTAR'        => ['Exportación a Excel', 'success'],
+    'DUPLICADO'       => ['Envío repetido bloqueado', 'secondary'],
 ];
 
 // ── Solicitudes ────────────────────────────────────────────────────
@@ -443,6 +444,10 @@ function requireLogin() {
     // ?action=ver&id=… de un proceso que no existe (o con su número en vez del id): config/edicion.php
     verificarRegistroAbierto($GLOBALS['pdo'], $script);
     if (soloRegistrosPropios()) verificarRegistrosPropios($GLOBALS['pdo'], $script);
+
+    // Mismo envío repetido en pocos segundos (varios clics en Guardar): no se ejecuta (config/envios.php).
+    // Antes de la bitácora: el rechazo ya deja su propio evento
+    if ($esPost) controlarEnvioDuplicado($GLOBALS['pdo'], $script);
 
     // Bitácora: toda acción enviada (POST) se registra al terminar la petición, con su resultado
     static $bitacoraLista = false;
@@ -825,3 +830,4 @@ require_once __DIR__ . '/correlativos.php';
 require_once __DIR__ . '/edicion.php';
 require_once __DIR__ . '/adjuntos.php';
 require_once __DIR__ . '/notificaciones.php';
+require_once __DIR__ . '/envios.php';

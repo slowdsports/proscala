@@ -331,7 +331,103 @@ const Busqueda = {
 };
 document.addEventListener('DOMContentLoaded', () => Busqueda.iniciar());
 
-async function post(url, data) { return ajax(url, data, 'POST'); }
+// ── Estado del botón que envía ───────────────────────────────────
+// El botón con el que se envió (clic o Enter en su formulario) queda deshabilitado y dice
+// "Guardando…", "Agregando…", etc. mientras el servidor procesa. Su estado sale de la respuesta
+// real: "Guardado" solo si el servidor confirmó; si falló, vuelve a su texto de inmediato.
+// El servidor además rechaza el mismo envío repetido en pocos segundos (config/envios.php).
+const BotonEnvio = {
+  ESPERA: 10000,      // un clic más viejo que esto ya no se asocia al envío
+  candidato: null,
+  // [patrón del texto del botón, mientras procesa, al terminar bien]
+  VERBOS: [
+    [/elimin|borrar|quitar/, 'Eliminando…', 'Eliminado'],
+    [/anular/, 'Anulando…', 'Anulado'],
+    [/rechaz/, 'Rechazando…', 'Rechazado'],
+    [/autoriz/, 'Autorizando…', 'Autorizado'],
+    [/aprob/, 'Aprobando…', 'Aprobado'],
+    [/revis/, 'Revisando…', 'Revisado'],
+    [/generar/, 'Generando…', 'Generado'],
+    [/enviar|emitir|reenviar/, 'Enviando…', 'Enviado'],
+    [/editar|actualizar/, 'Editando…', 'Editado'],
+    [/crear|agregar|añadir|nuev|registrar/, 'Agregando…', 'Agregado'],
+  ],
+  iniciar() {
+    // Un clic en otra cosa (casilla, enlace…) descarta el botón anterior
+    document.addEventListener('click', e => {
+      const b = e.target.closest?.('button, input[type=submit]');
+      this.candidato = b && !b.matches('[data-bs-dismiss], .btn-close, [data-sin-estado]') ? { b, t: Date.now() } : null;
+    }, true);
+    document.addEventListener('submit', e => {
+      const f = e.target;
+      // Enter en un campo mientras su botón sigue procesando: no se reenvía
+      if (f.querySelector?.('[data-enviando]')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+      const b = e.submitter || f.querySelector?.('button[type=submit], input[type=submit], button:not([type])');
+      if (b) this.candidato = { b, t: Date.now() };
+    }, true);
+  },
+  // El botón del envío que empieza (se usa una sola vez). Si la página ya lo deshabilitó antes de
+  // enviar, ella maneja su estado (planillas, catálogos…) y no se toca
+  tomar(url) {
+    const c = this.candidato;
+    this.candidato = null;
+    if (!c || Date.now() - c.t > this.ESPERA || !c.b.isConnected || c.b.disabled || /notificaciones\.php|sesion\.php/.test(url)) return null;
+    return c.b;
+  },
+  textos(b, data) {
+    const txt = (b.textContent || b.value || b.title || '').trim().toLowerCase();
+    for (const [re, ahora, listo] of this.VERBOS) if (re.test(txt)) return [ahora, listo];
+    if (/guardar/.test(txt)) {
+      const id = data instanceof FormData ? data.get('id') : data?.id;
+      return +id > 0 ? ['Guardando cambios…', 'Cambios guardados'] : ['Agregando…', 'Agregado'];
+    }
+    return ['Procesando…', 'Listo'];
+  },
+  pintar(b, icono, texto) {
+    // Botón solo con ícono (en tablas): solo cambia el ícono, sin texto que lo ensanche
+    const soloIcono = !(b.dataset.html ?? b.innerHTML).replace(/<[^>]*>/g, '').trim();
+    if (b.tagName === 'INPUT') b.value = texto;
+    else b.innerHTML = `<i class="fas ${icono}"></i>` + (soloIcono ? '' : ' ' + texto);
+  },
+  ocupar(b, data) {
+    const [ahora, listo] = this.textos(b, data);
+    b.dataset.html = b.tagName === 'INPUT' ? b.value : b.innerHTML;
+    b.dataset.enviando = '1';
+    b.dataset.listo = listo;
+    b.disabled = true;
+    b.setAttribute('aria-busy', 'true');
+    this.pintar(b, 'fa-spinner fa-spin', ahora);
+  },
+  liberar(b, ok) {
+    const restaurar = () => {
+      if (!b.isConnected) return;
+      if (b.tagName === 'INPUT') b.value = b.dataset.html; else b.innerHTML = b.dataset.html;
+      b.disabled = false;
+      b.removeAttribute('aria-busy');
+      ['html', 'enviando', 'listo'].forEach(k => delete b.dataset[k]);
+    };
+    if (!ok) { restaurar(); return; }
+    // Confirmado por el servidor: lo dice y sigue deshabilitado un momento (muchas pantallas
+    // recargan o cambian de página justo después, y un clic más repetiría el envío)
+    this.pintar(b, 'fa-check', b.dataset.listo);
+    b.removeAttribute('aria-busy');
+    setTimeout(restaurar, 2500);
+  },
+};
+BotonEnvio.iniciar();
+
+async function post(url, data) {
+  const boton = BotonEnvio.tomar(url);
+  if (boton) BotonEnvio.ocupar(boton, data);
+  try {
+    const r = await ajax(url, data, 'POST');
+    if (boton) BotonEnvio.liberar(boton, r?.success !== false);
+    return r;
+  } catch (e) {
+    if (boton) BotonEnvio.liberar(boton, false);
+    throw e;
+  }
+}
 
 // ── Dark / Light mode ─────────────────────────────────────────────
 function toggleTheme() {
