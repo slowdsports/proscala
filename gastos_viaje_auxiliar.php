@@ -19,15 +19,16 @@ $filas = $pdo->prepare("
         gv.destino,
         gv.viaticos_anticipados,
         gv.estado        AS gv_estado,
-        e.id             AS emp_id,
-        e.codigo         AS emp_codigo,
-        CONCAT(e.nombre,' ',e.apellidos) AS emp_nombre,
-        e.cargo,
+        -- Beneficiario: un empleado o un proveedor/consultor (config/auth.php)
+        IF(gv.proveedor_id IS NULL, CONCAT('e', gv.empleado_id), CONCAT('p', gv.proveedor_id)) AS emp_id,
+        COALESCE(e.codigo, pr.rtn) AS emp_codigo,
+        " . SQL_BENEFICIARIO_GASTO . " AS emp_nombre,
+        IF(gv.proveedor_id IS NULL, e.cargo, 'Proveedor / consultor') AS cargo,
         COALESCE(liq.total_liquidado, 0)   AS total_liquidado,
         COALESCE(liq.num_liquidaciones, 0) AS num_liquidaciones,
         gv.viaticos_anticipados - COALESCE(liq.total_liquidado, 0) AS balance
     FROM gastos_viaje gv
-    JOIN empleados e ON gv.empleado_id = e.id
+    " . joinBeneficiarioGasto('gv') . "
     LEFT JOIN (
         SELECT viaje_id,
                SUM(monto_total) AS total_liquidado,
@@ -37,7 +38,7 @@ $filas = $pdo->prepare("
         GROUP BY viaje_id
     ) liq ON liq.viaje_id = gv.id
     WHERE $fp
-    ORDER BY e.apellidos, e.nombre, gv.fecha_salida DESC
+    ORDER BY COALESCE(e.apellidos, pr.nombre), e.nombre, gv.fecha_salida DESC
 ");
 $filas->execute($fpParams);
 $filas = $filas->fetchAll();
@@ -123,11 +124,11 @@ $empClass = $balEmp > 0 ? '#d97706' : ($balEmp < 0 ? '#16a34a' : '#64748b');
   <!-- Encabezado del empleado -->
   <div class="card-header" style="background:var(--surface-2);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <div>
-      <span style="font-weight:700;font-size:.95rem"><?= htmlspecialchars($emp['nombre']) ?></span>
+      <span style="font-weight:700;font-size:.95rem"><?= htmlspecialchars($emp['nombre'] ?? '') ?></span>
       <?php if ($emp['cargo']): ?>
       <span style="font-size:.75rem;color:var(--text-3);margin-left:6px"><?= htmlspecialchars($emp['cargo']) ?></span>
       <?php endif; ?>
-      <span class="badge bg-secondary ms-2" style="font-size:.6rem"><?= htmlspecialchars($emp['codigo']) ?></span>
+      <?php if ($emp['codigo']): ?><span class="badge bg-secondary ms-2" style="font-size:.6rem"><?= htmlspecialchars($emp['codigo']) ?></span><?php endif; ?>
     </div>
     <div class="ms-auto d-flex gap-3" style="font-size:.8rem;">
       <span>Anticipos: <strong class="font-mono"><?= lps($emp['anticipo']) ?></strong></span>

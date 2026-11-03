@@ -231,9 +231,9 @@ Resumen de la organización: empleados activos, gastos y anticipos pendientes, �
 
 ### Contabilidad
 
-**Anticipos.** Solicitudes de anticipo para **viáticos** de viaje o para **compras**: destino, fechas, propósito, detalle por cuenta contable y monto de alimentación. Siguen el flujo de aprobación; al autorizarse se genera su orden de pago. Si incluye alimentación, se imprime su **voucher de alimentación**.
+**Anticipos.** Solicitudes de anticipo para **viáticos** de viaje o para **compras**: destino, fechas, propósito, detalle por cuenta contable y monto de alimentación. Siguen el flujo de aprobación; al autorizarse se genera su orden de pago. Si incluye alimentación, se imprime su **voucher de alimentación**. El beneficiario es un **empleado** o un **proveedor / consultor** (para consultores que no son empleados; se puede dar de alta desde la misma lista): la orden de pago se emite a su nombre con sus datos bancarios.
 
-**Liquidaciones / Reembolsos.** Rinda cuentas de un anticipo con sus facturas, o pida el reembolso de un gasto propio. Si está ligada a un anticipo, el sistema calcula la diferencia y solo genera orden de pago por lo gastado de más (reembolso). Adjunte las facturas en el panel de documentos.
+**Liquidaciones / Reembolsos.** Rinda cuentas de un anticipo con sus facturas, o pida el reembolso de un gasto propio. Si está ligada a un anticipo, el sistema calcula la diferencia y solo genera orden de pago por lo gastado de más (reembolso), y su beneficiario es el mismo del anticipo (empleado o proveedor). Adjunte las facturas en el panel de documentos.
 
 **Auxiliar de Anticipos.** Vista contable de los anticipos de viáticos y de compras: monto anticipado, monto liquidado y el balance de cada uno.
 

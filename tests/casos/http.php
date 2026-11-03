@@ -295,6 +295,61 @@ try {
         }
     });
 
+    prueba('Anticipo a un proveedor o consultor: se guarda sin empleado, su liquidación lo hereda y la orden de pago es para el proveedor', function () use ($baseUrl, $sesAdmin, $pdo) {
+        $enviar = function (string $modulo, array $datos) use ($baseUrl, $sesAdmin) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba', '_action' => 'guardar', 'id' => 0])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/$modulo", false, $ctx), true) ?: [];
+        };
+        $prov = $pdo->query("SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY id LIMIT 1")->fetch();
+        if (!$prov) throw new Omitir('no hay proveedores');
+        $emp = (int)$pdo->query("SELECT id FROM empleados WHERE activo = 1 ORDER BY id LIMIT 1")->fetchColumn();
+        $gvId = $sgId = 0;
+        try {
+            $sinElegir = $enviar('gastos_viajes.php', ['tipo' => 'viaje', 'beneficiario_tipo' => 'proveedor', 'proveedor_id' => '', 'empleado_id' => $emp,
+                'destino' => 'ZZ prueba', 'fecha_salida' => '2039-02-01', 'fecha_regreso' => '2039-02-03', 'items' => '[]']);
+            afirmar(empty($sinElegir['success']) && str_contains($sinElegir['message'] ?? '', 'proveedor'), 'aceptó un anticipo a proveedor sin elegirlo');
+            $r = $enviar('gastos_viajes.php', ['tipo' => 'viaje', 'beneficiario_tipo' => 'proveedor', 'proveedor_id' => $prov['id'], 'empleado_id' => $emp,
+                'destino' => 'ZZ prueba consultor', 'fecha_salida' => '2039-02-01', 'fecha_regreso' => '2039-02-03', 'monto_alimentacion' => 0,
+                'items' => json_encode([['descripcion' => 'Hotel', 'cuenta_id' => '', 'monto' => 500]])]);
+            $gvId = (int)($r['id'] ?? 0);
+            afirmar(!empty($r['success']) && $gvId, 'no se guardó el anticipo: ' . ($r['message'] ?? 'sin respuesta'));
+            $gv = $pdo->query("SELECT empleado_id, proveedor_id FROM gastos_viaje WHERE id = $gvId")->fetch();
+            iguales([null, (int)$prov['id']], [$gv['empleado_id'], (int)$gv['proveedor_id']], 'anticipo a nombre del proveedor y sin empleado');
+            $op = datosOrdenPago($pdo, 'gastos_viaje', $gvId);
+            iguales(['proveedor', (int)$prov['id'], $prov['nombre']], [$op['beneficiario_tipo'], $op['proveedor_id'], $op['beneficiario']], 'la orden de pago del anticipo es para el proveedor');
+            foreach (["gastos_viajes.php?action=ver&id=$gvId" => 'Proveedor / consultor', 'gastos_viajes.php' => $prov['nombre'], "print.php?tipo=gv&id=$gvId" => 'Proveedor / Consultor',
+                      "gastos_viajes.php?action=editar&id=$gvId" => 'beneficiario_tipo', 'gastos_viaje_auxiliar.php' => $prov['nombre']] as $url => $texto) {
+                [$cod, $html] = pedir("$baseUrl/$url", $sesAdmin);
+                afirmar($cod === 200 && str_contains($html, htmlspecialchars($texto)) && !erroresPhp($html), "$url (HTTP $cod) no muestra «{$texto}»");
+            }
+            // La liquidación del anticipo es del mismo proveedor, aunque el formulario diga otra cosa
+            $r = $enviar('gastos_solicitud.php', ['fecha' => '2039-02-04', 'beneficiario_tipo' => 'empleado', 'empleado_id' => $emp, 'descripcion' => 'ZZ liquidación consultor',
+                'viaje_id' => $gvId, 'items' => json_encode([['fecha' => '2039-02-02', 'descripcion' => 'Hotel', 'cuenta_id' => null, 'monto' => 650]])]);
+            $sgId = (int)($r['id'] ?? 0);
+            afirmar(!empty($r['success']) && $sgId, 'no se guardó la liquidación: ' . ($r['message'] ?? 'sin respuesta'));
+            $sg = $pdo->query("SELECT empleado_id, proveedor_id FROM solicitud_gastos WHERE id = $sgId")->fetch();
+            iguales([null, (int)$prov['id']], [$sg['empleado_id'], (int)$sg['proveedor_id']], 'la liquidación hereda el proveedor del anticipo');
+            $op = datosOrdenPago($pdo, 'solicitud_gastos', $sgId);
+            iguales(['proveedor', 150.0], [$op['beneficiario_tipo'], round((float)$op['monto'], 2)], 'el reembolso (lo gastado sobre el anticipo) es para el proveedor');
+            foreach (["gastos_solicitud.php?action=ver&id=$sgId", "print.php?tipo=sg&id=$sgId", 'gastos_solicitud.php', 'dashboard.php'] as $url) {
+                [$cod, $html] = pedir("$baseUrl/$url", $sesAdmin);
+                afirmar($cod === 200 && str_contains($html, htmlspecialchars($prov['nombre'])) && !erroresPhp($html), "$url (HTTP $cod) no muestra al proveedor");
+            }
+        } finally {
+            foreach (['solicitud_gastos' => $sgId, 'gastos_viaje' => $gvId] as $tabla => $id) {
+                if (!$id) continue;
+                $proc = (int)$pdo->query("SELECT proceso_id FROM `$tabla` WHERE id = $id")->fetchColumn();
+                $pdo->exec($tabla === 'gastos_viaje' ? "DELETE FROM gastos_viaje_detalle WHERE viaje_id = $id" : "DELETE FROM solicitud_gastos_detalle WHERE solicitud_id = $id");
+                $pdo->exec("DELETE FROM `$tabla` WHERE id = $id");
+                foreach (['registro_usuarios', 'notificaciones', 'aprobaciones', 'recordatorios'] as $t) $pdo->exec("DELETE FROM $t WHERE tabla = '$tabla' AND registro_id = $id");
+                if ($proc && $tabla === 'gastos_viaje') $pdo->exec("DELETE FROM procesos_viaticos WHERE id = $proc");
+            }
+            $pdo->exec("DELETE FROM auditoria WHERE ip IN ('127.0.0.1', '::1') AND (detalle LIKE 'GV creado%' OR detalle LIKE 'Nueva solicitud de gastos%') AND created_at >= NOW() - INTERVAL 10 MINUTE");
+        }
+    });
+
     prueba('Página principal, inicio de sesión y recuperar contraseña (sin sesión)', function () use ($baseUrl) {
         foreach (['' => 'Iniciar sesión', 'login.php' => 'RTN de la empresa', 'recuperar.php' => 'Enviar enlace'] as $p => $texto) {
             [$cod, $html] = pedir("$baseUrl/$p");

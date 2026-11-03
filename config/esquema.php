@@ -132,6 +132,24 @@ function cambiosPlanillasAnuladas(PDO $db): array {
 }
 
 /**
+ * 1.21.0 · Anticipos y liquidaciones/reembolsos a nombre de un proveedor (consultores que no son
+ * empleados): el empleado deja de ser obligatorio y proveedor_id (lo agrega el esquema) apunta a
+ * proveedores. Devuelve las sentencias que faltan (vacío si ya está).
+ */
+function cambiosGastosProveedor(PDO $db): array {
+    $sql = [];
+    foreach (['gastos_viaje' => 'fk_gv_proveedor', 'solicitud_gastos' => 'fk_sg_proveedor'] as $tabla => $fk) {
+        $s = $db->prepare("SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'empleado_id'");
+        $s->execute([$tabla]);
+        if ($s->fetchColumn() === 'NO') $sql[] = "ALTER TABLE `$tabla` MODIFY `empleado_id` int(11) DEFAULT NULL";
+        $s = $db->prepare("SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?");
+        $s->execute([$tabla, $fk]);
+        if (!$s->fetchColumn()) $sql[] = "ALTER TABLE `$tabla` ADD CONSTRAINT `$fk` FOREIGN KEY (`proveedor_id`) REFERENCES `proveedores` (`id`)";
+    }
+    return $sql;
+}
+
+/**
  * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: anula (no borra) las planillas
  * quincenales de octubre de 2026 para pagar ese mes con una planilla mensual. Se conservan con su
  * detalle, como constancia; sus órdenes de pago aún no pagadas se anulan y las ya pagadas quedan

@@ -3,15 +3,15 @@
 // Plantilla de impresión (print.php): datos del documento y su contenido,
 // dentro de la página común con el diseño de todos los documentos.
 
-$s = $pdo->prepare("SELECT sg.*, CONCAT(e.nombre,' ',e.apellidos) AS emp_nombre,
-    e.identidad AS emp_identidad, e.cargo AS emp_cargo,
+$s = $pdo->prepare("SELECT sg.*, " . SQL_BENEFICIARIO_GASTO . " AS emp_nombre,
+    COALESCE(e.identidad, pr.rtn) AS emp_identidad, IF(sg.proveedor_id IS NULL, e.cargo, 'Consultor') AS emp_cargo,
     p.codigo AS proy_nombre,
     gv.numero AS gv_numero, gv.id AS gv_id, gv.viaticos_anticipados, gv.tipo AS gv_tipo,
     gv.monto_alimentacion, gv.fecha_salida AS gv_fecha_salida,
     gv.fecha_regreso AS gv_fecha_regreso, gv.destino AS gv_destino,
     CONCAT(a.nombre,' ',a.apellidos) AS aprobador_nombre
     FROM solicitud_gastos sg
-    JOIN empleados e ON sg.empleado_id = e.id
+    " . joinBeneficiarioGasto('sg') . "
     LEFT JOIN proyectos p ON sg.proyecto_id = p.id
     LEFT JOIN gastos_viaje gv ON sg.viaje_id = gv.id
     LEFT JOIN empleados a ON sg.aprobador_id = a.id
@@ -52,7 +52,7 @@ require __DIR__ . '/_pagina_inicio.php';
         <div class="meta-value"><?= fmtFecha($doc['fecha']) ?></div>
       </div>
       <div class="meta-item">
-        <div class="meta-label">Empleado</div>
+        <div class="meta-label"><?= $doc['proveedor_id'] ? 'Proveedor / Consultor' : 'Empleado' ?></div>
         <div class="meta-value"><?= htmlspecialchars($doc['emp_nombre']) ?></div>
       </div>
       <?php if ($doc['proy_nombre']): ?>
@@ -151,11 +151,11 @@ require __DIR__ . '/_pagina_inicio.php';
   <div class="meta-section" style="background:#f0f5fc;border-color:#dbeafe">
     <div class="meta-grid cols-4">
       <div class="meta-item" style="grid-column:1/3">
-        <div class="meta-label">Empleado</div>
+        <div class="meta-label"><?= $doc['proveedor_id'] ? 'Proveedor / Consultor' : 'Empleado' ?></div>
         <div class="meta-value" style="font-size:12pt;font-weight:800;color:#0D3F6A"><?= htmlspecialchars($doc['emp_nombre']) ?></div>
       </div>
       <div class="meta-item">
-        <div class="meta-label">N° Identidad</div>
+        <div class="meta-label"><?= $doc['proveedor_id'] ? 'RTN' : 'N° Identidad' ?></div>
         <div class="meta-value mono"><?= htmlspecialchars($doc['emp_identidad'] ?? '—') ?></div>
       </div>
       <div class="meta-item">
@@ -211,7 +211,7 @@ require __DIR__ . '/_pagina_inicio.php';
   <div style="margin:18px 28px 0;padding:18px 20px;border:1.5px dashed #cbd5e1;border-radius:8px;background:#fafafa">
     <p style="font-size:9pt;line-height:1.7;color:#374151;margin-bottom:16px">
       Yo, <strong><?= htmlspecialchars(strtoupper($doc['emp_nombre'])) ?></strong><?php if ($doc['emp_identidad'] ?? ''): ?>,
-      portador/a de la Tarjeta de Identidad número <strong><?= htmlspecialchars($doc['emp_identidad']) ?></strong><?php endif; ?>,
+      <?= $doc['proveedor_id'] ? 'con RTN' : 'portador/a de la Tarjeta de Identidad número' ?> <strong><?= htmlspecialchars($doc['emp_identidad']) ?></strong><?php endif; ?>,
       declaro haber recibido la suma de <strong><?= lps($doc['monto_alimentacion']) ?></strong>
       en concepto de <em>viáticos de alimentación</em> correspondientes a la comisión<?php if ($doc['gv_destino']): ?> a <strong><?= htmlspecialchars($doc['gv_destino']) ?></strong><?php endif; ?><?php if ($doc['gv_fecha_salida'] && $doc['gv_fecha_regreso']): ?>, del <?= fmtFecha($doc['gv_fecha_salida']) ?> al <?= fmtFecha($doc['gv_fecha_regreso']) ?><?php endif; ?>, en conformidad con lo indicado.
     </p>
@@ -219,7 +219,7 @@ require __DIR__ . '/_pagina_inicio.php';
       <div style="text-align:center">
         <div style="border-top:1.5px solid #64748b;margin-bottom:5px;margin-top:36px"></div>
         <div style="font-size:8pt;font-weight:600"><?= htmlspecialchars($doc['emp_nombre']) ?></div>
-        <div style="font-size:7.5pt;color:#64748b">Firma y nombre del empleado</div>
+        <div style="font-size:7.5pt;color:#64748b">Firma y nombre <?= $doc['proveedor_id'] ? 'del beneficiario' : 'del empleado' ?></div>
       </div>
       <div>
         <div style="font-size:8pt;color:#64748b;margin-bottom:4px">Fecha de recibo:</div>

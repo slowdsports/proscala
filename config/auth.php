@@ -269,6 +269,23 @@ function firmante1Nombre(PDO $pdo, int $empleadoId = 0): string {
     return $_SESSION['usuario_nombre'] ?? '';
 }
 
+// ── Beneficiario de un anticipo o de una liquidación/reembolso ──────
+// Un empleado o un proveedor (consultores que no son empleados): gastos_viaje y solicitud_gastos
+// tienen empleado_id y proveedor_id, y se usa uno de los dos. Formulario: includes/beneficiario_gasto.php
+const SQL_BENEFICIARIO_GASTO = "COALESCE(CONCAT(e.nombre,' ',e.apellidos), pr.nombre)";
+function joinBeneficiarioGasto(string $alias): string {
+    return "LEFT JOIN empleados e ON e.id = $alias.empleado_id LEFT JOIN proveedores pr ON pr.id = $alias.proveedor_id";
+}
+/** Beneficiario elegido en el formulario: [empleado_id, proveedor_id], uno de los dos (si falta, responde el error). */
+function beneficiarioGastoDelFormulario(PDO $pdo): array {
+    $esProveedor = ($_POST['beneficiario_tipo'] ?? 'empleado') === 'proveedor';
+    $id = (int)($_POST[$esProveedor ? 'proveedor_id' : 'empleado_id'] ?? 0);
+    $s = $pdo->prepare('SELECT 1 FROM ' . ($esProveedor ? 'proveedores' : 'empleados') . ' WHERE id = ?');
+    $s->execute([$id]);
+    if (!$s->fetchColumn()) jsonErr($esProveedor ? 'Seleccione el proveedor o consultor.' : 'Seleccione el empleado.');
+    return $esProveedor ? [null, $id] : [$id, null];
+}
+
 // Bloquea abrir, editar, aprobar o imprimir solicitudes ajenas (roles con "solo sus solicitudes")
 function verificarRegistrosPropios(PDO $pdo, string $script): void {
     $denegar = function (string $detalle) use ($pdo, $script) {

@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.16.0';
+const VERSION_BD = '1.21.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -73,6 +73,13 @@ $PASOS = [
         'pendiente' => fn(PDO $db) => empresaDeBase($db, $GLOBALS['pdoMaster'], '08269016867779') !== null
             && !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_quincenas_oct2026'")->fetchColumn(),
         'aplicar' => function (PDO $db) { anularQuincenasOctubre2026($db); },
+    ],
+    [
+        // Después de las columnas del esquema (proveedor_id): config/esquema.php
+        'base' => 'empresa',
+        'descripcion' => 'Anticipos y liquidaciones/reembolsos a nombre de un proveedor o consultor: el empleado deja de ser obligatorio (1.21.0)',
+        'pendiente' => fn(PDO $db) => (bool)cambiosGastosProveedor($db),
+        'aplicar' => function (PDO $db) { foreach (cambiosGastosProveedor($db) as $sql) $db->exec($sql); },
     ],
 ];
 

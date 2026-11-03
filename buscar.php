@@ -10,14 +10,15 @@ requireLogin();
 header('Cache-Control: no-store');
 
 // Procesos: módulo => [tabla, texto que se busca y se muestra (alias t), columna del empleado o null]
+// ('beneficiario': empleado o proveedor/consultor de anticipos y liquidaciones, config/auth.php)
 const BUSQUEDA_PROCESOS = [
     'compras_solicitud.php'    => ['solicitud_compra',    't.descripcion', 'solicitante_id'],
     'compras_cotizaciones.php' => ['cotizaciones',        't.justificacion', null],
     'compras_orden.php'        => ['ordenes_compra',      '(SELECT nombre FROM proveedores WHERE id = t.proveedor_id)', null],
     'compras_pago.php'         => ['ordenes_pago',        "CONCAT(t.beneficiario, ' — ', t.concepto)", null],
     'compras_recepcion.php'    => ['notas_recepcion',     '(SELECT nombre FROM proveedores WHERE id = t.proveedor_id)', null],
-    'gastos_viajes.php'        => ['gastos_viaje',        't.destino', 'empleado_id'],
-    'gastos_solicitud.php'     => ['solicitud_gastos',    't.descripcion', 'empleado_id'],
+    'gastos_viajes.php'        => ['gastos_viaje',        't.destino', 'beneficiario'],
+    'gastos_solicitud.php'     => ['solicitud_gastos',    't.descripcion', 'beneficiario'],
     'vacaciones.php'           => ['vacaciones',          "CONCAT(t.dias, ' días')", 'empleado_id'],
     'permisos.php'             => ['permisos',            't.motivo', 'empleado_id'],
     'caja_chica.php'           => ['caja_chica',          't.notas', 'empleado_id'],
@@ -53,8 +54,11 @@ foreach (MODULOS as $items) {
 foreach (BUSQUEDA_PROCESOS as $modulo => [$tabla, $texto, $colEmpleado]) {
     if (!puedeAcceder($modulo)) continue;
     [$condPropios, $paramsPropios] = filtroPropios($modulo, 't');
-    $empleado = $colEmpleado ? "CONCAT(e.nombre, ' ', e.apellidos)" : "''";
-    $join = $colEmpleado ? "LEFT JOIN empleados e ON e.id = t.`$colEmpleado`" : '';
+    if ($colEmpleado === 'beneficiario') [$empleado, $join] = [SQL_BENEFICIARIO_GASTO, joinBeneficiarioGasto('t')];
+    else {
+        $empleado = $colEmpleado ? "CONCAT(e.nombre, ' ', e.apellidos)" : "''";
+        $join = $colEmpleado ? "LEFT JOIN empleados e ON e.id = t.`$colEmpleado`" : '';
+    }
     try {
         $s = $pdo->prepare("SELECT t.id, t.numero, t.estado, $texto AS texto, $empleado AS empleado
             FROM `$tabla` t $join

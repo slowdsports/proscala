@@ -15,13 +15,21 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($_act === 'guardar') {
         $sgId        = (int)($_POST['id'] ?? 0);
-        $empleadoId  = (int)$_POST['empleado_id'];
-        // Firmante #1: quien llena la solicitud (su empleado vinculado; si no tiene, el beneficiario).
+        // Beneficiario: un empleado o un proveedor (consultor que no es empleado). La liquidación de
+        // un anticipo es de quien lo recibió.
+        [$empleadoId, $proveedorId] = beneficiarioGastoDelFormulario($pdo);
+        if ($_POST['viaje_id'] ?? '') {
+            $s = $pdo->prepare("SELECT empleado_id, proveedor_id FROM gastos_viaje WHERE id = ?");
+            $s->execute([(int)$_POST['viaje_id']]);
+            if ($v = $s->fetch()) [$empleadoId, $proveedorId] = [$v['empleado_id'] ?: null, $v['proveedor_id'] ?: null];
+        }
+        // Firmante #1: quien llena la solicitud (su empleado vinculado; si no tiene, el empleado beneficiario).
         // Se fija al crearla; al editarla se conserva.
         $firmante1Id = (int)($_SESSION['empleado_id'] ?? 0) ?: $empleadoId;
         $d = [
             'fecha'        => $_POST['fecha'],
             'empleado_id'  => $empleadoId,
+            'proveedor_id' => $proveedorId,
             'firmante1_id' => $firmante1Id,
             'descripcion'  => trim($_POST['descripcion']),
             'proyecto_id'  => $_POST['proyecto_id'] ?: null,
@@ -35,8 +43,8 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             if ($sgId) {
-                $pdo->prepare("UPDATE solicitud_gastos SET fecha=?,empleado_id=?,descripcion=?,proyecto_id=?,viaje_id=?,monto_total=?,notas=? WHERE id=?")
-                    ->execute([$d['fecha'],$d['empleado_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas'],$sgId]);
+                $pdo->prepare("UPDATE solicitud_gastos SET fecha=?,empleado_id=?,proveedor_id=?,descripcion=?,proyecto_id=?,viaje_id=?,monto_total=?,notas=? WHERE id=?")
+                    ->execute([$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas'],$sgId]);
                 $pdo->prepare("DELETE FROM solicitud_gastos_detalle WHERE solicitud_id=?")->execute([$sgId]);
             } else {
                 // Si viene vinculada a un anticipo, heredar su proceso_id
@@ -47,9 +55,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $procesoId = $ps->fetchColumn() ?: null;
                 }
                 $num = numeroProceso($pdo,'solicitud_gastos',getConfig($pdo,'prefijo_sg','SG'), numeroDe($pdo,'gastos_viaje',$d['viaje_id']));
-                $pdo->prepare("INSERT INTO solicitud_gastos (numero,proceso_id,fecha,empleado_id,firmante1_id,descripcion,proyecto_id,viaje_id,monto_total,notas,estado)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,'pendiente')")
-                    ->execute([$num,$procesoId,$d['fecha'],$d['empleado_id'],$d['firmante1_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas']]);
+                $pdo->prepare("INSERT INTO solicitud_gastos (numero,proceso_id,fecha,empleado_id,proveedor_id,firmante1_id,descripcion,proyecto_id,viaje_id,monto_total,notas,estado)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,'pendiente')")
+                    ->execute([$num,$procesoId,$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['firmante1_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas']]);
                 $sgId = $pdo->lastInsertId();
             }
             foreach ($items as $item) {
@@ -77,35 +85,38 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 $sg = null; $detalle = []; $viaje_link = null;
 $prefill_viaje_id = (int)($_GET['viaje_id'] ?? 0);
 if (in_array($action,['ver','editar']) && $id) {
-    $s = $pdo->prepare("SELECT sg.*,CONCAT(e.nombre,' ',e.apellidos) as emp_nombre
-        FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id WHERE sg.id=?");
+    $s = $pdo->prepare("SELECT sg.*," . SQL_BENEFICIARIO_GASTO . " as emp_nombre
+        FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . " WHERE sg.id=?");
     $s->execute([$id]); $sg = $s->fetch();
     $s2 = $pdo->prepare("SELECT d.*, cc.nombre as cuenta_nombre FROM solicitud_gastos_detalle d
         LEFT JOIN cuentas_contables cc ON d.cuenta_id=cc.id WHERE d.solicitud_id=?");
     $s2->execute([$id]); $detalle = $s2->fetchAll();
     if ($sg && $sg['viaje_id']) {
-        $sv = $pdo->prepare("SELECT gv.*, CONCAT(e.nombre,' ',e.apellidos) as emp_nombre FROM gastos_viaje gv JOIN empleados e ON gv.empleado_id=e.id WHERE gv.id=?");
+        $sv = $pdo->prepare("SELECT gv.*, " . SQL_BENEFICIARIO_GASTO . " as emp_nombre FROM gastos_viaje gv " . joinBeneficiarioGasto('gv') . " WHERE gv.id=?");
         $sv->execute([$sg['viaje_id']]); $viaje_link = $sv->fetch();
     }
 }
 
 // ── Auxiliares ────────────────────────────────────────────────────
 $empleados = $pdo->query("SELECT id, CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
+$proveedores = $pdo->query("SELECT id,nombre FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();
 $proyectos = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo' ORDER BY nombre")->fetchAll();
 $cuentas   = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 // Roles que solo ven sus solicitudes: también solo pueden ligar sus propios anticipos
 [$fpGv, $fpGvParams] = filtroPropios('gastos_viajes.php', 'gv');
 $s = $pdo->prepare("SELECT gv.id, gv.numero, gv.tipo, gv.destino, gv.fecha_salida, gv.viaticos_anticipados FROM gastos_viaje gv WHERE $fpGv ORDER BY gv.id DESC");
 $s->execute($fpGvParams); $viajes = $s->fetchAll();
-// Anticipos autorizados que su empleado aún no ha liquidado (sin liquidación vigente):
-// al elegir al empleado, el formulario los liga solo y pasa a "Liquidación de gastos"
-$s = $pdo->prepare("SELECT gv.id, gv.numero, gv.empleado_id, gv.destino, gv.viaticos_anticipados FROM gastos_viaje gv
+// Anticipos autorizados que su beneficiario aún no ha liquidado (sin liquidación vigente): al
+// elegir al empleado o proveedor, el formulario los liga solo y pasa a "Liquidación de gastos".
+// Por beneficiario: 'e12' (empleado 12) o 'p5' (proveedor 5), como Beneficiario.clave() en proscala.js
+$s = $pdo->prepare("SELECT gv.id, gv.numero, IF(gv.proveedor_id IS NULL, CONCAT('e', gv.empleado_id), CONCAT('p', gv.proveedor_id)) AS beneficiario,
+        gv.destino, gv.viaticos_anticipados FROM gastos_viaje gv
     WHERE gv.estado = 'aprobada' AND $fpGv
       AND NOT EXISTS (SELECT 1 FROM solicitud_gastos sg WHERE sg.viaje_id = gv.id AND sg.estado <> 'rechazada')
     ORDER BY gv.fecha_salida");
 $s->execute($fpGvParams);
 $anticiposPendientes = [];
-foreach ($s->fetchAll() as $a) $anticiposPendientes[$a['empleado_id']][] = $a;
+foreach ($s->fetchAll() as $a) $anticiposPendientes[$a['beneficiario']][] = $a;
 
 // Ligada a un anticipo es una liquidación; si no, una solicitud de gastos (reembolso)
 function tipoSolicitudGastos(?array $sg): string {
@@ -114,8 +125,8 @@ function tipoSolicitudGastos(?array $sg): string {
 $listaSolicitudes = [];
 if ($action === 'list') {
     [$fp, $fpParams] = filtroPropios('gastos_solicitud.php', 'sg');
-    $s = $pdo->prepare("SELECT sg.*,CONCAT(e.nombre,' ',e.apellidos) as emp_nombre
-        FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id WHERE $fp AND " . filtroHistorico('sg') . " ORDER BY sg.id DESC");
+    $s = $pdo->prepare("SELECT sg.*," . SQL_BENEFICIARIO_GASTO . " as emp_nombre
+        FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . " WHERE $fp AND " . filtroHistorico('sg') . " ORDER BY sg.id DESC");
     $s->execute($fpParams); $listaSolicitudes = $s->fetchAll();
 }
 
@@ -136,7 +147,7 @@ include __DIR__ . '/includes/header.php';
 <div class="card">
   <div class="card-body p-0">
     <table id="tbl-sg" class="table-proscala w-100">
-      <thead><tr><th>Proceso</th><th>Número</th><th>Fecha</th><th>Empleado</th><th>Descripción</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Proceso</th><th>Número</th><th>Fecha</th><th>Beneficiario</th><th>Descripción</th><th>Total</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($listaSolicitudes as $r): ?>
         <tr>
@@ -144,7 +155,7 @@ include __DIR__ . '/includes/header.php';
           <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?>
             <div class="text-muted" style="font-size:.72rem;font-family:inherit"><?= $r['viaje_id'] ? '<i class="fas fa-hand-holding-dollar"></i> Liquidación' : '<i class="fas fa-receipt"></i> Solicitud' ?></div></td>
           <td><?= fmtFecha($r['fecha']) ?></td>
-          <td><?= htmlspecialchars($r['emp_nombre']) ?></td>
+          <td><?= htmlspecialchars($r['emp_nombre'] ?? '') ?><?= $r['proveedor_id'] ? ' <span class="badge bg-secondary-subtle text-secondary-emphasis" title="Proveedor / consultor">Proveedor</span>' : '' ?></td>
           <td><?= htmlspecialchars(substr($r['descripcion'],0,60)) ?></td>
           <td class="font-mono"><?= lps($r['monto_total']) ?></td>
           <td><?= estadoBadge($r['estado']) ?></td>
@@ -192,7 +203,7 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
   <div class="card-body">
     <div class="row g-2" style="font-size:.85rem;">
       <div class="col-md-3"><strong>Fecha:</strong> <?= fmtFecha($sg['fecha']) ?></div>
-      <div class="col-md-4"><strong>Empleado:</strong> <?= htmlspecialchars($sg['emp_nombre']) ?></div>
+      <div class="col-md-4"><strong><?= $sg['proveedor_id'] ? 'Proveedor / consultor:' : 'Empleado:' ?></strong> <?= htmlspecialchars($sg['emp_nombre'] ?? '') ?></div>
       <div class="col-md-5"><strong>Descripción:</strong> <?= htmlspecialchars($sg['descripcion']) ?></div>
       <?php if ($sg['notas']): ?><div class="col-12"><strong>Notas:</strong> <?= htmlspecialchars($sg['notas']) ?></div><?php endif; ?>
     </div>
@@ -240,15 +251,7 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
           <label class="form-label">Fecha *</label>
           <input type="text" name="fecha" class="form-control date-input" required value="<?= $sg['fecha'] ?? date('Y-m-d') ?>">
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Empleado *</label>
-          <select name="empleado_id" id="sel-empleado-sg" class="form-select" required>
-            <option value="">-- Seleccione --</option>
-            <?php foreach ($empleados as $e): ?>
-            <option value="<?= $e['id'] ?>" <?= ($sg['empleado_id']??$_SESSION['empleado_id']??0)==$e['id']?'selected':'' ?>><?= htmlspecialchars($e['nombre']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
+        <?php $benefFila = $sg; $benefIdEmpleado = 'sel-empleado-sg'; $benefCol = 'col-md-4'; include __DIR__ . '/includes/beneficiario_gasto.php'; ?>
         <div class="col-md-5">
           <label class="form-label">Descripción General *</label>
           <input type="text" name="descripcion" class="form-control" required value="<?= htmlspecialchars($sg['descripcion']??'') ?>">
@@ -402,12 +405,12 @@ function actualizarTipoSG() {
   document.getElementById('boton-sg').textContent = liq ? 'liquidación' : 'solicitud';
 }
 
-// Al elegir al empleado: si tiene anticipos autorizados sin liquidar, se liga solo.
-// Un anticipo ligado automáticamente se quita si luego se elige a otro empleado.
+// Al elegir al empleado o proveedor: si tiene anticipos autorizados sin liquidar, se liga solo.
+// Un anticipo ligado automáticamente se quita si luego se elige a otro beneficiario.
 let anticipoAuto = '';
 function detectarAnticipo() {
   const aviso = document.getElementById('aviso-anticipo');
-  const pend = ANTICIPOS_PENDIENTES[document.getElementById('sel-empleado-sg').value] || [];
+  const pend = ANTICIPOS_PENDIENTES[Beneficiario.clave(document.querySelector('#form-sg .beneficiario-gasto'))] || [];
   if (anticipoAuto && document.getElementById('sel-viaje').value === anticipoAuto) $('#sel-viaje').val('').trigger('change');
   anticipoAuto = '';
   aviso.style.display = pend.length ? '' : 'none';
@@ -415,16 +418,17 @@ function detectarAnticipo() {
   if (pend.length === 1) {
     anticipoAuto = String(pend[0].id);
     $('#sel-viaje').val(anticipoAuto).trigger('change');
-    aviso.innerHTML = '<i class="fas fa-circle-info"></i> El empleado tiene el anticipo <strong>' + pend[0].numero
+    aviso.innerHTML = '<i class="fas fa-circle-info"></i> El beneficiario tiene el anticipo <strong>' + pend[0].numero
       + '</strong> pendiente de liquidar: se registrará como su liquidación de gastos.';
   } else {
-    aviso.innerHTML = '<i class="fas fa-circle-info"></i> El empleado tiene ' + pend.length + ' anticipos pendientes de liquidar ('
+    aviso.innerHTML = '<i class="fas fa-circle-info"></i> El beneficiario tiene ' + pend.length + ' anticipos pendientes de liquidar ('
       + pend.map(a => a.numero).join(', ') + '). Seleccione cuál está liquidando.';
   }
 }
 
 $('#sel-viaje').on('change', actualizarTipoSG);
-$('#sel-empleado-sg').on('change', () => { if (SG_NUEVA) detectarAnticipo(); });
+// Cambia el empleado, el proveedor o el tipo de beneficiario (Beneficiario.cambiar avisa con 'change')
+$('#form-sg .beneficiario-gasto').on('change', e => { if (SG_NUEVA && !$(e.target).is('[name=beneficiario_tipo]')) detectarAnticipo(); });
 if (SG_NUEVA && !document.getElementById('sel-viaje').value) detectarAnticipo();
 actualizarTipoSG();
 ENDJS;

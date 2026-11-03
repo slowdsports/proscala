@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.21.0 — 2026-11-03
+**Anticipos y liquidaciones para proveedores o consultores**
+- **Anticipos a proveedores o consultores**: en Anticipos y en Liquidaciones / Reembolsos el beneficiario puede ser un **empleado** o un **proveedor / consultor** (para consultores que no son empleados y necesitan viáticos). La lista de proveedores permite dar de alta uno nuevo sin salir del formulario. La liquidación de un anticipo toma siempre el beneficiario del anticipo, y al elegir al proveedor se liga sola a su anticipo pendiente, igual que con un empleado.
+- La **orden de pago** automática (y la manual desde la liquidación) se emite al proveedor con sus datos bancarios. Las listas, la vista, los PDF (anticipo, liquidación y voucher de alimentación, con RTN en lugar de identidad), el Auxiliar de Anticipos, el dashboard y la búsqueda muestran al proveedor.
+- **Base de datos**: `gastos_viaje` y `solicitud_gastos` tienen `proveedor_id` y el empleado deja de ser obligatorio. Requiere ejecutar `actualizar_bd.php` (estructura 1.21.0).
+- Pruebas automáticas: 43 (1 nueva: anticipo y liquidación a nombre de un proveedor, con su orden de pago); la del paso único de octubre ya no depende de si la base lo aplicó.
+
 ## 1.20.0 — 2026-11-02
 **Correcciones: dashboard, orden de las compras, constancias, correos y listas**
 - **Dashboard**: la gráfica "Gastos vs. Pagos" (que comparaba lo mismo dos veces) pasa a **Egresos por tipo, últimos 6 meses**: una barra por mes con lo pagado o aprobado en órdenes de pago, dividido en Compras, Viáticos y gastos, Planillas y Otros, con el total del mes al pasar el cursor. Nuevas tablas **Anticipos recientes** y **Solicitudes de gastos recientes** junto a las de compras y órdenes de pago; cada una solo aparece a quien tiene acceso a su módulo.

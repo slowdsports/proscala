@@ -352,7 +352,10 @@ prueba('Paso único 1.15.1: anula (no borra) las quincenas de octubre 2026 de AH
     $oct = "anio = 2026 AND mes = 10 AND tipo = 'quincenal'";
     $pdo->beginTransaction();
     try {
-        // Escenario: una quincena de octubre con OP pendiente y otra con OP pagada
+        // Escenario: una quincena de octubre con OP pendiente y otra con OP pagada, como antes del paso
+        // (si la base ya lo aplicó, se deshace dentro de la transacción)
+        $pdo->exec("UPDATE planilla_periodos SET estado = 'procesada' WHERE $oct AND estado = 'anulada'");
+        $pdo->exec("DELETE FROM configuracion WHERE clave = 'paso_quincenas_oct2026'");
         $q = $pdo->query("SELECT id FROM planilla_periodos WHERE $oct ORDER BY quincena")->fetchAll(PDO::FETCH_COLUMN);
         if (count($q) < 2) {
             foreach (['primera', 'segunda'] as $i => $qn) if (!isset($q[$i])) {

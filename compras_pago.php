@@ -84,10 +84,10 @@ if ($ocId) {
 // Pre-carga desde Solicitud de Gastos (liquidación de viáticos)
 $sgData = null;
 if ($sgId) {
-    $s=$pdo->prepare("SELECT sg.*,CONCAT(e.nombre,' ',e.apellidos) as emp_nombre,
+    $s=$pdo->prepare("SELECT sg.*," . SQL_BENEFICIARIO_GASTO . " as emp_nombre,
         gv.numero as gv_numero, gv.id as gv_id
         FROM solicitud_gastos sg
-        JOIN empleados e ON sg.empleado_id=e.id
+        " . joinBeneficiarioGasto('sg') . "
         LEFT JOIN gastos_viaje gv ON sg.viaje_id=gv.id
         WHERE sg.id=?");
     $s->execute([$sgId]); $sgData=$s->fetch();
@@ -122,8 +122,8 @@ if (in_array($action,['ver','editar']) && $id) {
         if ($op['solicitud_gastos_id'] ?? null) {
             try {
                 $t4=$pdo->prepare("SELECT sg.id,sg.numero,sg.estado,sg.proceso_id,sg.viaje_id,
-                    CONCAT(e.nombre,' ',e.apellidos) as emp_nombre
-                    FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id
+                    " . SQL_BENEFICIARIO_GASTO . " as emp_nombre
+                    FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . "
                     WHERE sg.id=?");
                 $t4->execute([$op['solicitud_gastos_id']]); $traza['sg']=$t4->fetch();
                 if ($traza['sg'] && ($traza['sg']['viaje_id'] ?? null)) {
@@ -141,8 +141,8 @@ $proyectos    = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activ
 $cuentas      = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 $ocList       = $pdo->query("SELECT id,numero,total FROM ordenes_compra WHERE estado IN ('emitida','parcial') ORDER BY numero DESC")->fetchAll();
 try {
-    $sgList = $pdo->query("SELECT sg.*, CONCAT(e.nombre,' ',e.apellidos) as emp_nombre
-        FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id
+    $sgList = $pdo->query("SELECT sg.*, " . SQL_BENEFICIARIO_GASTO . " as emp_nombre
+        FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . "
         WHERE sg.estado='aprobada' ORDER BY sg.id DESC")->fetchAll();
 } catch (\Exception $e) {
     $sgList = [];
@@ -364,11 +364,13 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
           foreach($sgList as $sg): ?>
           <option value="<?= $sg['id'] ?>"
             data-monto="<?= $sg['monto_total'] ?>"
-            data-emp="<?= htmlspecialchars($sg['emp_nombre']) ?>"
+            data-emp="<?= htmlspecialchars($sg['emp_nombre'] ?? '') ?>"
+            data-tipo="<?= $sg['proveedor_id'] ? 'proveedor' : 'empleado' ?>"
+            data-benef="<?= (int)($sg['proveedor_id'] ?: $sg['empleado_id']) ?>"
             data-proceso="<?= ($sg['proceso_id'] ?? null) ? formatProceso($sg['proceso_id']) : '' ?>"
             <?= $selSgId==$sg['id']?'selected':'' ?>>
             <?= $sg['numero'] ?><?= ($sg['proceso_id'] ?? null) ? ' [Proceso '.formatProceso($sg['proceso_id']).']' : '' ?>
-            — <?= htmlspecialchars($sg['emp_nombre']) ?>
+            — <?= htmlspecialchars($sg['emp_nombre'] ?? '') ?>
             — <?= lps($sg['monto_total']) ?>
           </option>
           <?php endforeach; ?>
@@ -443,8 +445,11 @@ function setSgData(sel) {
   const tipoBen   = document.getElementById('tipo-ben');
   if (inpMonto && monto)  inpMonto.value = parseFloat(monto).toFixed(2);
   if (inpBenef && emp)    inpBenef.value = emp;
-  if (tipoBen)            tipoBen.value  = 'empleado';
+  // Beneficiario de la liquidación: un empleado o un proveedor/consultor (con sus datos bancarios)
+  const tipo = opt.dataset.tipo || 'empleado';
+  if (tipoBen) $(tipoBen).val(tipo).trigger('change.select2');
   updateBenType();
+  if (opt.dataset.benef) $(tipo === 'proveedor' ? '#sel-prov-op' : '#form-op [name=empleado_id]').val(opt.dataset.benef).trigger('change');
   if (proceso) {
     document.getElementById('sg-proceso-badge').innerHTML =
       '<span class="badge bg-primary font-mono">Proceso ' + proceso + ' será asignado a esta OP</span>';

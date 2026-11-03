@@ -17,13 +17,16 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $items = json_decode($_POST['items'] ?? '[]', true);
         $total = round(array_sum(array_column($items, 'monto')), 2);
         $alimentacion = round((float)($_POST['monto_alimentacion'] ?? 0), 2);
-        // Firmante #1: quien llena la solicitud (su empleado vinculado; si no tiene, el beneficiario).
+        // Beneficiario: un empleado o un proveedor (consultor que no es empleado)
+        [$empleadoId, $proveedorId] = beneficiarioGastoDelFormulario($pdo);
+        // Firmante #1: quien llena la solicitud (su empleado vinculado; si no tiene, el empleado beneficiario).
         // Se fija al crearla; al editarla se conserva.
-        $firmante1Id = (int)($_SESSION['empleado_id'] ?? 0) ?: (int)$_POST['empleado_id'];
+        $firmante1Id = (int)($_SESSION['empleado_id'] ?? 0) ?: $empleadoId;
         $tipo = ($_POST['tipo'] ?? 'viaje') === 'compra' ? 'compra' : 'viaje';
         $d = [
             'tipo'               => $tipo,
-            'empleado_id'        => (int)$_POST['empleado_id'],
+            'empleado_id'        => $empleadoId,
+            'proveedor_id'       => $proveedorId,
             'firmante1_id'       => $firmante1Id,
             'proyecto_id'        => $_POST['proyecto_id'] ?: null,
             'destino'            => trim($_POST['destino']),
@@ -36,19 +39,19 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             if ($gvId) {
-                $pdo->prepare("UPDATE gastos_viaje SET tipo=?,empleado_id=?,proyecto_id=?,destino=?,proposito=?,
+                $pdo->prepare("UPDATE gastos_viaje SET tipo=?,empleado_id=?,proveedor_id=?,proyecto_id=?,destino=?,proposito=?,
                     fecha_salida=?,fecha_regreso=?,viaticos_anticipados=?,monto_alimentacion=?,notas=? WHERE id=?")->execute([
-                    $d['tipo'],$d['empleado_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
+                    $d['tipo'],$d['empleado_id'],$d['proveedor_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
                     $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas'],$gvId
                 ]);
                 $pdo->prepare("DELETE FROM gastos_viaje_detalle WHERE viaje_id=?")->execute([$gvId]);
             } else {
                 $procesoId = generarProceso($pdo);
                 $num = numeroProceso($pdo,'gastos_viaje',getConfig($pdo,'prefijo_gv','GV'));
-                $pdo->prepare("INSERT INTO gastos_viaje (numero,proceso_id,tipo,empleado_id,firmante1_id,proyecto_id,destino,proposito,
+                $pdo->prepare("INSERT INTO gastos_viaje (numero,proceso_id,tipo,empleado_id,proveedor_id,firmante1_id,proyecto_id,destino,proposito,
                     fecha_salida,fecha_regreso,viaticos_anticipados,monto_alimentacion,total_gastos,saldo,notas,estado)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,'pendiente')")
-                    ->execute([$num,$procesoId,$d['tipo'],$d['empleado_id'],$d['firmante1_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,'pendiente')")
+                    ->execute([$num,$procesoId,$d['tipo'],$d['empleado_id'],$d['proveedor_id'],$d['firmante1_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
                     $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas']]);
                 $gvId = $pdo->lastInsertId();
             }
@@ -78,23 +81,24 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $gv = null; $detalle = []; $liquidaciones = [];
 if (in_array($action,['ver','editar']) && $id) {
-    $s = $pdo->prepare("SELECT gv.*,CONCAT(e.nombre,' ',e.apellidos) as emp_nombre FROM gastos_viaje gv JOIN empleados e ON gv.empleado_id=e.id WHERE gv.id=?");
+    $s = $pdo->prepare("SELECT gv.*," . SQL_BENEFICIARIO_GASTO . " as emp_nombre FROM gastos_viaje gv " . joinBeneficiarioGasto('gv') . " WHERE gv.id=?");
     $s->execute([$id]); $gv = $s->fetch();
     $s2 = $pdo->prepare("SELECT d.*,cc.nombre as cuenta_nombre FROM gastos_viaje_detalle d LEFT JOIN cuentas_contables cc ON d.cuenta_id=cc.id WHERE d.viaje_id=?");
     $s2->execute([$id]); $detalle = $s2->fetchAll();
     if ($action === 'ver') {
-        $liq = $pdo->prepare("SELECT sg.*, CONCAT(e.nombre,' ',e.apellidos) as emp_nombre FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id WHERE sg.viaje_id=? ORDER BY sg.id DESC");
+        $liq = $pdo->prepare("SELECT sg.*, " . SQL_BENEFICIARIO_GASTO . " as emp_nombre FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . " WHERE sg.viaje_id=? ORDER BY sg.id DESC");
         $liq->execute([$id]); $liquidaciones = $liq->fetchAll();
     }
 }
 
 $empleados = $pdo->query("SELECT id,CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
+$proveedores = $pdo->query("SELECT id,nombre FROM proveedores WHERE activo=1 ORDER BY nombre")->fetchAll();
 $proyectos = $pdo->query("SELECT id,nombre FROM proyectos WHERE estado='activo' ORDER BY nombre")->fetchAll();
 $cuentas   = $pdo->query("SELECT id,codigo,nombre FROM cuentas_contables WHERE activa=1 AND tipo='gasto' ORDER BY codigo")->fetchAll();
 $listaViajes = [];
 if ($action === 'list') {
     [$fp, $fpParams] = filtroPropios('gastos_viajes.php', 'gv');   // roles que solo ven sus solicitudes
-    $s = $pdo->prepare("SELECT gv.*,CONCAT(e.nombre,' ',e.apellidos) as emp_nombre FROM gastos_viaje gv JOIN empleados e ON gv.empleado_id=e.id WHERE $fp AND " . filtroHistorico('gv') . " ORDER BY gv.id DESC");
+    $s = $pdo->prepare("SELECT gv.*," . SQL_BENEFICIARIO_GASTO . " as emp_nombre FROM gastos_viaje gv " . joinBeneficiarioGasto('gv') . " WHERE $fp AND " . filtroHistorico('gv') . " ORDER BY gv.id DESC");
     $s->execute($fpParams); $listaViajes = $s->fetchAll();
 }
 
@@ -115,14 +119,14 @@ include __DIR__ . '/includes/header.php';
 <div class="card">
   <div class="card-body p-0">
     <table id="tbl-gv" class="table-proscala w-100">
-      <thead><tr><th>Proceso</th><th>Número</th><th>Tipo</th><th>Empleado</th><th>Destino / Concepto</th><th>Salida</th><th>Regreso</th><th>Monto Anticipo</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Proceso</th><th>Número</th><th>Tipo</th><th>Beneficiario</th><th>Destino / Concepto</th><th>Salida</th><th>Regreso</th><th>Monto Anticipo</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($listaViajes as $r): ?>
         <tr>
           <td class="font-mono text-primary fw-bold"><?= $r['proceso_id'] ? formatProceso($r['proceso_id']) : '—' ?></td>
           <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?></td>
           <td><?= tipoAnticipoBadge($r['tipo']) ?></td>
-          <td><?= htmlspecialchars($r['emp_nombre']) ?></td>
+          <td><?= htmlspecialchars($r['emp_nombre'] ?? '') ?><?= $r['proveedor_id'] ? ' <span class="badge bg-secondary-subtle text-secondary-emphasis" title="Proveedor / consultor">Proveedor</span>' : '' ?></td>
           <td><?= htmlspecialchars($r['destino']) ?></td>
           <td><?= fmtFecha($r['fecha_salida']) ?></td>
           <td><?= fmtFecha($r['fecha_regreso']) ?></td>
@@ -166,7 +170,7 @@ include __DIR__ . '/includes/header.php';
   </div>
   <div class="card-body">
     <div class="row g-2" style="font-size:.85rem;">
-      <div class="col-md-3"><strong>Empleado:</strong> <?= htmlspecialchars($gv['emp_nombre']) ?></div>
+      <div class="col-md-3"><strong><?= $gv['proveedor_id'] ? 'Proveedor / consultor:' : 'Empleado:' ?></strong> <?= htmlspecialchars($gv['emp_nombre'] ?? '') ?></div>
       <div class="col-md-3"><strong><?= $gv['tipo']==='compra' ? 'Concepto:' : 'Destino:' ?></strong> <?= htmlspecialchars($gv['destino']) ?></div>
       <div class="col-md-3"><strong><?= $gv['tipo']==='compra' ? 'Fecha del Anticipo:' : 'Salida:' ?></strong> <?= fmtFecha($gv['fecha_salida']) ?></div>
       <div class="col-md-3"><strong><?= $gv['tipo']==='compra' ? 'Fecha Límite de Liquidación:' : 'Regreso:' ?></strong> <?= fmtFecha($gv['fecha_regreso']) ?></div>
@@ -257,15 +261,7 @@ include __DIR__ . '/includes/header.php';
             <option value="compra" <?= ($gv['tipo']??'viaje')==='compra'?'selected':'' ?>>Compra de Insumos/Activos</option>
           </select>
         </div>
-        <div class="col-md-5">
-          <label class="form-label">Empleado *</label>
-          <select name="empleado_id" id="sel-empleado" class="form-select" required>
-            <option value="">-- Seleccione --</option>
-            <?php foreach ($empleados as $e): ?>
-            <option value="<?= $e['id'] ?>" <?= ($gv['empleado_id']??$_SESSION['empleado_id']??0)==$e['id']?'selected':'' ?>><?= htmlspecialchars($e['nombre']) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
+        <?php $benefFila = $gv; $benefIdEmpleado = 'sel-empleado'; include __DIR__ . '/includes/beneficiario_gasto.php'; ?>
         <div class="col-md-4">
           <label class="form-label">Proyecto</label>
           <select name="proyecto_id" class="form-select">

@@ -827,6 +827,26 @@ const AltaRapida = {
   },
 };
 
+// ── Beneficiario de anticipos y liquidaciones (includes/beneficiario_gasto.php) ──
+// Empleado o proveedor/consultor: se muestra y se exige solo la lista del tipo elegido.
+const Beneficiario = {
+  cambiar(radio) {
+    const caja = radio.closest('.beneficiario-gasto');
+    const prov = radio.value === 'proveedor';
+    caja.querySelector('.benef-empleado').hidden = prov;
+    caja.querySelector('.benef-proveedor').hidden = !prov;
+    caja.querySelector('.benef-empleado select').required = !prov;
+    caja.querySelector('.benef-proveedor select').required = prov;
+    caja.dispatchEvent(new Event('change', { bubbles: true }));
+  },
+  // 'e12' (empleado 12) o 'p5' (proveedor 5); '' si falta elegirlo
+  clave(caja) {
+    const prov = caja.querySelector('[name=beneficiario_tipo]:checked')?.value === 'proveedor';
+    const id = caja.querySelector(prov ? '.benef-proveedor select' : '.benef-empleado select').value;
+    return id ? (prov ? 'p' : 'e') + id : '';
+  },
+};
+
 function confirmAction(msg, callback) {
   confirmar(msg).then(ok => { if (ok) callback(); });
 }

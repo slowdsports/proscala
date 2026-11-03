@@ -70,13 +70,13 @@ $pagos_recientes = !puedeAcceder('compras_pago.php') ? null : $pdo->query("
     FROM ordenes_pago ORDER BY id DESC LIMIT 6")->fetchAll();
 
 $anticipos_recientes = !puedeAcceder('gastos_viajes.php') ? null : $pdo->query("
-    SELECT gv.id, gv.numero, gv.tipo, gv.destino, CONCAT(e.nombre,' ',e.apellidos) AS empleado, gv.viaticos_anticipados AS monto, gv.estado
-    FROM gastos_viaje gv JOIN empleados e ON gv.empleado_id=e.id
+    SELECT gv.id, gv.numero, gv.tipo, gv.destino, " . SQL_BENEFICIARIO_GASTO . " AS empleado, gv.viaticos_anticipados AS monto, gv.estado
+    FROM gastos_viaje gv " . joinBeneficiarioGasto('gv') . "
     ORDER BY gv.id DESC LIMIT 6")->fetchAll();
 
 $gastos_recientes = !puedeAcceder('gastos_solicitud.php') ? null : $pdo->query("
-    SELECT sg.id, sg.numero, sg.viaje_id, sg.descripcion, CONCAT(e.nombre,' ',e.apellidos) AS empleado, sg.monto_total AS monto, sg.estado
-    FROM solicitud_gastos sg JOIN empleados e ON sg.empleado_id=e.id
+    SELECT sg.id, sg.numero, sg.viaje_id, sg.descripcion, " . SQL_BENEFICIARIO_GASTO . " AS empleado, sg.monto_total AS monto, sg.estado
+    FROM solicitud_gastos sg " . joinBeneficiarioGasto('sg') . "
     ORDER BY sg.id DESC LIMIT 6")->fetchAll();
 
 $labelsJson  = json_encode($prettyLabels);
@@ -225,9 +225,9 @@ include __DIR__ . '/includes/header.php';
 $tablasRecientes = [
     ['Solicitudes de Compra Recientes', 'fa-cart-plus', 'compras_solicitud.php', $compras_recientes, 'Solicitante', fn($r) => $r['solicitante'], 'Sin solicitudes'],
     ['Órdenes de Pago Recientes', 'fa-money-bill-transfer', 'compras_pago.php', $pagos_recientes, 'Beneficiario', fn($r) => $r['beneficiario'], 'Sin órdenes'],
-    ['Anticipos Recientes', 'fa-plane', 'gastos_viajes.php', $anticipos_recientes, 'Empleado / Destino',
+    ['Anticipos Recientes', 'fa-plane', 'gastos_viajes.php', $anticipos_recientes, 'Beneficiario / Destino',
         fn($r) => $r['empleado'] . ' — ' . ($r['tipo'] === 'compra' ? 'Compra: ' : '') . $r['destino'], 'Sin anticipos'],
-    ['Solicitudes de Gastos Recientes', 'fa-file-invoice-dollar', 'gastos_solicitud.php', $gastos_recientes, 'Empleado / Descripción',
+    ['Solicitudes de Gastos Recientes', 'fa-file-invoice-dollar', 'gastos_solicitud.php', $gastos_recientes, 'Beneficiario / Descripción',
         fn($r) => $r['empleado'] . ' — ' . ($r['viaje_id'] ? 'Liquidación: ' : 'Reembolso: ') . $r['descripcion'], 'Sin solicitudes'],
 ];
 ?>

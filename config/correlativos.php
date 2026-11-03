@@ -96,6 +96,15 @@ function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
         return ['beneficiario' => $e['nombre'], 'beneficiario_tipo' => 'empleado', 'empleado_id' => $e['id'],
                 'banco' => $e['banco'], 'cuenta_bancaria' => $e['cuenta_banco']];
     };
+    // Anticipos y liquidaciones/reembolsos: a nombre de un empleado o de un proveedor (consultor)
+    $beneficiarioGasto = function (array $r) use ($pdo, $empleado): array {
+        if (empty($r['proveedor_id'])) return $empleado((int)$r['empleado_id']);
+        $s = $pdo->prepare("SELECT nombre, banco, banco_cuenta, banco_tipo FROM proveedores WHERE id = ?");
+        $s->execute([$r['proveedor_id']]);
+        $p = $s->fetch() ?: ['nombre' => '', 'banco' => '', 'banco_cuenta' => '', 'banco_tipo' => null];
+        return ['beneficiario' => $p['nombre'], 'beneficiario_tipo' => 'proveedor', 'proveedor_id' => (int)$r['proveedor_id'],
+                'banco' => $p['banco'], 'cuenta_bancaria' => $p['banco_cuenta'], 'banco_tipo' => $p['banco_tipo']];
+    };
     $fila = function (string $sql) use ($pdo, $id) { $s = $pdo->prepare($sql); $s->execute([$id]); return $s->fetch(); };
     $meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     $d = null;
@@ -103,7 +112,7 @@ function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
     switch ($tabla) {
         case 'gastos_viaje':
             $r = $fila("SELECT * FROM gastos_viaje WHERE id = ?");
-            if ($r) $d = $empleado((int)$r['empleado_id']) + ['monto' => $r['viaticos_anticipados'], 'proyecto_id' => $r['proyecto_id'],
+            if ($r) $d = $beneficiarioGasto($r) + ['monto' => $r['viaticos_anticipados'], 'proyecto_id' => $r['proyecto_id'],
                 'proceso_id' => $r['proceso_id'], 'concepto' => "Anticipo {$r['numero']} — {$r['destino']}"];
             break;
         case 'solicitud_gastos':
@@ -112,7 +121,7 @@ function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
             if ($r) {
                 // Ligada a un anticipo: solo se paga lo gastado por encima del anticipo (reembolso)
                 $monto = $r['viaje_id'] ? $r['monto_total'] - $r['viaticos_anticipados'] : $r['monto_total'];
-                $d = $empleado((int)$r['empleado_id']) + ['monto' => $monto, 'proyecto_id' => $r['proyecto_id'],
+                $d = $beneficiarioGasto($r) + ['monto' => $monto, 'proyecto_id' => $r['proyecto_id'],
                     'proceso_id' => $r['proceso_id'], 'solicitud_gastos_id' => $id,
                     'concepto' => $r['viaje_id'] ? "Reembolso de liquidación {$r['numero']} (anticipo {$r['gv_numero']}) — {$r['descripcion']}"
                                                  : "Reembolso {$r['numero']} — {$r['descripcion']}"];

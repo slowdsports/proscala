@@ -3,9 +3,9 @@
 // Plantilla de impresión (print.php): datos del documento y su contenido,
 // dentro de la página común con el diseño de todos los documentos.
 
-$s = $pdo->prepare("SELECT gv.*, CONCAT(e.nombre,' ',e.apellidos) AS emp_nombre, p.codigo AS proy_nombre,
+$s = $pdo->prepare("SELECT gv.*, " . SQL_BENEFICIARIO_GASTO . " AS emp_nombre, p.codigo AS proy_nombre,
     CONCAT(a.nombre,' ',a.apellidos) AS aprobador_nombre
-    FROM gastos_viaje gv JOIN empleados e ON gv.empleado_id = e.id
+    FROM gastos_viaje gv " . joinBeneficiarioGasto('gv') . "
     LEFT JOIN proyectos p ON gv.proyecto_id = p.id
     LEFT JOIN empleados a ON gv.aprobador_id = a.id
     WHERE gv.id = ?");
@@ -31,7 +31,7 @@ require __DIR__ . '/_pagina_inicio.php';
   <div class="meta-section">
     <div class="meta-grid cols-4">
       <div class="meta-item">
-        <div class="meta-label">Empleado</div>
+        <div class="meta-label"><?= $doc['proveedor_id'] ? 'Proveedor / Consultor' : 'Empleado' ?></div>
         <div class="meta-value"><?= htmlspecialchars($doc['emp_nombre']) ?></div>
       </div>
       <div class="meta-item">
