@@ -47,16 +47,6 @@ function sigBlock(array $fs, string $cls = 'cols-3', string $sty = ''): string {
     }
     return $html . '</div>';
 }
-function sigProvBlock(string $name, string $label): string {
-    $nm = htmlspecialchars($name);
-    $rl = htmlspecialchars($label);
-    return "<div class=\"sig-prov-wrap\">"
-         . "<div class=\"sig-item sig-ext\">"
-         . "<div class=\"sig-line\"></div>"
-         . "<div class=\"sig-name\">{$nm}</div>"
-         . "<div class=\"sig-role\">{$rl}</div>"
-         . "</div></div>";
-}
 
 // ── Tabla "Distribución por Proyecto" de los recibos plv / pbv ─────
 // $cols: [clave => etiqueta]; la primera clave es el porcentaje.

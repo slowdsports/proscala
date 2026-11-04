@@ -301,8 +301,7 @@ La nota de recepción es el último paso: solo se puede registrar sobre una orde
 
 1. **Solicitud de Compra.** Describa qué necesita, para qué proyecto, la urgencia, la justificación y el detalle de artículos con precio estimado. Sigue el flujo de aprobación.
 2. **Resumen de Cotizaciones.** Registre lo que cotizó cada proveedor en un cuadro comparativo: una fila por artículo (vienen de la solicitud y se pueden agregar más) y una columna por proveedor, con el precio unitario de cada uno (vacío si no lo cotizó). El sistema marca el menor precio de cada artículo y recomienda dos opciones: el **proveedor único** más barato entre los que cotizaron todo, y la **compra por artículo** (cada artículo al mejor precio, con el ahorro y cuántas órdenes de compra requiere). Seleccione el proveedor, justifique la selección y descargue el **PDF del resumen**. Al aprobarlo, cree la orden de compra de cada proveedor con sus precios cotizados.
-3. **Orden de Compra.** Se emite al proveedor seleccionado, con detalle, descuentos e impuestos (ISV y turismo). Sigue el flujo de aprobación; al autorizarse se genera la orden de pago. Al imprimirla incluye la firma del proveedor.
-4. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
+3. **Orden de Compra.** Se emite al proveedor seleccionado, con detalle, descuentos e impuestos (ISV y turismo). Sigue el flujo de aprobación; al autorizarse se genera la orden de pago.4. **Orden de Pago.** El pago al proveedor, empleado u otro beneficiario: forma de pago (cheque, transferencia o efectivo), banco y cuenta, proyecto y cuenta contable. *Pendiente → Aprobada → Pagada*.
 5. **Nota de Recepción.** Registre lo recibido: completo, parcial o con devolución, artículo por artículo.
 
 Desde la solicitud de compra puede imprimir el **proceso completo** en un solo documento.

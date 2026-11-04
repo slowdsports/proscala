@@ -138,10 +138,7 @@ require __DIR__ . '/_pagina_inicio.php';
     </table>
   </div>
 
-  <?php
-  echo sigBlock($fOC);
-  echo sigProvBlock($doc['prov_nombre'] ?? '', 'Nombre, Firma y Sello');
-  ?>
+  <?= sigBlock($fOC) ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
 <?php require __DIR__ . '/_fin.php';

@@ -140,10 +140,7 @@ require __DIR__ . '/_inicio.php';
       </tfoot>
     </table>
   </div>
-  <?php
-  echo sigBlock($fOC);
-  echo sigProvBlock($proc_oc['prov_nombre'] ?? '', 'Nombre, Firma y Sello');
-  ?>
+  <?= sigBlock($fOC) ?>
   <div class="spacer"></div>
   <div class="doc-footer">
     <div class="footer-left"><?= htmlspecialchars($org) ?><br>Generado el <span class="gen-ts"></span> — Sistema de Administración Proscala</div>

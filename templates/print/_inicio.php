@@ -292,17 +292,6 @@ table.items tfoot tr:last-child td {
 .signatures.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .signatures.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .signatures.cols-4 { grid-template-columns: repeat(4, 1fr); }
-/* Proveedor block — centered, not full-width */
-.sig-prov-wrap {
-  margin: 40px 28px 0;
-  display: flex;
-  justify-content: center;
-}
-.sig-prov-wrap .sig-item {
-  width: 38%;
-  min-width: 190px;
-}
-.sig-prov-wrap .sig-line { margin-top: 58px; }
 .sig-item.sig-ext .sig-line { border-top-style: dashed; border-top-color: #94a3b8; }
 .sig-item.sig-ext .sig-name { color: #475569; }
 .sig-item.sig-ext .sig-role { color: #94a3b8; }

@@ -72,7 +72,7 @@ try {
         foreach ($probados as $tipo => $id) {
             [$cod, $html] = pedir("$baseUrl/print.php?tipo=$tipo&id=$id", $sesAdmin);
             if ($cod !== 200 || !str_contains($html, 'class="page') || ($e = erroresPhp($html))) $fallas[] = "$tipo #$id (HTTP $cod" . (!empty($e) ? ", $e" : '') . ')';
-            // Como máximo 3 firmas de la organización por página (la del proveedor, sig-ext, aparte)
+            // Como máximo 3 firmas de la organización por página
             foreach (array_slice(preg_split('#<div class="page[ "]#', $html), 1) as $n => $pagina) {
                 if (($f = preg_match_all('#class="sig-item"#', $pagina)) > 3) $fallas[] = "$tipo #$id: $f firmas en la página " . ($n + 1);
             }

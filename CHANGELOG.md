@@ -11,6 +11,10 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.29.0 — 2026-11-04
+**Orden de compra sin firma del proveedor**
+- La orden de compra impresa ya no incluye el espacio *Nombre, Firma y Sello* del proveedor; solo lleva las firmas de la organización. Aplica a la OC impresa y a su página dentro del expediente del proceso.
+
 ## 1.28.0 — 2026-11-04
 **Vincular un usuario a su ficha de empleado**
 - **Corrección**: quien creaba una caja chica a su propio nombre no podía editarla ("No puede editar un proceso que usted creó…"). El sistema reconoce al responsable por la ficha de empleado vinculada a su usuario, y un usuario creado en Usuarios quedaba sin vincular, salvo que el correo de su ficha coincidiera con el del usuario.
