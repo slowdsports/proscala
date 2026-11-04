@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.28.0 — 2026-11-04
+**Vincular un usuario a su ficha de empleado**
+- **Corrección**: quien creaba una caja chica a su propio nombre no podía editarla ("No puede editar un proceso que usted creó…"). El sistema reconoce al responsable por la ficha de empleado vinculada a su usuario, y un usuario creado en Usuarios quedaba sin vincular, salvo que el correo de su ficha coincidiera con el del usuario.
+- **Usuarios** tiene el campo **Empleado vinculado**: el administrador elige la ficha de empleado de cada usuario. Al escribir el correo, el formulario sugiere el empleado que tiene ese mismo correo. Un empleado solo puede estar vinculado a un usuario; el sistema avisa si ya es de otro.
+- La lista de Usuarios muestra el empleado de cada usuario, o *Sin empleado vinculado*.
+- Si alguien sin empleado vinculado intenta editar la caja chica que creó, el mensaje explica que debe vincularse en Usuarios.
+
 ## 1.27.0 — 2026-11-04
 **Edición de la caja chica**
 - **Mientras está abierta**, el responsable la edita en todo momento: los gastos y también el monto del fondo, y su orden de pago se actualiza si aún no está pagada. Lo único que no cambia es quién es el responsable; eso lo hace un rango superior.

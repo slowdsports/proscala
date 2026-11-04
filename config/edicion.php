@@ -66,7 +66,15 @@ function puedeEditar(PDO $pdo, string $modulo, int $id, string $accion = 'editar
     $s = $pdo->prepare("SELECT usuario_id FROM registro_usuarios WHERE tabla = ? AND registro_id = ? AND participacion = 'creador'");
     $s->execute([$def['tabla'], $id]);
     if ((int)$s->fetchColumn() === (int)($_SESSION['usuario_id'] ?? 0)) {
-        if (!isset(PROCESOS[$modulo])) return 'No puede editar un proceso que usted creó: debe corregirlo un rango superior.';
+        if (!isset(PROCESOS[$modulo])) {
+            // Con responsable (caja chica): quien la creó a su propio nombre la edita como responsable,
+            // pero el sistema solo lo reconoce si su usuario está vinculado a su ficha de empleado
+            if (!empty($def['responsable']) && empty($_SESSION['empleado_id'])) {
+                return 'Su usuario no está vinculado a su ficha de empleado, así que el sistema no lo reconoce como responsable. '
+                     . 'Pida al administrador que lo vincule en Usuarios (campo "Empleado vinculado").';
+            }
+            return 'No puede editar un proceso que usted creó: debe corregirlo un rango superior.';
+        }
         return pasosFlujoDados($pdo, $def['tabla'], $id)
             ? 'Ya fue revisado, autorizado o rechazado: ya no puede editarlo. Si hay que cambiarlo, debe corregirlo un rango superior.'
             : true;

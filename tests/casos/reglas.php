@@ -348,6 +348,11 @@ prueba('Caja chica: el responsable la edita (no la elimina) mientras está abier
         iguales(true, puedeEditar($pdo, 'caja_chica.php', $cc), 'liquidada: el jefe del responsable la corrige');
         afirmar(puedeEditar($pdo, 'caja_chica.php', $cc, 'eliminar') !== true, 'liquidada: no se elimina, ni el jefe');
         comoUsuario($pdo, $u['par']); afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'liquidada: un puesto que no es superior del responsable no la edita');
+        // Quien la creó a su nombre sin tener su usuario vinculado a su ficha de empleado: se le dice cómo resolverlo
+        $pdo->exec("UPDATE caja_chica SET estado = 'abierta' WHERE id = $cc");
+        $pdo->exec("UPDATE usuarios SET empleado_id = NULL WHERE id = {$u['asistente']}");
+        comoUsuario($pdo, $u['asistente']);
+        afirmar(str_contains((string)puedeEditar($pdo, 'caja_chica.php', $cc), 'Empleado vinculado'), 'sin empleado vinculado, el mensaje no explica cómo resolverlo');
     });
 });
 require_once RAIZ . '/config/esquema.php';

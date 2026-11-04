@@ -302,6 +302,38 @@ try {
         }
     });
 
+    prueba('Usuarios: se vincula el usuario a su ficha de empleado, y un empleado no queda en dos usuarios', function () use ($baseUrl, $sesAdmin, $pdo, $pdoMaster, $empresa) {
+        $emp = (int)$pdo->query("SELECT id FROM empleados WHERE id NOT IN (SELECT empleado_id FROM usuarios WHERE empleado_id IS NOT NULL) ORDER BY id LIMIT 1")->fetchColumn();
+        if (!$emp) throw new Omitir('todos los empleados tienen usuario');
+        $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba', '_action' => 'guardar', 'rol' => 'empleado'])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/usuarios.php", false, $ctx), true) ?: [];
+        };
+        $sufijo = bin2hex(random_bytes(4));
+        $emails = ["zz.vinculo.a.$sufijo@prueba.local", "zz.vinculo.b.$sufijo@prueba.local"];
+        try {
+            // Inactivos: no se envía el correo de activación
+            $a = $enviar(['id' => 0, 'nombre' => 'ZZ Vínculo A', 'email' => $emails[0], 'empleado_id' => $emp]);
+            afirmar(!empty($a['success']), 'no creó el usuario: ' . ($a['message'] ?? 'sin respuesta'));
+            iguales($emp, (int)$pdo->query("SELECT empleado_id FROM usuarios WHERE id = " . (int)$a['id'])->fetchColumn(), 'el usuario no quedó vinculado al empleado');
+            $b = $enviar(['id' => 0, 'nombre' => 'ZZ Vínculo B', 'email' => $emails[1], 'empleado_id' => $emp]);
+            afirmar(empty($b['success']) && str_contains($b['message'] ?? '', 'ya está vinculado'), 'vinculó el mismo empleado a dos usuarios');
+            $r = $enviar(['id' => $a['id'], 'nombre' => 'ZZ Vínculo A', 'email' => $emails[0], 'empleado_id' => '']);
+            afirmar(!empty($r['success']) && $pdo->query("SELECT empleado_id FROM usuarios WHERE id = " . (int)$a['id'])->fetchColumn() === null, 'no se pudo desvincular');
+            [$cod, $html] = pedir("$baseUrl/usuarios.php", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Empleado vinculado') && !erroresPhp($html), "Usuarios (HTTP $cod) no muestra el campo Empleado vinculado");
+        } finally {
+            foreach ($emails as $e) {
+                $pdo->prepare("DELETE FROM usuarios WHERE email = ?")->execute([$e]);
+                $pdoMaster->prepare("DELETE FROM accesos WHERE email = ?")->execute([$e]);
+                $pdoMaster->prepare("DELETE FROM recuperaciones WHERE email = ?")->execute([$e]);
+            }
+            $pdo->exec("DELETE FROM auditoria WHERE modulo = 'usuarios.php' AND ip IN ('127.0.0.1', '::1') AND detalle LIKE '%zz.vinculo.%'");
+        }
+    });
+
     prueba('Envío repetido: el mismo envío en pocos segundos se rechaza sin ejecutarse; uno distinto o tras un error, no', function () use ($baseUrl, $sesAdmin, $pdo, $admin) {
         $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
             $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,

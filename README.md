@@ -418,6 +418,8 @@ El puesto **Consultor** (con "solo sus propias solicitudes" y los módulos Antic
 
 Cree usuarios, asígneles su puesto, actívelos o desactívelos y **desbloquee** a quien haya superado los intentos de contraseña. Los empleados reciben su usuario desde el módulo Empleados, y los consultores desde Proveedores.
 
+**Empleado vinculado.** Indique a qué ficha de Empleados corresponde cada usuario. Con ese vínculo, el sistema lo reconoce como **responsable de su caja chica**, como firmante de lo que solicita y como dueño de sus solicitudes. Al escribir el correo se sugiere el empleado con ese mismo correo. Un empleado solo puede estar vinculado a un usuario. La lista muestra *Sin empleado vinculado* en los usuarios que aún no lo tienen; revíselos, sobre todo los creados directamente en Usuarios.
+
 Cada usuario nuevo recibe por correo un enlace para crear su propia contraseña; mientras no lo use, aparece como **Sin activar**. Con el botón del sobre se le reenvía la invitación (el enlace anterior deja de servir).
 
 ### 12.5 Bitácora de Actividad
