@@ -9,18 +9,18 @@ $id     = (int)($_GET['id'] ?? 0);
 $pagina = 'Caja Chica';
 
 /**
- * Por qué ya no cambian el responsable ni el monto del fondo de una caja (solo sus gastos), o null:
- * el fondo ya se entregó (su orden de pago está pagada), o quien edita es el propio responsable
- * (registra los gastos día a día; el fondo lo define un superior).
+ * Qué datos del encabezado de una caja ya no cambia quien la edita: ['responsable' => bool, 'fondo' => bool, 'motivo' => ?string].
+ * El fondo ya entregado (su orden de pago está pagada) no cambia: ni el responsable ni el monto.
+ * El propio responsable cambia el fondo y los gastos, pero no quién es el responsable (eso lo hace un superior).
  */
-function motivoFondoFijo(PDO $pdo, int $ccId, int $empleadoCaja): ?string {
+function camposFijosCaja(PDO $pdo, int $ccId, int $empleadoCaja): array {
     $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = 'caja_chica' AND origen_id = ? AND estado = 'pagada'");
     $s->execute([$ccId]);
-    if ($s->fetchColumn()) return 'El fondo ya fue entregado (su orden de pago está pagada): el responsable y el monto del fondo ya no cambian; solo los gastos.';
-    if (!tieneAccesoTotal() && $empleadoCaja === (int)($_SESSION['empleado_id'] ?? 0)) {
-        return 'Como responsable de la caja puede registrar y corregir los gastos; el responsable y el monto del fondo los cambia un superior.';
-    }
-    return null;
+    if ($s->fetchColumn()) return ['responsable' => true, 'fondo' => true,
+        'motivo' => 'El fondo ya fue entregado (su orden de pago está pagada): el responsable y el monto del fondo ya no cambian; solo los gastos.'];
+    if (!tieneAccesoTotal() && $empleadoCaja === (int)($_SESSION['empleado_id'] ?? 0)) return ['responsable' => true, 'fondo' => false,
+        'motivo' => 'Como responsable de la caja puede cambiar el fondo y los gastos; el responsable de la caja lo cambia un superior.'];
+    return ['responsable' => false, 'fondo' => false, 'motivo' => null];
 }
 
 // ── AJAX ──────────────────────────────────────────────────────────
@@ -45,8 +45,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $s->execute([$ccId]);
             $actual = $s->fetch();
             if (!$actual) jsonErr('Caja chica no encontrada.');
-            $fijo = motivoFondoFijo($pdo, $ccId, (int)$actual['empleado_id']);
-            if ($fijo && ($empId !== (int)$actual['empleado_id'] || abs($anticipo - (float)$actual['anticipo']) > 0.004)) jsonErr($fijo);
+            $fijos = camposFijosCaja($pdo, $ccId, (int)$actual['empleado_id']);
+            if (($fijos['responsable'] && $empId !== (int)$actual['empleado_id'])
+                || ($fijos['fondo'] && abs($anticipo - (float)$actual['anticipo']) > 0.004)) jsonErr($fijos['motivo']);
         }
 
         $total = 0;
@@ -58,7 +59,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if ($ccId) {
                 $pdo->prepare("UPDATE caja_chica SET empleado_id=?,anticipo=?,total_gastos=?,saldo=?,
-                    fecha_apertura=?,notas=? WHERE id=? AND estado='abierta'")
+                    fecha_apertura=?,notas=? WHERE id=?")   // liquidada: solo llega un rango superior (config/edicion.php)
                     ->execute([$empId,$anticipo,$total,$saldo,$fApert,$notas,$ccId]);
                 $pdo->prepare("DELETE FROM caja_chica_detalle WHERE caja_id=?")->execute([$ccId]);
                 registrarAuditoria($pdo,'UPDATE','caja_chica',$ccId,'CC actualizada — '.lps($total));
@@ -443,8 +444,8 @@ include __DIR__ . '/includes/header.php';
 <?php $adjModulo = 'caja_chica.php'; $adjId = $cc['id']; include __DIR__ . '/includes/adjuntos.php'; ?>
 <?php else: /* nuevo o editar */
   $initItems = $detalle ?: [['fecha' => date('Y-m-d'), 'cuenta_id' => '', 'descripcion' => '', 'cantidad' => 1, 'precio_unitario' => 0, 'monto' => 0]];
-  // Responsable o fondo ya entregado: el responsable y el anticipo se muestran pero no se cambian
-  $fondoFijo = $cc ? motivoFondoFijo($pdo, (int)$cc['id'], (int)$cc['empleado_id']) : null;
+  // Responsable o fondo ya entregado: el responsable (y, con el fondo entregado, el anticipo) se muestran pero no se cambian
+  $fijos = $cc ? camposFijosCaja($pdo, (int)$cc['id'], (int)$cc['empleado_id']) : ['responsable' => false, 'fondo' => false, 'motivo' => null];
 ?>
 
 <div class="card">
@@ -459,15 +460,18 @@ include __DIR__ . '/includes/header.php';
       <input type="hidden" name="id" value="<?= $cc['id'] ?? 0 ?>">
       <input type="hidden" name="items" id="items-json">
 
-      <?php if ($fondoFijo): ?>
-      <div class="alert alert-info py-2 small"><i class="fas fa-circle-info"></i> <?= htmlspecialchars($fondoFijo) ?></div>
-      <input type="hidden" name="empleado_id" value="<?= (int)$cc['empleado_id'] ?>">
-      <input type="hidden" name="anticipo" value="<?= htmlspecialchars($cc['anticipo']) ?>">
+      <?php if ($cc && $cc['estado'] === 'liquidada'): ?>
+      <div class="alert alert-warning py-2 small"><i class="fas fa-triangle-exclamation"></i> Esta caja chica ya está liquidada: la está corrigiendo como rango superior a su responsable.</div>
       <?php endif; ?>
+      <?php if ($fijos['motivo']): ?>
+      <div class="alert alert-info py-2 small"><i class="fas fa-circle-info"></i> <?= htmlspecialchars($fijos['motivo']) ?></div>
+      <?php endif; ?>
+      <?php if ($fijos['responsable']): ?><input type="hidden" name="empleado_id" value="<?= (int)$cc['empleado_id'] ?>"><?php endif; ?>
+      <?php if ($fijos['fondo']): ?><input type="hidden" name="anticipo" value="<?= htmlspecialchars($cc['anticipo']) ?>"><?php endif; ?>
       <div class="row g-3">
         <div class="col-md-5">
           <label class="form-label">Responsable *</label>
-          <select <?= $fondoFijo ? 'disabled' : 'name="empleado_id" required' ?> class="form-select">
+          <select <?= $fijos['responsable'] ? 'disabled' : 'name="empleado_id" required' ?> class="form-select">
             <option value="">— Seleccione —</option>
             <?php foreach ($empleados as $e): ?>
             <option value="<?= $e['id'] ?>" <?= ($cc['empleado_id'] ?? 0) == $e['id'] ? 'selected' : '' ?>>
@@ -483,7 +487,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-2">
           <label class="form-label">Anticipo (L.)</label>
-          <input type="number" <?= $fondoFijo ? 'disabled' : 'name="anticipo"' ?> class="form-control text-end" min="0" step="0.01"
+          <input type="number" <?= $fijos['fondo'] ? 'disabled' : 'name="anticipo"' ?> class="form-control text-end" min="0" step="0.01"
             value="<?= htmlspecialchars($cc['anticipo'] ?? '0') ?>">
           <div class="form-text">0 si es reembolso</div>
         </div>

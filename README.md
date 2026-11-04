@@ -99,7 +99,6 @@ Para salir manualmente, pulse **Salir** en la esquina superior derecha.
 - Cada lista muestra primero **lo más reciente**: los procesos se ordenan por **Número**, del último creado al primero.
 - Puede buscar con el campo **Buscar**, ordenar con un clic en el título de una columna y cambiar cuántos registros ver por página.
 - **Exportar a Excel**: el botón **Excel** de cada lista descarga, como hoja de cálculo, las filas que pasan el filtro actual (de todas las páginas), con los montos como números. Las tablas de Reportes Financieros tienen su propio botón.
-- **Actuales e Históricos**: en los procesos, el botón **Histórico** muestra los registros anteriores a la puesta en marcha del sistema. Se pueden consultar, imprimir y terminar de tramitar, pero no se editan.
 
 ---
 
@@ -348,7 +347,14 @@ Desde la solicitud de compra puede imprimir el **proceso completo** en un solo d
 
 ### Caja Chica
 
-Abra un fondo de caja chica para un responsable, registre cada gasto con su cuenta contable y comprobante, y liquídelo. El documento impreso incluye el resumen por cuenta. Al crear el fondo se genera su orden de pago. *Abierta → Liquidada*.
+Abra un fondo de caja chica para un responsable, registre cada gasto con su cuenta contable y comprobante, y liquídelo. El documento impreso incluye el resumen por cuenta. Al crear el fondo se genera su orden de pago. *Abierta → Liquidada*. Para liquidarla debe haberse consumido al menos el 80 % del fondo.
+
+**Quién la edita:**
+
+- **Mientras está abierta**, su **responsable** la edita en todo momento: registra y corrige los gastos y puede ajustar el monto del fondo. Si cambia el fondo, su orden de pago se actualiza mientras no esté pagada. Quién es el responsable solo lo cambia un rango superior.
+- Cuando el fondo ya se entregó (su orden de pago está pagada), el monto del fondo y el responsable ya no cambian; los gastos sí.
+- **Una vez liquidada**, el responsable ya no la puede editar. Solo un **rango superior** al responsable en el organigrama (o el Administrador) puede corregirla.
+- Una caja chica solo se elimina mientras está abierta, y no la elimina su responsable.
 
 ---
 

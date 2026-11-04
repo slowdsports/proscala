@@ -15,6 +15,8 @@
 //   bloqueo   → [consulta con ? = id, motivo] que impide editar (p. ej. ya tiene pagos)
 //   responsable → columna con el empleado a cargo: él también lo edita (no lo elimina) mientras
 //                 no esté cerrado, aunque lo haya creado (caja chica: registra los gastos día a día)
+//   cerrados_superior → estados en los que ya no lo edita el responsable ni quien lo creó, pero sí
+//                 un rango superior al responsable (caja chica liquidada: se corrige desde arriba)
 //   op_fondo  → su orden de pago es el fondo que se entrega al empezar: pagarla no lo cierra
 const EDICION_PROCESOS = [
     'compras_solicitud.php'    => ['tabla' => 'solicitud_compra',    'cerrados' => ['cotizando', 'adjudicada', 'anulada'], 'reinicio' => ['pendiente', null],
@@ -41,7 +43,7 @@ const EDICION_PROCESOS = [
                                    'bloqueo'  => ['SELECT 1 FROM prestamos_pagos WHERE prestamo_id = ?', 'Ya tiene cuotas pagadas.']],
     'liquidaciones.php'        => ['tabla' => 'liquidaciones',       'cerrados' => ['pagada'], 'reinicio' => ['borrador', null],
                                    'acciones' => ['guardar' => 'id', 'eliminar' => 'id']],
-    'caja_chica.php'           => ['tabla' => 'caja_chica',          'cerrados' => ['liquidada'], 'reinicio' => null,
+    'caja_chica.php'           => ['tabla' => 'caja_chica',          'cerrados' => [], 'cerrados_superior' => ['liquidada'], 'reinicio' => null,
                                    'acciones' => ['guardar' => 'id', 'eliminar' => 'id'],
                                    'responsable' => 'empleado_id', 'op_fondo' => true],
     'planillas.php'            => ['tabla' => 'planilla_periodos',   'cerrados' => ['pagada', 'anulada'], 'reinicio' => ['procesada', ['aprobada']],
@@ -57,6 +59,7 @@ function puedeEditar(PDO $pdo, string $modulo, int $id, string $accion = 'editar
     $def = EDICION_PROCESOS[$modulo] ?? null;
     if (!$def || !$id) return true;
     if ($motivo = motivoCierre($pdo, $modulo, $id)) return $motivo;
+    if (($motivo = motivoCierreSuperior($pdo, $modulo, $id, $accion)) !== null) return $motivo ?: true;
 
     if (tieneAccesoTotal()) return true;
     if ($accion !== 'eliminar' && esResponsableProceso($pdo, $modulo, $id)) return true;
@@ -70,6 +73,29 @@ function puedeEditar(PDO $pdo, string $modulo, int $id, string $accion = 'editar
     }
     if (!puedeAprobar()) return 'Solo los puestos que aprueban procesos pueden editarlos.';
     return motivoJerarquia(rolCreador($pdo, $def['tabla'], $id)) ?? true;
+}
+
+/**
+ * Proceso en un estado de "cerrados_superior" (caja chica liquidada): null si no lo está; si lo está,
+ * '' cuando el usuario puede editarlo (Administrador o rango superior al responsable) o el motivo.
+ */
+function motivoCierreSuperior(PDO $pdo, string $modulo, int $id, string $accion): ?string {
+    $def = EDICION_PROCESOS[$modulo];
+    if (empty($def['cerrados_superior'])) return null;
+    $s = $pdo->prepare("SELECT estado FROM `{$def['tabla']}` WHERE id = ?");
+    $s->execute([$id]);
+    $estado = (string)$s->fetchColumn();
+    if (!in_array($estado, $def['cerrados_superior'], true)) return null;
+    if ($accion === 'eliminar') return "El proceso ya está cerrado ($estado) y no se puede eliminar.";
+    if (tieneAccesoTotal()) return '';
+    $motivo = "Ya está $estado: solo un rango superior a su responsable puede editarlo.";
+    if (esResponsableProceso($pdo, $modulo, $id) || !puedeAprobar()) return $motivo;
+    // Superior al responsable (su usuario); si no tiene usuario, a quien lo creó
+    $s = $pdo->prepare("SELECT u.rol FROM usuarios u JOIN `{$def['tabla']}` t ON u.empleado_id = t.`{$def['responsable']}`
+                        WHERE t.id = ? AND u.activo = 1 LIMIT 1");
+    $s->execute([$id]);
+    $rol = $s->fetchColumn() ?: rolCreador($pdo, $def['tabla'], $id);
+    return motivoJerarquia($rol) === null ? '' : $motivo;
 }
 
 /** ¿El usuario es el empleado a cargo del proceso (EDICION_PROCESOS → responsable)? */

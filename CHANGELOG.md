@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.27.0 — 2026-11-04
+**Edición de la caja chica**
+- **Mientras está abierta**, el responsable la edita en todo momento: los gastos y también el monto del fondo, y su orden de pago se actualiza si aún no está pagada. Lo único que no cambia es quién es el responsable; eso lo hace un rango superior.
+- **Una vez liquidada**, el responsable ya no la edita. Solo un rango superior al responsable en el organigrama (o el Administrador) puede corregirla, y el formulario le avisa que está corrigiendo una caja liquidada. Antes, una caja liquidada no la podía editar nadie.
+- Con el fondo ya entregado (su orden de pago pagada), el monto del fondo y el responsable siguen sin cambiar, para nadie.
+- **Manual de uso** (`README.md`) reescrito como guía completa del funcionamiento actual de cada módulo, incluidos los consultores externos, el guardado de formularios y las herramientas del super administrador.
+
 ## 1.26.0 — 2026-11-03
 **Proyectos de cada consultor**
 - En **Proveedores**, la sección *Consultor* tiene la lista **Proyectos a los que tiene acceso**, donde se eligen uno o varios proyectos. El expediente del consultor también los muestra (tabla nueva `proveedor_proyectos`).

@@ -325,9 +325,11 @@ prueba('Jerarquía: en la cima del organigrama los colegas del mismo puesto se a
         comoUsuario($pdo, $u['par']); afirmar($accion($pdo, $deMedio, 'revisar') !== true, 'con la opción, tampoco se revisa lo propio');
     });
 });
-prueba('Caja chica: el responsable la edita (no la elimina) mientras está abierta, aunque el fondo ya se haya pagado', function () use ($pdo) {
+prueba('Caja chica: el responsable la edita (no la elimina) mientras está abierta; liquidada, solo un rango superior', function () use ($pdo) {
     conEscenario($pdo, function ($u) use ($pdo) {
-        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        // Un empleado sin usuario: el asistente pasa a ser su único usuario (el responsable de la caja)
+        $emp = (int)$pdo->query("SELECT id FROM empleados WHERE id NOT IN (SELECT empleado_id FROM usuarios WHERE empleado_id IS NOT NULL) ORDER BY id LIMIT 1")->fetchColumn();
+        if (!$emp) throw new Omitir('todos los empleados tienen usuario');
         $pdo->exec("UPDATE usuarios SET empleado_id = $emp WHERE id = {$u['asistente']}");   // el asistente (no aprueba) es el responsable
         $pdo->exec("INSERT INTO caja_chica (numero, empleado_id, anticipo, fecha_apertura) VALUES ('ZZPRUEBA-CC', $emp, 1000, CURDATE())");
         $cc = (int)$pdo->lastInsertId();
@@ -341,7 +343,11 @@ prueba('Caja chica: el responsable la edita (no la elimina) mientras está abier
         comoUsuario($pdo, $u['asistente']);
         iguales(true, puedeEditar($pdo, 'caja_chica.php', $cc), 'con el fondo pagado se siguen registrando gastos');
         $pdo->exec("UPDATE caja_chica SET estado = 'liquidada' WHERE id = $cc");
-        afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'liquidada: ya no se edita');
+        afirmar(str_contains((string)puedeEditar($pdo, 'caja_chica.php', $cc), 'rango superior'), 'liquidada: el responsable ya no la edita');
+        comoUsuario($pdo, $u['jefe']);
+        iguales(true, puedeEditar($pdo, 'caja_chica.php', $cc), 'liquidada: el jefe del responsable la corrige');
+        afirmar(puedeEditar($pdo, 'caja_chica.php', $cc, 'eliminar') !== true, 'liquidada: no se elimina, ni el jefe');
+        comoUsuario($pdo, $u['par']); afirmar(puedeEditar($pdo, 'caja_chica.php', $cc) !== true, 'liquidada: un puesto que no es superior del responsable no la edita');
     });
 });
 require_once RAIZ . '/config/esquema.php';
