@@ -77,7 +77,7 @@ include __DIR__ . '/includes/header.php';
           <input type="hidden" name="_action" value="guardar">
           <input type="hidden" name="id" id="py-id" value="0">
           <div class="row g-3">
-            <div class="col-md-3"><label class="form-label">Código *</label><input type="text" name="codigo" id="py-cod" class="form-control" required></div>
+            <div class="col-md-3"><label class="form-label">Código *</label><input type="text" name="codigo" id="py-cod" class="form-control" spellcheck="false" required></div>
             <div class="col-md-9"><label class="form-label">Nombre del Proyecto *</label><input type="text" name="nombre" id="py-nom" class="form-control" required></div>
             <div class="col-md-6"><label class="form-label">Donante / Financiador</label><input type="text" name="donante" id="py-don" class="form-control" placeholder="ej: USAID, OPS, FAO"></div>
             <div class="col-md-3">

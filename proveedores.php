@@ -179,9 +179,9 @@ include __DIR__ . '/includes/header.php';
           </div>
           <div class="row g-3">
             <div class="col-md-8"><label class="form-label">Nombre *</label><input type="text" name="nombre" id="p-nombre" class="form-control" required></div>
-            <div class="col-md-4"><label class="form-label">RTN</label><input type="text" name="rtn" id="p-rtn" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label">RTN</label><input type="text" name="rtn" id="p-rtn" class="form-control" spellcheck="false"></div>
             <div class="col-md-4"><label class="form-label">Contacto</label><input type="text" name="contacto" id="p-contacto" class="form-control"></div>
-            <div class="col-md-3"><label class="form-label">Teléfono</label><input type="text" name="telefono" id="p-tel" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Teléfono</label><input type="text" name="telefono" id="p-tel" class="form-control" spellcheck="false"></div>
             <div class="col-md-5"><label class="form-label">Email</label><input type="email" name="email" id="p-email" class="form-control"></div>
             <div class="col-12"><label class="form-label">Dirección</label><input type="text" name="direccion" id="p-dir" class="form-control"></div>
             <div class="col-md-3">
@@ -199,7 +199,7 @@ include __DIR__ . '/includes/header.php';
               <hr style="border-color:var(--border);margin:.25rem 0 .75rem">
               <div style="font-size:.78rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em" class="mb-2">Consultor · Acceso al sistema</div>
               <div class="row g-3">
-                <div class="col-md-4"><label class="form-label">N° de Identidad</label><input type="text" name="identidad" id="p-identidad" class="form-control" maxlength="20" placeholder="0801-1990-12345"></div>
+                <div class="col-md-4"><label class="form-label">N° de Identidad</label><input type="text" name="identidad" id="p-identidad" class="form-control" spellcheck="false" maxlength="20" placeholder="0801-1990-12345"></div>
                 <div class="col-md-8 d-flex align-items-end pb-1">
                   <div class="form-check form-switch">
                     <input type="checkbox" name="acceso_sistema" class="form-check-input" id="p-acceso" onchange="toggleConsultor()">
@@ -254,7 +254,7 @@ include __DIR__ . '/includes/header.php';
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="col-md-4"><label class="form-label">Número de Cuenta</label><input type="text" name="banco_cuenta" id="p-banco-cuenta" class="form-control" placeholder="XXXX-XXXX-XXXX"></div>
+            <div class="col-md-4"><label class="form-label">Número de Cuenta</label><input type="text" name="banco_cuenta" id="p-banco-cuenta" class="form-control" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></div>
             <div class="col-md-4">
               <label class="form-label">Tipo de Cuenta</label>
               <select name="banco_tipo" id="p-banco-tipo" class="form-select">

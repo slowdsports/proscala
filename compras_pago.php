@@ -328,7 +328,7 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
           <option value="efectivo">Efectivo</option>
         </select>
       </div>
-      <div class="col-md-3" id="cheque-wrap" style="display:none"><label class="form-label">Número de Cheque</label><input type="text" name="numero_cheque" class="form-control"></div>
+      <div class="col-md-3" id="cheque-wrap" style="display:none"><label class="form-label">Número de Cheque</label><input type="text" name="numero_cheque" class="form-control" spellcheck="false"></div>
       <div class="col-md-3"><label class="form-label">No. Factura del Proveedor</label><input type="text" name="factura_proveedor" class="form-control" placeholder="Ej: F-0001"></div>
       <div class="col-md-3">
         <label class="form-label">Banco (referencia)</label>
@@ -339,7 +339,7 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="col-md-3"><label class="form-label">No. Cuenta / Referencia</label><input type="text" name="cuenta_bancaria" class="form-control" id="inp-cuenta-bancaria"></div>
+      <div class="col-md-3"><label class="form-label">No. Cuenta / Referencia</label><input type="text" name="cuenta_bancaria" class="form-control" spellcheck="false" id="inp-cuenta-bancaria"></div>
       <div class="col-md-2">
         <label class="form-label">Tipo de Cuenta</label>
         <select name="banco_tipo" class="form-select" id="sel-banco-tipo">

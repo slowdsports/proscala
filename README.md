@@ -110,6 +110,21 @@ Las listas de los formularios (empleados, proveedores, proyectos, bancos, cuenta
 
 Algunas listas permiten **agregar una opción nueva sin salir del formulario**: si el proveedor, banco, cargo o departamento que busca no existe, pulse **Agregar … nuevo** al pie de la lista, llene los datos básicos y pulse **Guardar y seleccionar**. Queda creado en su catálogo y elegido en el formulario. Si ya existía uno con el mismo nombre, se elige el existente en vez de duplicarlo.
 
+### Corrector ortográfico
+
+Los campos de texto (descripciones, observaciones, memorandos, actas…) subrayan en rojo las palabras mal escritas. Haga clic derecho sobre la palabra para ver las sugerencias. Los campos de códigos, RTN, identidad, teléfonos, cuentas bancarias, fechas y los buscadores no se revisan.
+
+Si las sugerencias salen en otro idioma, active el español en el corrector del navegador (Chrome o Edge: *Configuración → Idiomas → Revisión ortográfica*; Firefox: clic derecho en el campo → *Idiomas → Español*).
+
+### Operaciones en los campos numéricos
+
+En cualquier campo de cantidad o monto puede escribir una operación en vez del número: `1500*3`, `200+150-20`, `(10+5)/2`. Al pulsar **Enter** o salir del campo, se reemplaza por el resultado y los totales se recalculan.
+
+- Signos: `+` `-` `*` (o `x`) `/` y paréntesis. Las comas de miles se ignoran.
+- El resultado se redondea a los decimales del campo: en un monto, `10/3` queda 3.33; en una cantidad entera, 3.
+- Enter con una operación solo calcula; el segundo Enter envía el formulario.
+- Si la operación no es válida (por ejemplo, `2*(3` o una división entre cero), el campo vuelve al valor que tenía y se marca en rojo un momento.
+
 ### Guardar: el botón muestra lo que está pasando
 
 Al pulsar **Guardar**, **Crear**, **Editar**, **Eliminar**, **Autorizar** u otro botón que envía información, el botón se desactiva y muestra lo que el sistema está haciendo: *Agregando…*, *Guardando cambios…*, *Eliminando…*, *Autorizando…*

@@ -104,7 +104,7 @@ include __DIR__ . '/includes/header.php';
           <input type="hidden" name="_action" value="guardar">
           <input type="hidden" name="id" id="a-id" value="0">
           <div class="row g-3">
-            <div class="col-md-2"><label class="form-label">Código *</label><input type="text" name="codigo" id="a-cod" class="form-control" required></div>
+            <div class="col-md-2"><label class="form-label">Código *</label><input type="text" name="codigo" id="a-cod" class="form-control" spellcheck="false" required></div>
             <div class="col-md-6"><label class="form-label">Descripción *</label><input type="text" name="descripcion" id="a-desc" class="form-control" required></div>
             <div class="col-md-4"><label class="form-label">Categoría</label><input type="text" name="categoria" id="a-cat" class="form-control" list="dl-cat"><datalist id="dl-cat"><?php foreach($categorias as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?><option>Mobiliario y Equipo de Oficina</option><option>Equipo de Cómputo</option><option>Vehículos</option><option>Equipo de Campo</option></datalist></div>
             <div class="col-md-2"><label class="form-label">Fecha Adq.</label><input type="text" name="fecha_adquisicion" id="a-fi" class="form-control date-input"></div>
@@ -113,7 +113,7 @@ include __DIR__ . '/includes/header.php';
             <div class="col-md-2"><label class="form-label">% Depreciación</label><input type="number" name="porcentaje_depreciacion" id="a-pct" class="form-control" step="0.01" min="0" max="100" oninput="calcDepre()"></div>
             <div class="col-md-3"><label class="form-label">Valor Residual</label><input type="number" name="valor_residual" id="a-vr" class="form-control" step="0.01" min="0" value="0"></div>
             <div class="col-md-3"><label class="form-label">Valor en Libros</label><input type="number" name="valor_libro" id="a-vl" class="form-control" step="0.01" min="0" value="0"></div>
-            <div class="col-md-2"><label class="form-label">No. Serie</label><input type="text" name="numero_serie" id="a-serie" class="form-control"></div>
+            <div class="col-md-2"><label class="form-label">No. Serie</label><input type="text" name="numero_serie" id="a-serie" class="form-control" spellcheck="false"></div>
             <div class="col-md-3"><label class="form-label">Ubicación</label><input type="text" name="ubicacion" id="a-ubic" class="form-control"></div>
             <div class="col-md-3"><label class="form-label">Responsable</label><select name="responsable_id" id="a-resp" class="form-select"><option value="">--</option><?php foreach($empleados as $e): ?><option value="<?= $e['id'] ?>"><?= htmlspecialchars($e['nombre']) ?></option><?php endforeach; ?></select></div>
             <div class="col-md-4"><label class="form-label">Proveedor</label><select name="proveedor_id" id="a-prov" class="form-select" data-alta="proveedor"><option value="">--</option><?php foreach($proveedores as $p): ?><option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['nombre']) ?></option><?php endforeach; ?></select></div>

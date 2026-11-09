@@ -361,12 +361,12 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">No. Identidad</label>
-          <input type="text" name="identidad" class="form-control"
+          <input type="text" name="identidad" class="form-control" spellcheck="false"
                  value="<?= htmlspecialchars($emp['identidad'] ?? '') ?>" placeholder="0801-xxxx-xxxxx">
         </div>
         <div class="col-md-3">
           <label class="form-label">RTN</label>
-          <input type="text" name="rtn" class="form-control"
+          <input type="text" name="rtn" class="form-control" spellcheck="false"
                  value="<?= htmlspecialchars($emp['rtn'] ?? '') ?>">
         </div>
         <div class="col-md-3">
@@ -376,7 +376,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">Teléfono</label>
-          <input type="text" name="telefono" class="form-control"
+          <input type="text" name="telefono" class="form-control" spellcheck="false"
                  value="<?= htmlspecialchars($emp['telefono'] ?? '') ?>">
         </div>
         <div class="col-12">
@@ -454,7 +454,7 @@ include __DIR__ . '/includes/header.php';
         </div>
         <div class="col-md-3">
           <label class="form-label">No. Cuenta Bancaria</label>
-          <input type="text" name="cuenta_banco" class="form-control"
+          <input type="text" name="cuenta_banco" class="form-control" spellcheck="false"
                  value="<?= htmlspecialchars($emp['cuenta_banco'] ?? '') ?>">
         </div>
       </div>

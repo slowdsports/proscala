@@ -133,7 +133,7 @@ $urlCon = fn(array $extra) => 'auditoria.php?' . http_build_query(array_filter(a
     <form method="get" class="row g-2 align-items-end">
       <div class="col-md-2">
         <label class="form-label" style="font-size:.8rem">Buscar</label>
-        <input type="text" name="q" class="form-control form-control-sm" value="<?= htmlspecialchars($f['q']) ?>" placeholder="Detalle, usuario, correo…">
+        <input type="text" name="q" class="form-control form-control-sm" spellcheck="false" value="<?= htmlspecialchars($f['q']) ?>" placeholder="Detalle, usuario, correo…">
       </div>
       <div class="col-md-2">
         <label class="form-label" style="font-size:.8rem">Usuario</label>

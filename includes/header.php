@@ -19,7 +19,7 @@ $user = currentUser();
 $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" spellcheck="true">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -70,7 +70,7 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <?php // Búsqueda global (buscar.php; proscala.js → Busqueda). En celulares se abre con el botón de la lupa ?>
   <div class="buscador" id="buscador" role="search">
     <i class="fas fa-magnifying-glass buscador-icono"></i>
-    <input type="search" id="buscador-input" placeholder="Buscar número, empleado, proveedor, módulo…" autocomplete="off"
+    <input type="search" id="buscador-input" spellcheck="false" placeholder="Buscar número, empleado, proveedor, módulo…" autocomplete="off"
            aria-label="Buscar en el sistema" aria-controls="buscador-panel" aria-expanded="false">
     <kbd class="buscador-atajo">Ctrl K</kbd>
     <div class="buscador-panel" id="buscador-panel" role="listbox" hidden></div>

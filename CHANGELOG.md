@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.30.0 — 2026-11-09
+**Corrector ortográfico y operaciones en los campos numéricos**
+- **Corrector ortográfico** en todo el sistema: los campos de texto subrayan las palabras mal escritas y ofrecen sugerencias con clic derecho (corrector del navegador, activado en `includes/header.php` y en la página principal). No se aplica a los campos de código, RTN, identidad, teléfono, cuenta bancaria, número de cheque, fechas ni a los buscadores (barra superior y Auditoría). El inicio de sesión y la recuperación de contraseña no cambian.
+- **Operaciones en los campos numéricos**: en cualquier campo de cantidad o monto se puede escribir `1500*3`, `200+150-20` o `(10+5)/2`; al pulsar Enter o salir del campo se reemplaza por el resultado y los totales se recalculan. Acepta `+ - * /` (también `x`), paréntesis y comas de miles. El resultado se redondea a los decimales del campo. Enter con una operación solo calcula, sin enviar el formulario. Una operación no válida devuelve el campo a su valor anterior y lo marca en rojo un momento (`assets/js/proscala.js`, `CampoCalc`; se calcula sin `eval`).
+
 ## 1.29.0 — 2026-11-04
 **Orden de compra sin firma del proveedor**
 - La orden de compra impresa ya no incluye el espacio *Nombre, Firma y Sello* del proveedor; solo lleva las firmas de la organización. Aplica a la OC impresa y a su página dentro del expediente del proceso.

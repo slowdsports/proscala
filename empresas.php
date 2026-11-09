@@ -233,7 +233,7 @@ include __DIR__ . '/includes/header.php';
             <div class="col-md-12"><label class="form-label">Nombre de la empresa *</label><input type="text" name="nombre" class="form-control" required></div>
             <div class="col-md-6">
               <label class="form-label">RTN *</label>
-              <input type="text" name="rtn" class="form-control font-mono" inputmode="numeric" placeholder="14 dígitos" required>
+              <input type="text" name="rtn" class="form-control font-mono" spellcheck="false" inputmode="numeric" placeholder="14 dígitos" required>
               <div class="form-text">Los usuarios lo escriben al iniciar sesión para entrar a esta empresa.</div>
             </div>
             <div class="col-md-6">
@@ -273,7 +273,7 @@ include __DIR__ . '/includes/header.php';
           <input type="hidden" name="id" id="ed-id">
           <div class="mb-3"><label class="form-label">Nombre *</label><input type="text" name="nombre" id="ed-nombre" class="form-control" required></div>
           <div class="mb-3">
-            <label class="form-label">RTN *</label><input type="text" name="rtn" id="ed-rtn" class="form-control font-mono" inputmode="numeric" required>
+            <label class="form-label">RTN *</label><input type="text" name="rtn" id="ed-rtn" class="form-control font-mono" spellcheck="false" inputmode="numeric" required>
             <div class="form-text">Si lo cambia, los usuarios deberán usar el nuevo RTN al iniciar sesión.</div>
           </div>
           <div class="form-check"><input type="checkbox" name="activo" class="form-check-input" id="ed-activo"><label class="form-check-label" for="ed-activo">Activa <small class="text-muted">(si se desactiva, sus usuarios no pueden entrar)</small></label></div>

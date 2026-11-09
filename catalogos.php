@@ -226,7 +226,7 @@ include __DIR__ . '/includes/header.php';
           <input type="hidden" name="_action" value="guardar">
           <input type="hidden" name="id" id="f-id" value="0">
           <div class="row g-3">
-            <div class="col-md-3"><label class="form-label">Código *</label><input type="text" name="codigo" id="f-codigo" class="form-control" required maxlength="20"></div>
+            <div class="col-md-3"><label class="form-label">Código *</label><input type="text" name="codigo" id="f-codigo" class="form-control" spellcheck="false" required maxlength="20"></div>
             <div class="col-md-7"><label class="form-label">Nombre *</label><input type="text" name="nombre" id="f-nombre" class="form-control" required></div>
             <div class="col-md-2"><label class="form-label">Nivel</label><input type="number" name="nivel" id="f-nivel" class="form-control" min="1" max="5" value="2"></div>
             <div class="col-md-4">

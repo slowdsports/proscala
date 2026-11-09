@@ -521,8 +521,105 @@ function marcarSidebarActivo() {
 function initFechas(root) {
   if (typeof flatpickr === 'undefined') return;
   const campos = root.querySelectorAll('.date-input:not(.flatpickr-input)');
+  campos.forEach(c => { c.spellcheck = false; });   // una fecha no se corrige ortográficamente
   if (campos.length) flatpickr(campos, { locale: 'es', dateFormat: 'Y-m-d', allowInput: true });
 }
+
+// Operaciones en los campos numéricos: en cualquier <input type="number"> se puede escribir
+// 1500*3, 200+150-20 o (10+5)/2; al pulsar Enter o salir del campo se reemplaza por el resultado.
+// Un campo numérico no admite esos signos, así que mientras se edita pasa a type="text" y al
+// terminar vuelve a type="number". El resultado se redondea a los decimales de su step.
+const CampoCalc = {
+  porMouse: false,
+
+  iniciar() {
+    document.addEventListener('pointerdown', () => { this.porMouse = true; }, true);
+    document.addEventListener('keydown', () => { this.porMouse = false; }, true);
+    document.addEventListener('focusin', e => {
+      const el = e.target;
+      if (el.tagName === 'INPUT' && el.type === 'number' && !el.readOnly && !el.disabled) this.empezar(el);
+    });
+    document.addEventListener('focusout', e => { if (e.target.dataset?.calc) this.terminar(e.target); });
+    document.addEventListener('keydown', e => {
+      const el = e.target;
+      if (e.key !== 'Enter' || !el.dataset?.calc) return;
+      if (this.esOperacion(el.value)) { e.preventDefault(); this.aplicar(el); }   // Enter calcula
+      else this.terminar(el);                                                      // y si ya es un número, sigue normal
+    });
+  },
+
+  empezar(el) {
+    el.dataset.calc = '1';
+    el.dataset.calcOriginal = el.value;
+    el.dataset.calcInputmode = el.getAttribute('inputmode') ?? '';
+    const todo = !this.porMouse;
+    el.type = 'text';
+    el.setAttribute('inputmode', 'decimal');
+    if (todo) el.select();   // con Tab se selecciona todo, como en el campo numérico
+  },
+
+  terminar(el) {
+    if (this.esOperacion(el.value) || /[\s,]/.test(el.value)) this.aplicar(el);
+    delete el.dataset.calc;
+    if (el.dataset.calcInputmode) el.setAttribute('inputmode', el.dataset.calcInputmode);
+    else el.removeAttribute('inputmode');
+    el.type = 'number';
+  },
+
+  // Calcula el contenido del campo y avisa a la página (input/change) para que recalcule totales
+  aplicar(el) {
+    const r = this.evaluar(el.value);
+    if (r === null) {
+      el.value = el.dataset.calcOriginal ?? '';
+      el.classList.add('is-invalid');
+      el.title = 'Operación no válida';
+      setTimeout(() => { el.classList.remove('is-invalid'); el.removeAttribute('title'); }, 1800);
+    } else {
+      el.value = String(this.redondear(r, el.getAttribute('step')));
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  },
+
+  esOperacion(v) { return /[\d)]\s*[-+*/xX×÷]|[()]/.test(v); },
+
+  redondear(v, step) {
+    if (step === 'any') return parseFloat(v.toFixed(10));
+    const dec = ((step || '1').split('.')[1] || '').length;
+    return parseFloat(v.toFixed(dec));
+  },
+
+  // Analizador propio (sin eval): + - * / paréntesis y signo; las comas de miles se ignoran
+  evaluar(texto) {
+    const s = texto.replace(/[\s,]/g, '').replace(/[xX×]/g, '*').replace(/÷/g, '/');
+    if (!s || !/^[-+*/().\d]+$/.test(s)) return null;
+    let i = 0;
+    const suma = () => {
+      let v = producto();
+      while (s[i] === '+' || s[i] === '-') { const op = s[i++]; const d = producto(); v = op === '+' ? v + d : v - d; }
+      return v;
+    };
+    const producto = () => {
+      let v = factor();
+      while (s[i] === '*' || s[i] === '/') { const op = s[i++]; const d = factor(); v = op === '*' ? v * d : v / d; }
+      return v;
+    };
+    const factor = () => {
+      if (s[i] === '-') { i++; return -factor(); }
+      if (s[i] === '+') { i++; return factor(); }
+      if (s[i] === '(') { i++; const v = suma(); if (s[i++] !== ')') throw 0; return v; }
+      const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i));
+      if (!m) throw 0;
+      i += m[0].length;
+      return parseFloat(m[0]);
+    };
+    try {
+      const v = suma();
+      return i === s.length && isFinite(v) ? v : null;
+    } catch (e) { return null; }
+  },
+};
+CampoCalc.iniciar();
 
 // Select2: buscador en todos los <select> (excepto .no-search), también en los agregados después
 function initSelect2(context) {
