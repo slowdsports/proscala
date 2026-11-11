@@ -1481,8 +1481,11 @@ const Borradores = {
   pagina() { return location.pathname.split('/').pop() || 'index.php'; },
   activo() { return /^\d+-[1-9]\d*$/.test(this.usuario()) && !!document.getElementById('main-content'); },   // con sesión
 
+  // getAttribute: un campo name="id" dentro del formulario tapa la propiedad f.id
+  idForm(f) { return f.getAttribute('id') || ''; },
+
   elegible(f) {
-    if (!(f instanceof HTMLFormElement) || !f.id || 'sinBorrador' in f.dataset) return false;
+    if (!(f instanceof HTMLFormElement) || !this.idForm(f) || 'sinBorrador' in f.dataset) return false;
     if ((f.getAttribute('method') || 'get').toLowerCase() !== 'post' || !f.querySelector('[name="_action"]')) return false;
     if (f.querySelector('input[type=password]')) return false;
     return this.campos(f).length > 0 || this.contenedores(f).length > 0;
@@ -1491,7 +1494,7 @@ const Borradores = {
     const limpio = v => String(v || '0').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || '0';
     const q = new URLSearchParams(location.search);
     const id = f.querySelector('[name="id"]')?.value ?? q.get('id') ?? q.get('edit');
-    return `${this.pagina()}|${f.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}|${limpio(id)}`;
+    return `${this.pagina()}|${this.idForm(f).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}|${limpio(id)}`;
   },
   titulo(f) {
     const t = f.closest('.modal')?.querySelector('.modal-title')?.textContent
@@ -1834,7 +1837,7 @@ const Borradores = {
       fila.className = 'd-flex align-items-center gap-2 flex-wrap py-1';
       const txt = document.createElement('span');
       txt.className = 'flex-grow-1';
-      const form = forms.find(f => this.clave(f) === b.clave) || (b.modal ? forms.find(f => f.closest('.modal') && b.clave.startsWith(this.pagina() + '|' + f.id + '|')) : null);
+      const form = forms.find(f => this.clave(f) === b.clave) || (b.modal ? forms.find(f => f.closest('.modal') && b.clave.startsWith(this.pagina() + '|' + this.idForm(f) + '|')) : null);
       const nuevo = b.clave.endsWith('|0');
       txt.textContent = `«${b.titulo}», ${this.hora(b.actualizado)}` + (!nuevo && b.modal ? ' — ábralo de nuevo con su botón Editar para continuar.' : '');
       fila.appendChild(txt);

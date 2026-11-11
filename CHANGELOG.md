@@ -19,6 +19,7 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 - Aviso en la pantalla del módulo con los formularios sin terminar (*Continuar* / *Descartar*), y la sección **Formularios sin terminar** en *Mis solicitudes*.
 - El borrador se borra al guardar el formulario, al descartarlo o a los 30 días. No se guardan contraseñas, campos ocultos ni archivos adjuntos. El autoguardado no se anota en la bitácora.
 - Base de datos (`actualizar_bd.php`): tabla `borradores`.
+- Corregido: en los formularios con un campo `id` (por ejemplo, Compras) aparecía el error *f.id.replace is not a function* y no se guardaba el borrador.
 
 ## 1.31.0 — 2026-11-11
 **Facultades de aprobación por usuario: revisar, autorizar y corregir**
