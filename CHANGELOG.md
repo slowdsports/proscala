@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.32.0 — 2026-11-11
+**Borradores automáticos de los formularios**
+- Lo que el usuario va llenando en cualquier formulario de un módulo se guarda solo como **borrador**, unos segundos después de cada cambio y de inmediato al cambiar de pantalla o cerrar la página. Ya no se pierde lo escrito si se cierra el navegador, se corta la conexión o vence la sesión.
+- Al volver a abrir el formulario, **se rellena con lo que había escrito**, con un aviso y el botón *Descartar borrador*. Se recuperan los campos, las filas de detalle (artículos, gastos…) y las distribuciones por proyecto. Los formularios de ventanas emergentes (por ejemplo, Nuevo usuario) se rellenan al abrirlas.
+- Se guarda en el servidor (tabla `borradores`): sirve desde otro equipo. Mientras no llega (sin conexión), queda una copia en el navegador que se sube después.
+- Aviso en la pantalla del módulo con los formularios sin terminar (*Continuar* / *Descartar*), y la sección **Formularios sin terminar** en *Mis solicitudes*.
+- El borrador se borra al guardar el formulario, al descartarlo o a los 30 días. No se guardan contraseñas, campos ocultos ni archivos adjuntos. El autoguardado no se anota en la bitácora.
+- Base de datos (`actualizar_bd.php`): tabla `borradores`.
+
 ## 1.31.0 — 2026-11-11
 **Facultades de aprobación por usuario: revisar, autorizar y corregir**
 - Quién revisa, quién autoriza y quién corrige ahora se define **por usuario** y no por puesto. Se configura en **Usuarios → Facultades en el flujo de aprobación**. Las tres facultades son independientes:

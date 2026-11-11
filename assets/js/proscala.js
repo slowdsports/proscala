@@ -57,6 +57,8 @@ async function ajax(url, data = null, method = 'GET', reintento = false) {
   // Una acción (revisar, autorizar, crear…) puede cambiar lo pendiente de la campana
   if (method === 'POST' && !/notificaciones\.php/.test(url)) Notificaciones.programar();
   const json = await res.json();
+  // Formulario guardado: su borrador ya no hace falta (Borradores)
+  if (method === 'POST' && json?.success && !/borradores\.php|notificaciones\.php/.test(url)) Borradores.alGuardar(url, data);
   // Formulario guardado con documentos elegidos al llenarlo: se suben antes de seguir (AdjuntosForm)
   if (method === 'POST' && json?.success && !/adjuntos\.php/.test(url)) await AdjuntosForm.alGuardar(data, json);
   return json;
@@ -714,6 +716,7 @@ const Nav = {
       if (this.enCurso === ctrl) document.body.classList.remove('nav-cargando');
     }
     if (this.enCurso !== ctrl) return;
+    Borradores.salir();   // lo que el usuario estaba escribiendo sale antes de cambiar de página
 
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const nuevo = doc.getElementById('main-content');
@@ -737,6 +740,7 @@ const Nav = {
     Excel.botonesTablas(main);
     initSelect2(main);
     animarContenido(main);
+    Borradores.iniciar(main);
     if (mantenerScroll) window.scrollTo(0, scroll);
     else if (final.hash && document.getElementById(final.hash.slice(1))) document.getElementById(final.hash.slice(1)).scrollIntoView();
     else window.scrollTo(0, 0);
@@ -1455,6 +1459,450 @@ document.addEventListener('hidden.bs.modal', e => e.target.querySelectorAll?.('.
   else Adjuntos.enviar(p, [...e.dataTransfer.files]);
 }));
 
+// ── Borradores de formularios (borradores.php) ─────────────────────
+// Lo que el usuario va llenando en cualquier formulario de un módulo se guarda solo, unos segundos
+// después de cada cambio: en el servidor (sirve desde otro equipo) y, mientras no llega (sin conexión,
+// sesión vencida), en este navegador. Al volver a abrir el formulario se rellena con lo que había
+// escrito y se avisa, con la opción de descartarlo. El borrador se borra al guardar el formulario.
+// Se guardan los campos con nombre, las filas de detalle (artículos, gastos…: se agregan con el botón
+// "Agregar" de la tabla) y las distribuciones por proyecto (DistEditor). No se guardan contraseñas,
+// campos ocultos ni archivos. Un formulario queda fuera con data-sin-borrador.
+// Clave de cada borrador: "pagina|id del formulario|id del registro" (0 = registro nuevo).
+const Borradores = {
+  ESPERA: 3000,               // tras el último cambio, se envía al servidor
+  formularios: new Map(),     // form → { base: firma inicial, ultimo: firma enviada }
+  conocidos: new Map(),       // clave → borrador (del servidor o de este navegador) de esta página
+  pendientes: new Map(),      // clave → borrador por enviar
+  temporizador: null,
+  restaurando: false,
+  CONTROLES: 'input, select, textarea',
+
+  usuario() { return document.querySelector('meta[name="borrador"]')?.content || ''; },
+  pagina() { return location.pathname.split('/').pop() || 'index.php'; },
+  activo() { return /^\d+-[1-9]\d*$/.test(this.usuario()) && !!document.getElementById('main-content'); },   // con sesión
+
+  elegible(f) {
+    if (!(f instanceof HTMLFormElement) || !f.id || 'sinBorrador' in f.dataset) return false;
+    if ((f.getAttribute('method') || 'get').toLowerCase() !== 'post' || !f.querySelector('[name="_action"]')) return false;
+    if (f.querySelector('input[type=password]')) return false;
+    return this.campos(f).length > 0 || this.contenedores(f).length > 0;
+  },
+  clave(f) {
+    const limpio = v => String(v || '0').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || '0';
+    const q = new URLSearchParams(location.search);
+    const id = f.querySelector('[name="id"]')?.value ?? q.get('id') ?? q.get('edit');
+    return `${this.pagina()}|${f.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}|${limpio(id)}`;
+  },
+  titulo(f) {
+    const t = f.closest('.modal')?.querySelector('.modal-title')?.textContent
+      || f.closest('.card')?.querySelector('.card-header')?.textContent
+      || document.querySelector('.page-header h1')?.textContent || document.title;
+    return t.replace(/\s+/g, ' ').trim().slice(0, 200);
+  },
+
+  // Tablas de filas de detalle del formulario y distribuciones por proyecto
+  contenedores(f) {
+    return [...f.querySelectorAll('tbody')].filter(t => t._distEditor || t.querySelector(':scope > tr.detail-row') || /^tbody-/.test(t.id));
+  },
+  claveContenedor(f, tb) { return tb.id || 'tb' + this.contenedores(f).indexOf(tb); },
+  filasDe(tb) { return [...tb.children].filter(tr => tr.tagName === 'TR' && tr.querySelector(this.CONTROLES)); },
+  controlesFila(tr) {
+    return [...tr.querySelectorAll(this.CONTROLES)].filter(el => !/^(button|submit|reset|file|password|image)$/.test(el.type));
+  },
+  // Campos sueltos (con nombre, fuera de las filas, sin ocultos, archivos ni tokens)
+  campos(f) {
+    const filas = this.contenedores(f);
+    return [...f.elements].filter(el => el.name && el.matches?.(this.CONTROLES)
+      && !/^(hidden|password|file|button|submit|reset|image)$/.test(el.type)
+      && !['csrf_token', '_action'].includes(el.name)
+      && !el.closest('.adjuntos-form') && !filas.some(t => t.contains(el)));
+  },
+  valor(el) {
+    if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
+    if (el.multiple) return [...el.selectedOptions].map(o => o.value);
+    return el.value;
+  },
+
+  capturar(f) {
+    const d = { v: 1, campos: [], filas: {}, dist: {} };
+    this.campos(f).forEach(el => d.campos.push(el.type === 'checkbox' || el.type === 'radio'
+      ? { n: el.name, val: el.value, c: el.checked } : { n: el.name, v: this.valor(el) }));
+    this.contenedores(f).forEach(tb => {
+      const k = this.claveContenedor(f, tb);
+      if (tb._distEditor) {
+        d.dist[k] = this.filasDe(tb).map(tr => {
+          const r = { proyecto_id: tr.querySelector('select')?.value || '' };
+          tr.querySelectorAll('input[data-campo]').forEach(i => { r[i.dataset.campo] = i.value; });
+          return r;
+        });
+      } else {
+        d.filas[k] = this.filasDe(tb).map(tr => this.controlesFila(tr).map(el => this.valor(el)));
+      }
+    });
+    return d;
+  },
+  firma(d) { return JSON.stringify(d); },
+
+  // Pone un valor en un campo y avisa a la página (totales, Select2, dependencias)
+  fijar(el, v) {
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      if (el.checked === !!v) return true;
+      el.checked = !!v;
+    } else if (el.multiple) {
+      const vals = (Array.isArray(v) ? v : []).map(String);
+      if ([...el.selectedOptions].map(o => o.value).join('\n') === vals.join('\n')) return true;
+      [...el.options].forEach(o => { o.selected = vals.includes(o.value); });
+    } else {
+      v = v ?? '';
+      if (el.value === v) return true;
+      if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) return false;   // opción aún no cargada
+      if (el._flatpickr) el._flatpickr.setDate(v || null, false); else el.value = v;
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  },
+  aplicarCampos(f, campos) {
+    const porNombre = {};
+    this.campos(f).forEach(el => (porNombre[el.name] ??= []).push(el));
+    const vistos = {};
+    let faltan = 0;
+    (campos || []).forEach(c => {
+      const lista = porNombre[c.n] || [];
+      if ('c' in c) { const el = lista.find(x => x.value === c.val); if (el) this.fijar(el, c.c); return; }
+      const i = vistos[c.n] = (vistos[c.n] ?? -1) + 1;
+      if (lista[i] && !this.fijar(lista[i], c.v)) faltan++;
+    });
+    return faltan;
+  },
+  // Botón "Agregar …" de una tabla de filas: el que llama a add…Row() después de la tabla
+  botonAgregar(f, tb) {
+    const botones = [...f.querySelectorAll('button[onclick]')].filter(b => /\badd\w*Row\s*\(/.test(b.getAttribute('onclick')));
+    return botones.find(b => tb.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) || botones[0] || null;
+  },
+  clonarFila(tr) {
+    const c = tr.cloneNode(true);
+    c.querySelectorAll('.select2-container').forEach(x => x.remove());
+    c.querySelectorAll('select').forEach(s => { s.classList.remove('select2-hidden-accessible'); ['data-select2-id', 'aria-hidden', 'tabindex'].forEach(a => s.removeAttribute(a)); });
+    return c;
+  },
+  aplicarFilas(f, tb, filas) {
+    while (this.filasDe(tb).length > filas.length) this.filasDe(tb).pop().remove();
+    const boton = this.botonAgregar(f, tb);
+    for (let n = 0; this.filasDe(tb).length < filas.length && n < 500; n++) {
+      const antes = this.filasDe(tb).length;
+      boton?.click();
+      if (this.filasDe(tb).length === antes) {
+        const modelo = this.filasDe(tb).pop();
+        if (!modelo) break;
+        tb.appendChild(this.clonarFila(modelo));
+      }
+    }
+    this.filasDe(tb).forEach((tr, i) => {
+      const ctl = this.controlesFila(tr);
+      (filas[i] || []).forEach((v, j) => { if (ctl[j]) this.fijar(ctl[j], v); });
+    });
+    if (tb.id && typeof updateDetailRowNumbers === 'function') updateDetailRowNumbers(tb.id);
+  },
+  restaurar(f, b) {
+    const d = b.datos || {};
+    const aplicar = () => {
+      this.restaurando = true;
+      try { return this.aplicarCampos(f, d.campos); } finally { this.restaurando = false; }
+    };
+    let faltan = aplicar();
+    this.restaurando = true;
+    try {
+      this.contenedores(f).forEach(tb => {
+        const k = this.claveContenedor(f, tb);
+        if (tb._distEditor && d.dist?.[k]) tb._distEditor.set(d.dist[k]);
+        else if (!tb._distEditor && d.filas?.[k]) this.aplicarFilas(f, tb, d.filas[k]);
+      });
+    } finally { this.restaurando = false; }
+    if (typeof recalcTotals === 'function') recalcTotals();
+    // Listas que se llenan al elegir otra (proveedor → cuentas…): un segundo intento
+    if (faltan) setTimeout(() => { if (f.isConnected) { aplicar(); if (typeof recalcTotals === 'function') recalcTotals(); } }, 900);
+    this.aviso(f, b, true);
+  },
+
+  // ── Aviso dentro del formulario ──
+  hora(fecha) {
+    const d = new Date(fecha), hoy = new Date();
+    const h = d.toLocaleTimeString('es-HN', { hour: '2-digit', minute: '2-digit' });
+    return d.toDateString() === hoy.toDateString() ? 'hoy a las ' + h : 'el ' + d.toLocaleDateString('es-HN') + ' a las ' + h;
+  },
+  barra(f) {
+    let el = f.querySelector(':scope > .borrador-barra');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'borrador-barra';
+      f.prepend(el);
+    }
+    return el;
+  },
+  aviso(f, b, recuperado) {
+    const el = this.barra(f);
+    el.innerHTML = `<div class="alert alert-warning py-2 px-3 d-flex align-items-center gap-2 flex-wrap mb-3" style="font-size:.85rem">
+      <i class="fas fa-file-pen"></i><div class="flex-grow-1"></div>
+      ${recuperado ? '' : '<button type="button" class="btn btn-sm btn-warning" data-sin-estado data-b="recuperar"><i class="fas fa-rotate-left"></i> Recuperar</button>'}
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-sin-estado data-b="descartar"><i class="fas fa-trash"></i> Descartar borrador</button></div>`;
+    el.querySelector('.flex-grow-1').textContent = recuperado
+      ? `Se recuperó lo que había escrito ${this.hora(b.actualizado)} y no había guardado. Revíselo y pulse Guardar cuando termine. (Los archivos adjuntos no se guardan en el borrador.)`
+      : `Tiene un borrador de este formulario, de ${this.hora(b.actualizado)}, que aún no guardó.`;
+    el.querySelector('[data-b="recuperar"]')?.addEventListener('click', () => this.restaurar(f, b));
+    el.querySelector('[data-b="descartar"]').addEventListener('click', async () => {
+      if (!await confirmar('Lo que había escrito y no guardó se perderá.', { titulo: '¿Descartar el borrador?', aceptar: 'Descartar', peligro: true })) return;
+      await this.descartar(b.clave);
+      el.innerHTML = '';
+      if (recuperado) { f.closest('.modal') ? bootstrap.Modal.getInstance(f.closest('.modal'))?.hide() : Nav.recargar(); }
+    });
+  },
+  estado(f, texto, icono) {
+    const el = this.barra(f);
+    if (el.querySelector('.alert')) return;   // el aviso del borrador recuperado sigue visible
+    el.innerHTML = `<div class="text-muted text-end mb-1" style="font-size:.72rem"><i class="fas ${icono}"></i> </div>`;
+    el.firstChild.append(texto);
+  },
+
+  // ── Registro de formularios y cambios ──
+  registrar(f) {
+    if (!this.formularios.has(f)) this.formularios.set(f, { base: this.firma(this.capturar(f)), ultimo: null });
+  },
+  cambio(f) {
+    if (this.restaurando || !this.formularios.has(f)) return;
+    const st = this.formularios.get(f);
+    const datos = this.capturar(f), firma = this.firma(datos), clave = this.clave(f);
+    if (firma === st.base) {   // volvió a como estaba: no hay nada que guardar
+      st.ultimo = null;
+      if (this.conocidos.has(clave) || this.pendientes.has(clave)) this.descartar(clave);
+      return;
+    }
+    if (firma === st.ultimo) return;
+    st.ultimo = firma;
+    const b = { clave, url: this.pagina() + location.search, titulo: this.titulo(f), modal: !!f.closest('.modal'),
+                datos, actualizado: new Date().toISOString() };
+    this.local(clave, b);
+    this.descartados.delete(clave);
+    this.conocidos.set(clave, b);
+    this.pendientes.set(clave, b);
+    clearTimeout(this.temporizador);
+    this.temporizador = setTimeout(() => this.enviar(), this.ESPERA);
+  },
+
+  // ── Envío al servidor (y copia en este navegador mientras no llega) ──
+  claveLocal(clave) { return `proscala-borrador:${this.usuario()}:${clave}`; },
+  local(clave, b) {
+    try { b ? localStorage.setItem(this.claveLocal(clave), JSON.stringify(b)) : localStorage.removeItem(this.claveLocal(clave)); } catch (_) {}
+  },
+  locales() {
+    const pre = this.claveLocal(this.pagina() + '|'), r = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(pre)) { try { const b = JSON.parse(localStorage.getItem(k)); if (b?.clave) r[b.clave] = b; } catch (_) {} }
+      }
+    } catch (_) {}
+    return r;
+  },
+  datosEnvio(b, accion) {
+    const fd = new FormData();
+    fd.append('csrf_token', document.querySelector('meta[name="csrf"]')?.content || '');
+    fd.append('_action', accion);
+    fd.append('clave', b.clave);
+    if (accion === 'guardar') {
+      fd.append('url', b.url); fd.append('titulo', b.titulo); fd.append('modal', b.modal ? '1' : '');
+      fd.append('datos', JSON.stringify(b.datos));
+    }
+    return fd;
+  },
+  async pedir(fd) {
+    const intento = () => fetch('borradores.php', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    let res = await intento();
+    if (res.status === 403) {
+      const body = await res.json().catch(() => ({}));
+      const token = body.csrf_invalido && await Sesion.tokenVigente();
+      if (!token) return false;
+      fd.set('csrf_token', token);
+      res = await intento();
+    }
+    if (res.ok) Sesion.contacto();
+    return res.ok && (await res.json().catch(() => ({}))).success === true;
+  },
+  // sinEsperar: al salir de la página (sendBeacon sigue aunque la página se cierre)
+  enviar(sinEsperar = false) {
+    clearTimeout(this.temporizador);
+    const lista = [...this.pendientes.values()];
+    this.pendientes.clear();
+    if (sinEsperar && navigator.sendBeacon) {
+      lista.forEach(b => navigator.sendBeacon('borradores.php', this.datosEnvio(b, 'guardar')));
+      return Promise.resolve();
+    }
+    const previo = this.enCurso || Promise.resolve();
+    return this.enCurso = previo.then(async () => {
+      for (const b of lista) {
+        if (this.descartados.has(b.clave)) continue;   // se guardó o descartó mientras esperaba
+        let ok = false;
+        try { ok = await this.pedir(this.datosEnvio(b, 'guardar')); } catch (_) {}
+        // La copia de este navegador ya no hace falta si es la misma que llegó al servidor
+        if (ok) { try { if (JSON.parse(localStorage.getItem(this.claveLocal(b.clave)) || 'null')?.actualizado === b.actualizado) this.local(b.clave, null); } catch (_) {} }
+        const f = [...this.formularios.keys()].find(x => x.isConnected && this.clave(x) === b.clave);
+        const hora = new Date(b.actualizado).toLocaleTimeString('es-HN', { hour: '2-digit', minute: '2-digit' });
+        if (f) this.estado(f, ok ? `Borrador guardado automáticamente · ${hora}` : `Borrador guardado en este equipo · ${hora} (se subirá cuando haya conexión)`, ok ? 'fa-cloud' : 'fa-hard-drive');
+      }
+    });
+  },
+  descartados: new Set(),
+  async descartar(clave) {
+    this.pendientes.delete(clave);
+    this.conocidos.delete(clave);
+    this.local(clave, null);
+    this.descartados.add(clave);
+    // Después de un envío en curso, para que no vuelva a aparecer en el servidor
+    try { await (this.enCurso || Promise.resolve()); } catch (_) {}
+    try { await this.pedir(this.datosEnvio({ clave }, 'descartar')); } catch (_) {}
+    this.descartados.delete(clave);
+  },
+  enCurso: null,
+
+  // Tras un POST correcto (ajax): si guardó uno de estos formularios, su borrador ya no hace falta
+  alGuardar(url, data) {
+    if (!(data instanceof FormData) || new URL(url, location.href).pathname.split('/').pop() !== this.pagina()) return;
+    const claves = new Set(data.keys());
+    this.formularios.forEach((st, f) => {
+      if (!f.isConnected) return;
+      const accion = f.querySelector('[name="_action"]')?.value;
+      const idForm = f.querySelector('[name="id"]')?.value;
+      if (idForm !== undefined && data.has('id') && String(data.get('id')) !== String(idForm)) return;
+      const nombres = [...new Set(this.campos(f).map(el => el.name))];
+      const comunes = nombres.filter(n => claves.has(n)).length;
+      if (data.get('_action') !== accion && !(comunes >= 2 && comunes >= nombres.length * 0.6)) return;
+      const clave = this.clave(f);
+      st.base = this.firma(this.capturar(f));   // lo guardado pasa a ser el punto de partida
+      st.ultimo = null;
+      f.querySelector(':scope > .borrador-barra')?.replaceChildren();
+      this.descartar(clave);
+    });
+  },
+
+  // ── Al abrir una página: formularios y borradores ──
+  turno: 0,   // cambia con cada página: una respuesta de la página anterior se ignora
+  async iniciar(root = document) {
+    if (!this.activo()) return;
+    const turno = ++this.turno;
+    const forms = [...root.querySelectorAll('form')].filter(f => this.elegible(f));
+    forms.filter(f => !f.closest('.modal')).forEach(f => this.registrar(f));
+    let servidor = [];
+    try {
+      const r = await fetch('borradores.php?pagina=' + encodeURIComponent(this.pagina()), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' });
+      if (r.ok) servidor = (await r.json()).borradores || [];
+    } catch (_) {}
+    if (turno !== this.turno) return;
+    this.conocidos.clear();
+    servidor.forEach(b => this.conocidos.set(b.clave, b));
+    // Copias de este navegador más nuevas que las del servidor: se suben
+    Object.values(this.locales()).forEach(b => {
+      const s = this.conocidos.get(b.clave);
+      if (!s || Date.parse(b.actualizado) > Date.parse(s.actualizado)) { this.conocidos.set(b.clave, b); this.pendientes.set(b.clave, b); }
+      else this.local(b.clave, null);
+    });
+    if (this.pendientes.size) this.enviar();
+
+    const enPantalla = new Set();
+    forms.forEach(f => {
+      const b = this.conocidos.get(this.clave(f));
+      if (f.closest('.modal')) { if (b) enPantalla.add(b.clave); return; }   // se rellena al abrir el modal
+      if (!b) return;
+      enPantalla.add(b.clave);
+      const st = this.formularios.get(f);
+      // Si ya empezó a escribir, se le pregunta en vez de reemplazar lo que escribió
+      if (this.firma(this.capturar(f)) === st.base) this.restaurar(f, b); else this.aviso(f, b, false);
+    });
+    this.avisoPagina(forms, enPantalla);
+  },
+  // Borradores de esta página cuyo formulario no está a la vista (en un modal, o en "Nuevo…")
+  avisoPagina(forms, enPantalla) {
+    const main = document.getElementById('main-content');
+    main.querySelector(':scope > .borrador-pagina')?.remove();
+    const otros = [...this.conocidos.values()].filter(b => !enPantalla.has(b.clave) || (b.modal && b.clave.endsWith('|0')));
+    if (!otros.length) return;
+    const caja = document.createElement('div');
+    caja.className = 'borrador-pagina alert alert-warning py-2 px-3 mb-3';
+    caja.style.fontSize = '.85rem';
+    caja.innerHTML = '<div class="fw-semibold mb-1"><i class="fas fa-file-pen"></i> Tiene formularios sin terminar</div>';
+    otros.forEach(b => {
+      const fila = document.createElement('div');
+      fila.className = 'd-flex align-items-center gap-2 flex-wrap py-1';
+      const txt = document.createElement('span');
+      txt.className = 'flex-grow-1';
+      const form = forms.find(f => this.clave(f) === b.clave) || (b.modal ? forms.find(f => f.closest('.modal') && b.clave.startsWith(this.pagina() + '|' + f.id + '|')) : null);
+      const nuevo = b.clave.endsWith('|0');
+      txt.textContent = `«${b.titulo}», ${this.hora(b.actualizado)}` + (!nuevo && b.modal ? ' — ábralo de nuevo con su botón Editar para continuar.' : '');
+      fila.appendChild(txt);
+      if (nuevo || !b.modal) {
+        const ir = document.createElement('button');
+        ir.type = 'button'; ir.className = 'btn btn-sm btn-warning'; ir.dataset.sinEstado = '';
+        ir.innerHTML = '<i class="fas fa-pen"></i> Continuar';
+        ir.onclick = () => {
+          const modal = form?.closest('.modal');
+          if (modal) { caja.remove(); bootstrap.Modal.getOrCreateInstance(modal).show(); }
+          else Nav.ir(b.url);
+        };
+        fila.appendChild(ir);
+      }
+      const quitar = document.createElement('button');
+      quitar.type = 'button'; quitar.className = 'btn btn-sm btn-outline-secondary'; quitar.dataset.sinEstado = '';
+      quitar.innerHTML = '<i class="fas fa-trash"></i> Descartar';
+      quitar.onclick = async () => {
+        if (!await confirmar('Lo que había escrito y no guardó se perderá.', { titulo: '¿Descartar el borrador?', aceptar: 'Descartar', peligro: true })) return;
+        await this.descartar(b.clave);
+        fila.remove();
+        if (!caja.querySelector('.d-flex')) caja.remove();
+      };
+      fila.appendChild(quitar);
+      caja.appendChild(fila);
+    });
+    const cab = main.querySelector(':scope > .page-header');
+    cab ? cab.after(caja) : main.prepend(caja);
+  },
+  // Antes de cambiar de página (navegación sin recarga): lo pendiente se envía
+  salir() {
+    this.turno++;
+    if (this.pendientes.size) this.enviar(true);
+    this.formularios.clear();
+    this.conocidos.clear();
+  },
+};
+// Cambios del usuario (los de Select2 llegan como evento de jQuery)
+['input', 'change'].forEach(ev => document.addEventListener(ev, e => {
+  const f = e.target?.form || e.target?.closest?.('form');
+  if (f) Borradores.cambio(f);
+}));
+if (window.jQuery) jQuery(document).on('select2:select select2:unselect select2:clear', e => {
+  const f = e.target?.form || e.target?.closest?.('form');
+  if (f) setTimeout(() => Borradores.cambio(f), 0);
+});
+// Filas quitadas o agregadas con los botones de la tabla
+document.addEventListener('click', e => {
+  const b = e.target.closest?.('button');
+  const f = b?.closest('form');
+  if (f && !b.closest('.borrador-barra') && Borradores.formularios.has(f)) setTimeout(() => Borradores.cambio(f), 50);
+});
+// Formularios en un modal: se toman al abrirlo (ya con los datos del registro) y se rellenan si hay borrador
+document.addEventListener('shown.bs.modal', e => {
+  e.target.querySelectorAll?.('form').forEach(f => {
+    if (!Borradores.activo() || !Borradores.elegible(f)) return;
+    Borradores.formularios.set(f, { base: Borradores.firma(Borradores.capturar(f)), ultimo: null });
+    f.querySelector(':scope > .borrador-barra')?.replaceChildren();
+    const b = Borradores.conocidos.get(Borradores.clave(f));
+    if (b) Borradores.restaurar(f, b);
+  });
+});
+document.addEventListener('hide.bs.modal', () => { if (Borradores.pendientes.size) Borradores.enviar(); });
+// Al cerrar la pestaña o pasar a otra aplicación: lo pendiente sale de inmediato
+window.addEventListener('pagehide', () => { if (Borradores.pendientes.size) Borradores.enviar(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && Borradores.pendientes.size) Borradores.enviar(true); });
+window.addEventListener('load', () => Borradores.iniciar(document));
+
 async function cambiarEstado(url, id, estado, tabla, onDone) {
   const token = document.querySelector('meta[name="csrf"]')?.content || '';
   const fd = new FormData();
@@ -1622,6 +2070,7 @@ class DistEditor {
   constructor(tbody, { proyectos, campos, prefix = 'dist', onChange = null, monto = null }) {
     Object.assign(this, { tbody, proyectos, campos, prefix, onChange, monto, n: 0 });
     this.table = tbody.closest('table');
+    tbody._distEditor = this;   // los borradores de formularios guardan y restauran sus filas
   }
 
   static pct(v) { return String(+(+v).toFixed(6)); }

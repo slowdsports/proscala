@@ -24,6 +24,8 @@ $_avatarFoto = $user['foto'] ? BASE_URL . $user['foto'] : '';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf" content="<?= $csrf ?>">
+  <?php // Borradores de formularios (proscala.js): de quién son las copias que quedan en el navegador ?>
+  <meta name="borrador" content="<?= (int)($_SESSION['empresa_id'] ?? 0) . '-' . (int)($_SESSION['usuario_id'] ?? 0) ?>">
   <title><?= htmlspecialchars($pagina) ?> | Proscala Admin</title>
   <?php include __DIR__ . '/favicon.php'; ?>
   <script>

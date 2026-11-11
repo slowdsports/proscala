@@ -110,6 +110,22 @@ CREATE TABLE `auditoria` (
   KEY `idx_accion` (`accion`),
   KEY `idx_modulo` (`modulo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `borradores` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario_id` int(11) NOT NULL,
+  `clave` varchar(190) NOT NULL,
+  `pagina` varchar(60) NOT NULL,
+  `url` varchar(500) NOT NULL,
+  `titulo` varchar(200) NOT NULL,
+  `modal` tinyint(1) NOT NULL DEFAULT 0,
+  `datos` mediumtext NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_borrador` (`usuario_id`,`clave`),
+  KEY `idx_borrador_pagina` (`usuario_id`,`pagina`),
+  CONSTRAINT `fk_borrador_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `caja_chica` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `numero` varchar(20) NOT NULL,

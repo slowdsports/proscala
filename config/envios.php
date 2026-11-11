@@ -9,7 +9,7 @@
 //   · La comparación y el registro son una sola sentencia: dos peticiones simultáneas no pasan ambas.
 const VENTANA_ENVIO_DUPLICADO = 10;
 // Peticiones POST que solo consultan o que se repiten a propósito
-const ENVIOS_SIN_CONTROL = ['sesion.php', 'notificaciones.php', 'buscar.php', 'exportar_excel.php'];
+const ENVIOS_SIN_CONTROL = ['sesion.php', 'notificaciones.php', 'buscar.php', 'exportar_excel.php', 'borradores.php'];
 const ACCIONES_SIN_CONTROL = ['calcular', 'items_sc', 'get_co_data', 'conexion'];
 
 /** Huella del envío: módulo, campos (sin el token de seguridad), archivos adjuntos y cuerpo JSON. */

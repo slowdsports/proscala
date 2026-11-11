@@ -136,7 +136,7 @@ const PAGINAS_SUPERADMIN = ['empresas.php', 'prueba_correo.php'];
 // (respaldo.php valida que sea el super administrador; mis_solicitudes.php y buscar.php muestran
 // solo lo que cada usuario puede ver; alta_rapida.php, que tenga acceso a un módulo que use el tipo)
 const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php',
-                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php', 'alta_rapida.php'];
+                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php', 'alta_rapida.php', 'borradores.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -160,7 +160,7 @@ function moduloLabel(?string $archivo): string {
         $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
                  'empresas.php' => 'Empresas', 'prueba_correo.php' => 'Prueba de correo', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
-                 'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'buscar.php' => 'Búsqueda'];
+                 'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'buscar.php' => 'Búsqueda', 'borradores.php' => 'Borradores'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
     return $mapa[$archivo] ?? (string)$archivo;

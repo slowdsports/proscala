@@ -132,6 +132,17 @@ Al pulsar **Guardar**, **Crear**, **Editar**, **Eliminar**, **Autorizar** u otro
 - Solo cuando el servidor **confirma** que la acción se hizo, el botón cambia a ✓ *Agregado*, *Cambios guardados*, *Listo*, etc., y aparece un mensaje verde.
 - Si algo falla (por ejemplo, falta un dato obligatorio), el botón vuelve a su estado normal y un mensaje rojo explica el motivo. Corrija y vuelva a intentarlo.
 
+### Lo que escribe se guarda solo (borradores)
+
+Mientras llena un formulario, el sistema guarda lo que escribe como **borrador**, unos segundos después de cada cambio. Si cierra la página, se va la luz, se corta el internet o se cierra la sesión, no pierde lo escrito.
+
+- Arriba del formulario verá *Borrador guardado automáticamente · 10:32*. Sin conexión verá *Borrador guardado en este equipo*: se sube al servidor cuando vuelva la conexión.
+- **Al volver a abrir el formulario**, se rellena con lo que había escrito, también las filas de artículos o gastos. Un aviso amarillo lo indica. Revise y pulse **Guardar** cuando termine. Si no lo quiere, pulse **Descartar borrador**.
+- Si sale a otra pantalla del módulo, un aviso le recuerda los formularios sin terminar, con el botón **Continuar**.
+- En **Mis solicitudes**, la sección **Formularios sin terminar** lista todos sus borradores. Como se guardan en el servidor, puede continuar desde otro equipo.
+- El borrador se borra solo **al guardar el formulario**, al descartarlo o a los 30 días sin cambios. Cada borrador es suyo: nadie más lo ve.
+- No se guardan las contraseñas ni los **archivos adjuntos**: esos hay que volver a elegirlos.
+
 ### No se crean registros duplicados
 
 Si por error pulsa varias veces **Guardar** (o la conexión está lenta y lo vuelve a pulsar), el sistema **no repite** la acción: el mismo envío hecho otra vez a los pocos segundos se rechaza con el aviso *"Esta acción ya se envió hace unos segundos y no se repitió"*. Revise la lista: el registro ya quedó guardado una vez.

@@ -64,6 +64,12 @@ $rechazadas = count(array_filter($filas, fn($f) => $f['rechazado']));
 $anioActual = date('Y');
 $autorizadasAnio = count(array_filter($filas, fn($f) => $f['clase'] === 'success' && str_starts_with((string)$f['fecha'], $anioActual)));
 
+// Formularios que empezó a llenar y no guardó (borradores.php), de los módulos que puede abrir
+$s = $pdo->prepare("SELECT clave, pagina, url, titulo, modal, updated_at FROM borradores
+                    WHERE usuario_id = ? AND updated_at >= NOW() - INTERVAL 30 DAY ORDER BY updated_at DESC");
+$s->execute([$uid]);
+$borradores = array_values(array_filter($s->fetchAll(), fn($b) => puedeAcceder($b['pagina'])));
+
 include __DIR__ . '/includes/header.php';
 ?>
 <div class="page-header">
@@ -74,6 +80,31 @@ include __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </div>
 </div>
+
+<?php if ($borradores): ?>
+<div class="card mb-3">
+  <div class="card-header"><i class="fas fa-file-pen"></i> Formularios sin terminar
+    <span class="ms-auto text-muted fw-normal" style="font-size:.72rem;">Se guardan solos mientras escribe; se borran al guardar el formulario o a los 30 días</span></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0" style="font-size:.85rem;">
+      <thead><tr><th>Formulario</th><th>Módulo</th><th>Último cambio</th><th></th></tr></thead>
+      <tbody>
+        <?php foreach ($borradores as $b): ?>
+        <tr>
+          <td><?= htmlspecialchars($b['titulo']) ?></td>
+          <td><?= htmlspecialchars(moduloLabel($b['pagina'])) ?></td>
+          <td class="text-nowrap"><?= date('d/m/Y H:i', strtotime($b['updated_at'])) ?></td>
+          <td class="text-end text-nowrap">
+            <a href="<?= BASE_URL . htmlspecialchars($b['url']) ?>" class="btn btn-sm btn-warning py-0 px-2"><i class="fas fa-pen"></i> Continuar</a>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Descartar" data-sin-estado onclick='descartarBorrador(<?= json_encode($b['clave'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-3 mb-3">
   <div class="col-md-4"><div class="kpi-card kpi-yellow"><div class="kpi-icon"><i class="fas fa-hourglass-half"></i></div>
@@ -106,6 +137,11 @@ include __DIR__ . '/includes/header.php';
 <?php
 $extraJs = <<<'JS'
 initDataTable('#tbl-mis', { order: [] });
+async function descartarBorrador(clave) {
+  if (!await confirmar('Lo que había escrito y no guardó se perderá.', { titulo: '¿Descartar el borrador?', aceptar: 'Descartar', peligro: true })) return;
+  await Borradores.descartar(clave);
+  Nav.recargar();
+}
 JS;
 include __DIR__ . '/includes/footer.php';
 ?>

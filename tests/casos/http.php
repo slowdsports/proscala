@@ -334,6 +334,43 @@ try {
         }
     });
 
+    prueba('Borradores: se guardan solos por usuario, se listan en su página y en Mis solicitudes, y se descartan', function () use ($baseUrl, $sesAdmin, $pdo, $admin, $empresa) {
+        $enviar = function (array $datos, string $ses) use ($baseUrl) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$ses\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($datos + ['csrf_token' => 'tokenprueba'])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/borradores.php", false, $ctx), true) ?: [];
+        };
+        $otro = (int)$pdo->query("SELECT id FROM usuarios WHERE activo = 1 AND id <> $admin AND debe_cambiar_password = 0 ORDER BY id LIMIT 1")->fetchColumn();
+        $clave = 'compras_solicitud.php|form-zzprueba|0';
+        $datos = json_encode(['v' => 1, 'campos' => [['n' => 'descripcion', 'v' => 'ZZ borrador de prueba']], 'filas' => ['tbody-items' => [['Papel', 'resma', '2', '150', '300']]], 'dist' => []]);
+        $antes = (int)$pdo->query("SELECT COUNT(*) FROM auditoria WHERE modulo = 'borradores.php'")->fetchColumn();
+        try {
+            $r = $enviar(['_action' => 'guardar', 'clave' => $clave, 'url' => 'compras_solicitud.php?action=nuevo', 'titulo' => 'ZZ Prueba de borrador', 'datos' => $datos], $sesAdmin);
+            afirmar(!empty($r['success']), 'no guardó el borrador: ' . ($r['message'] ?? 'sin respuesta'));
+            afirmar(empty($enviar(['_action' => 'guardar', 'clave' => 'x|y', 'url' => 'a.php', 'titulo' => 'x', 'datos' => '{}'], $sesAdmin)['success']), 'aceptó una clave inválida');
+            afirmar(empty($enviar(['_action' => 'guardar', 'clave' => $clave, 'url' => 'a.php', 'titulo' => 'x', 'datos' => 'no es json'], $sesAdmin)['success']), 'aceptó datos que no son JSON');
+            // Un enlace fuera del sistema no se guarda tal cual
+            $enviar(['_action' => 'guardar', 'clave' => 'compras_solicitud.php|form-zzprueba|7', 'url' => 'https://otro.sitio/x', 'titulo' => 'x', 'datos' => '{}'], $sesAdmin);
+            iguales('compras_solicitud.php', $pdo->query("SELECT url FROM borradores WHERE usuario_id = $admin AND clave = 'compras_solicitud.php|form-zzprueba|7'")->fetchColumn(), 'url de un borrador con enlace externo');
+            [$cod, $json] = pedir("$baseUrl/borradores.php?pagina=compras_solicitud.php", $sesAdmin);
+            $lista = array_column(json_decode($json, true)['borradores'] ?? [], null, 'clave');
+            iguales('ZZ borrador de prueba', $lista[$clave]['datos']['campos'][0]['v'] ?? null, 'el borrador vuelve con sus datos');
+            iguales('Papel', $lista[$clave]['datos']['filas']['tbody-items'][0][0] ?? null, 'y con sus filas');
+            iguales($antes, (int)$pdo->query("SELECT COUNT(*) FROM auditoria WHERE modulo = 'borradores.php'")->fetchColumn(), 'el autoguardado no debe ir a la bitácora');
+            if ($otro) {
+                [, $json] = pedir("$baseUrl/borradores.php?pagina=compras_solicitud.php", sesionDePrueba($pdo, $empresa, $otro));
+                afirmar(!in_array($clave, array_column(json_decode($json, true)['borradores'] ?? [], 'clave'), true), 'otro usuario ve el borrador ajeno');
+            }
+            [$cod, $html] = pedir("$baseUrl/mis_solicitudes.php", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Formularios sin terminar') && str_contains($html, 'ZZ Prueba de borrador') && !erroresPhp($html), "Mis solicitudes (HTTP $cod) no lista el borrador");
+            $r = $enviar(['_action' => 'descartar', 'clave' => $clave], $sesAdmin);
+            afirmar(!empty($r['success']) && !$pdo->query("SELECT 1 FROM borradores WHERE usuario_id = $admin AND clave = " . $pdo->quote($clave))->fetchColumn(), 'no se descartó');
+        } finally {
+            $pdo->exec("DELETE FROM borradores WHERE usuario_id = $admin AND clave LIKE 'compras_solicitud.php|form-zzprueba|%'");
+        }
+    });
+
     prueba('Usuarios: facultades independientes con alcance; solo se eligen usuarios por debajo en el organigrama', function () use ($baseUrl, $sesAdmin, $pdo, $pdoMaster) {
         // Un puesto R (no Administrador) con un usuario por debajo, y un usuario fuera de su rango
         roles(true);
