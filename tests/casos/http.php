@@ -334,6 +334,51 @@ try {
         }
     });
 
+    prueba('Usuarios: facultades independientes con alcance; solo se eligen usuarios por debajo en el organigrama', function () use ($baseUrl, $sesAdmin, $pdo, $pdoMaster) {
+        // Un puesto R (no Administrador) con un usuario por debajo, y un usuario fuera de su rango
+        roles(true);
+        $usuarios = $pdo->query("SELECT id, rol FROM usuarios WHERE activo = 1")->fetchAll();
+        [$rol, $abajo, $fuera] = [null, null, null];
+        foreach (array_keys(roles()) as $r) {
+            if ($r === 'admin' || !empty(roles()[$r]['solo_propios'])) continue;
+            $a = array_values(array_filter($usuarios, fn($u) => enRango($r, $u['rol']) && $u['rol'] !== $r));
+            $f = array_values(array_filter($usuarios, fn($u) => !enRango($r, $u['rol'])));
+            if ($a && $f) { [$rol, $abajo, $fuera] = [$r, (int)$a[0]['id'], (int)$f[0]['id']]; break; }
+        }
+        if (!$rol) throw new Omitir('no hay un puesto con usuarios por debajo y fuera de su rango');
+        $email = 'zz.facultades.' . bin2hex(random_bytes(4)) . '@prueba.local';
+        $enviar = function (array $fac, int $id = 0) use ($baseUrl, $sesAdmin, $email, $rol) {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,
+                'header' => "Cookie: PROSCALA=$sesAdmin\r\nX-Requested-With: XMLHttpRequest\r\nContent-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query(['csrf_token' => 'tokenprueba', '_action' => 'guardar', 'id' => $id, 'nombre' => 'ZZ Facultades',
+                    'email' => $email, 'rol' => $rol, 'fac' => $fac])]]);
+            return json_decode((string)@file_get_contents("$baseUrl/usuarios.php", false, $ctx), true) ?: [];
+        };
+        try {
+            $r = $enviar(['revisar' => ['on' => 1, 'alcance' => 'seleccion', 'usuarios' => [$fuera]]]);
+            afirmar(empty($r['success']) && str_contains($r['message'] ?? '', 'no está por debajo'), 'aceptó elegir a alguien fuera de su rango: ' . ($r['message'] ?? ''));
+            iguales(0, (int)$pdo->query("SELECT COUNT(*) FROM usuarios WHERE email = " . $pdo->quote($email))->fetchColumn(), 'con facultades inválidas no debe crear el usuario');
+            $r = $enviar(['revisar' => ['on' => 1, 'alcance' => 'seleccion', 'usuarios' => [$abajo]], 'autorizar' => ['on' => 1, 'alcance' => 'todos']]);
+            afirmar(!empty($r['success']), 'no creó el usuario con facultades: ' . ($r['message'] ?? 'sin respuesta'));
+            $id = (int)$r['id'];
+            iguales([['revisar', 'seleccion'], ['autorizar', 'todos']], $pdo->query("SELECT facultad, alcance FROM usuario_facultades WHERE usuario_id = $id ORDER BY facultad")->fetchAll(PDO::FETCH_NUM), 'facultades guardadas');
+            iguales([$abajo], array_map('intval', $pdo->query("SELECT sobre_usuario_id FROM usuario_facultad_usuarios WHERE usuario_id = $id AND facultad = 'revisar'")->fetchAll(PDO::FETCH_COLUMN)), 'usuarios elegidos');
+            $r = $enviar(['corregir' => ['on' => 1, 'alcance' => 'todos']], $id);
+            afirmar(!empty($r['success']), 'no actualizó las facultades: ' . ($r['message'] ?? ''));
+            iguales(['corregir'], $pdo->query("SELECT facultad FROM usuario_facultades WHERE usuario_id = $id")->fetchAll(PDO::FETCH_COLUMN), 'al desmarcar, se quitan');
+            iguales(0, (int)$pdo->query("SELECT COUNT(*) FROM usuario_facultad_usuarios WHERE usuario_id = $id")->fetchColumn(), 'sin selección no quedan elegidos');
+            [$cod, $html] = pedir("$baseUrl/usuarios.php", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Facultades en el flujo de aprobación') && !erroresPhp($html), "Usuarios (HTTP $cod) no muestra las facultades");
+            [$cod, $html] = pedir("$baseUrl/roles.php", $sesAdmin);
+            afirmar($cod === 200 && str_contains($html, 'Sus procesos los autorizan') && !erroresPhp($html), "Roles y Permisos (HTTP $cod) no muestra quién revisa y autoriza");
+        } finally {
+            $pdo->prepare("DELETE FROM usuarios WHERE email = ?")->execute([$email]);
+            $pdoMaster->prepare("DELETE FROM accesos WHERE email = ?")->execute([$email]);
+            $pdoMaster->prepare("DELETE FROM recuperaciones WHERE email = ?")->execute([$email]);
+            $pdo->exec("DELETE FROM auditoria WHERE ip IN ('127.0.0.1', '::1') AND (detalle LIKE '%zz.facultades.%' OR detalle LIKE 'Facultades de ZZ Facultades%')");
+        }
+    });
+
     prueba('Envío repetido: el mismo envío en pocos segundos se rechaza sin ejecutarse; uno distinto o tras un error, no', function () use ($baseUrl, $sesAdmin, $pdo, $admin) {
         $enviar = function (array $datos) use ($baseUrl, $sesAdmin) {
             $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true, 'timeout' => 60,

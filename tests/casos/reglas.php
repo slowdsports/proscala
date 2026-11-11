@@ -3,10 +3,23 @@
 // jerarquía, delegación, notificaciones, recordatorios, orden de pago atómica, bloqueo por IP,
 // respaldo semanal y Excel.
 
+/** Reemplaza las facultades de un usuario: [facultad => true (todos por debajo) | [ids elegidos]]. */
+function darFacultades(PDO $pdo, int $uid, array $f): void {
+    $pdo->prepare("DELETE FROM usuario_facultad_usuarios WHERE usuario_id = ?")->execute([$uid]);
+    $pdo->prepare("DELETE FROM usuario_facultades WHERE usuario_id = ?")->execute([$uid]);
+    foreach ($f as $fac => $alcance) {
+        $pdo->prepare("INSERT INTO usuario_facultades (usuario_id, facultad, alcance) VALUES (?,?,?)")->execute([$uid, $fac, $alcance === true ? 'todos' : 'seleccion']);
+        if (is_array($alcance)) foreach ($alcance as $id) $pdo->prepare("INSERT INTO usuario_facultad_usuarios (usuario_id, facultad, sobre_usuario_id) VALUES (?,?,?)")->execute([$uid, $fac, $id]);
+    }
+    facultadesUsuario(0, true);
+}
+const TODAS_FACULTADES = ['revisar' => true, 'autorizar' => true, 'corregir' => true];
+
 /**
- * Escenario: puestos zz_jefe (aprueba, depende del Administrador), zz_asistente (depende de
- * zz_jefe) y zz_par (aprueba, sin relación con el asistente); un usuario por puesto y un permiso
- * creado por el asistente. Corre $fn dentro de una transacción que siempre se revierte.
+ * Escenario: puestos zz_jefe (depende del Administrador), zz_asistente (depende de zz_jefe) y
+ * zz_par (sin relación con el asistente); un usuario por puesto, el jefe y el par con las tres
+ * facultades sobre todos los puestos por debajo, y un permiso creado por el asistente. Corre $fn
+ * dentro de una transacción que siempre se revierte.
  */
 function conEscenario(PDO $pdo, callable $fn): void {
     $pdo->beginTransaction();
@@ -26,10 +39,13 @@ function conEscenario(PDO $pdo, callable $fn): void {
         $per = (int)$pdo->lastInsertId();
         $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('permisos', ?, ?, 'creador')")->execute([$per, $u['asistente']]);
         roles(true);
+        darFacultades($pdo, $u['jefe'], TODAS_FACULTADES);
+        darFacultades($pdo, $u['par'], TODAS_FACULTADES);
         $fn($u, $per);
     } finally {
         if ($pdo->inTransaction()) $pdo->rollBack();
         roles(true);
+        facultadesUsuario(0, true);
     }
 }
 $accion = fn(PDO $pdo, int $per, string $paso) => accionesFlujo(estadoFlujo($pdo, 'permisos.php', $per), 'permisos.php')[$paso];
@@ -82,6 +98,85 @@ prueba('Notificaciones: niveles de aprobadores según el organigrama', function 
         $niveles = nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']]);
         iguales([$u['jefe']], $niveles[0] ?? null, 'nivel 1 (superior inmediato)');
         afirmar(isset($niveles[1]) && !in_array($u['jefe'], $niveles[1], true), 'el último nivel son los Administradores');
+    });
+});
+
+/** Agrega zz_director por encima de zz_jefe (zz_asistente → zz_jefe → zz_director → Administrador) con un usuario. */
+function conDirector(PDO $pdo): int {
+    $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_director', 'ZZ Director', 'admin', 0, 0, 94)");
+    $pdo->exec("UPDATE roles SET depende_de = 'zz_director' WHERE clave = 'zz_jefe'");
+    $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES ('ZZ Director', ?, 'x', 'zz_director', 1)")
+        ->execute(['zz.director.' . bin2hex(random_bytes(3)) . '@prueba.local']);
+    $id = (int)$pdo->lastInsertId();
+    roles(true);
+    return $id;
+}
+
+prueba('Facultades independientes: quien revisa no autoriza y quien autoriza no revisa; cada uno rechaza en su paso', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        $dir = conDirector($pdo);
+        darFacultades($pdo, $u['jefe'], ['revisar' => true]);
+        darFacultades($pdo, $dir, ['autorizar' => true]);
+        comoUsuario($pdo, $dir);
+        afirmar(str_contains((string)$accion($pdo, $per, 'revisar'), 'facultad de revisar'), 'el director (solo autoriza) no debe revisar');
+        iguales('Primero debe ser revisado.', $accion($pdo, $per, 'autorizar'), 'el director espera la revisión');
+        afirmar($accion($pdo, $per, 'rechazar') !== true, 'sin revisar, rechaza quien revisa, no el director');
+        comoUsuario($pdo, $u['jefe']);
+        iguales(true, $accion($pdo, $per, 'revisar'), 'el jefe revisa');
+        iguales(true, $accion($pdo, $per, 'rechazar'), 'el jefe rechaza lo que espera revisión');
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        afirmar(str_contains((string)$accion($pdo, $per, 'autorizar'), 'facultad de autorizar'), 'el jefe (solo revisa) no debe autorizar');
+        afirmar($accion($pdo, $per, 'rechazar') !== true, 'ya revisado, el jefe no rechaza');
+        comoUsuario($pdo, $dir);
+        iguales(true, $accion($pdo, $per, 'autorizar'), 'revisado: el director autoriza');
+        iguales(true, $accion($pdo, $per, 'rechazar'), 'revisado: el director rechaza');
+    });
+});
+
+prueba('Avisos según la facultad: a quien solo autoriza no le llegan los de revisar', function () use ($pdo) {
+    conEscenario($pdo, function ($u, $per) use ($pdo) {
+        $dir = conDirector($pdo);
+        darFacultades($pdo, $u['jefe'], ['revisar' => true]);
+        darFacultades($pdo, $dir, ['autorizar' => true]);
+        $revisar = nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']], 'revisar');
+        iguales([$u['jefe']], $revisar[0] ?? null, 'revisar: el jefe');
+        afirmar(!in_array($dir, array_merge(...$revisar), true), 'el director no aparece en ningún nivel de revisar');
+        $autorizar = nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']], 'autorizar');
+        iguales([$dir], $autorizar[0] ?? null, 'autorizar: el director (salta al jefe, que no autoriza)');
+        iguales([$dir], aprobadoresProceso($pdo, 'permisos.php', $per, [$u['asistente']], 'autorizar'), 'aviso de autorizar');
+        // Recordatorio de un permiso revisado: va a quien autoriza
+        comoUsuario($pdo, $u['jefe']);
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        $pdo->exec("UPDATE aprobaciones SET created_at = NOW() - INTERVAL 3 DAY WHERE tabla = 'permisos' AND registro_id = $per");
+        $a = array_values(array_filter(recordarPendientes($pdo, false), fn($x) => str_contains($x['proceso'], 'ZZPRUEBA-PER')));
+        iguales('autorizar', $a[0]['paso'] ?? null, 'paso del recordatorio');
+        iguales([$dir], $a[0]['usuarios'] ?? null, 'el recordatorio de autorizar va al director');
+    });
+});
+
+prueba('Alcance: solo los usuarios elegidos, y siempre dentro del organigrama', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        darFacultades($pdo, $u['jefe'], ['revisar' => [$u['par']]]);   // eligió a alguien que no es el asistente
+        comoUsuario($pdo, $u['jefe']);
+        afirmar(str_contains((string)$accion($pdo, $per, 'revisar'), 'alcance'), 'fuera de su selección no revisa');
+        afirmar(!in_array($u['jefe'], array_merge(...nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']])), true), 'fuera de su selección no recibe avisos');
+        darFacultades($pdo, $u['jefe'], ['revisar' => [$u['asistente']]]);
+        iguales(true, $accion($pdo, $per, 'revisar'), 'eligió al asistente: lo revisa');
+        iguales([$u['jefe']], nivelesAprobadores($pdo, 'permisos.php', $per, [$u['asistente']])[0] ?? null, 'eligió al asistente: recibe el aviso');
+        // El par eligió al asistente, pero no está por encima de él: el organigrama manda
+        darFacultades($pdo, $u['par'], ['revisar' => [$u['asistente']]]);
+        comoUsuario($pdo, $u['par']);
+        afirmar(str_contains((string)$accion($pdo, $per, 'revisar'), 'organigrama'), 'una selección fuera de su rama no habilita');
+    });
+});
+
+prueba('Corregir es una facultad aparte: revisar no da permiso de editar lo de otro', function () use ($pdo) {
+    conEscenario($pdo, function ($u, $per) use ($pdo) {
+        darFacultades($pdo, $u['jefe'], ['revisar' => true, 'autorizar' => true]);
+        comoUsuario($pdo, $u['jefe']);
+        afirmar(str_contains((string)puedeEditar($pdo, 'permisos.php', $per), 'facultad de corregir'), 'sin "corregir" no edita');
+        darFacultades($pdo, $u['jefe'], ['corregir' => [$u['asistente']]]);
+        iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'con "corregir" sobre el asistente, edita');
     });
 });
 
@@ -311,6 +406,7 @@ prueba('Jerarquía: en la cima del organigrama los colegas del mismo puesto se a
         };
         $c1 = $nuevo('zz_cima'); $c2 = $nuevo('zz_cima'); $p2 = $nuevo('zz_par');
         roles(true);
+        foreach ([$c1, $c2, $p2] as $id) darFacultades($pdo, $id, TODAS_FACULTADES);
         $deCima = $permiso($c1, 'ZZPRUEBA-CIMA');
         comoUsuario($pdo, $c2); iguales(true, $accion($pdo, $deCima, 'revisar'), 'un colega de la cima revisa');
         iguales(true, puedeEditar($pdo, 'permisos.php', $deCima), 'un colega de la cima corrige');

@@ -56,7 +56,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Delegar mis aprobaciones (config/aprobaciones.php) ──
     if ($act === 'delegar') {
-        if (!tieneAccesoTotal() && empty($_SESSION['rol_aprueba'])) jsonErr('Su puesto no aprueba procesos: no tiene aprobaciones que delegar.');
+        if (!tieneAccesoTotal() && !facultadesUsuario($userId)) jsonErr('No tiene facultades de revisar, autorizar ni corregir: no tiene aprobaciones que delegar.');
         $delegado = (int)($_POST['delegado_id'] ?? 0);
         $desde = (string)($_POST['desde'] ?? '');
         $hasta = (string)($_POST['hasta'] ?? '');
@@ -161,8 +161,8 @@ $me = $stmt->fetch();
 
 $fotoUrl = $me['foto'] ? BASE_URL . $me['foto'] : BASE_URL . 'assets/images/proscala.png';
 
-// Delegación de aprobaciones: la puede hacer quien aprueba con su propio puesto
-$puedeDelegar = tieneAccesoTotal() || !empty($_SESSION['rol_aprueba']);
+// Delegación de aprobaciones: la puede hacer quien tiene facultades propias (Usuarios → Facultades)
+$puedeDelegar = tieneAccesoTotal() || (bool)facultadesUsuario($userId);
 $s = $pdo->prepare("SELECT d.*, u.nombre AS delegado FROM delegaciones d JOIN usuarios u ON u.id = d.delegado_id
                     WHERE d.usuario_id = ? AND d.cancelada = 0 AND d.hasta >= CURDATE() ORDER BY d.desde");
 $s->execute([$userId]);

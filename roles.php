@@ -49,12 +49,13 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($clave !== '' && ($padre === $clave || creaCiclo($clave, $padre))) {
             jsonErr('Un puesto no puede depender de sí mismo ni de un puesto que está debajo de él.');
         }
-        $aprueba = $clave === 'admin' ? 1 : (isset($_POST['aprueba']) ? 1 : 0);
-        $colegas = $aprueba && isset($_POST['aprueba_colegas']) ? 1 : 0;   // sus miembros se revisan entre sí
+        // Quién revisa, autoriza y corrige es de cada usuario (Usuarios → Facultades); el puesto define
+        // el rango (organigrama) y si sus miembros se revisan entre sí
+        $colegas = $clave !== 'admin' && isset($_POST['aprueba_colegas']) ? 1 : 0;
 
         if ($clave !== '') {
-            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba = ?, aprueba_colegas = ? WHERE clave = ?")->execute([$nombre, $padre, $aprueba, $colegas, $clave]);
-            registrarAuditoria($pdo, 'UPDATE', 'roles', 0, "Puesto $nombre ($clave): depende de " . ($padre ? $roles[$padre]['nombre'] : '—') . ', ' . ($aprueba ? 'aprueba procesos' : 'no aprueba procesos')
+            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba_colegas = ? WHERE clave = ?")->execute([$nombre, $padre, $colegas, $clave]);
+            registrarAuditoria($pdo, 'UPDATE', 'roles', 0, "Puesto $nombre ($clave): depende de " . ($padre ? $roles[$padre]['nombre'] : '—')
                 . ($colegas ? ', sus miembros se revisan entre sí' : ''));
             jsonOk([], 'Puesto actualizado.');
         }
@@ -64,9 +65,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $soloPropios = isset($roles[$copiar]) ? (int)$roles[$copiar]['solo_propios'] : 0;
         $pdo->beginTransaction();
         try {
-            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba, aprueba_colegas, solo_propios, orden)
-                           SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
-                ->execute([$clave, $nombre, $padre, $aprueba, $colegas, $soloPropios]);
+            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba_colegas, solo_propios, orden)
+                           SELECT ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
+                ->execute([$clave, $nombre, $padre, $colegas, $soloPropios]);
             // Copiar los módulos de un puesto parecido (opcional)
             if (isset($roles[$copiar]) && $copiar !== 'admin') {
                 $pdo->prepare("INSERT INTO rol_modulos (rol, modulo) SELECT ?, modulo FROM rol_modulos WHERE rol = ?")->execute([$clave, $copiar]);
@@ -129,19 +130,41 @@ $actuales = [];
 foreach ($pdo->query("SELECT rol, modulo FROM rol_modulos")->fetchAll() as $r) $actuales[$r['rol']][$r['modulo']] = true;
 $conteo = $pdo->query("SELECT rol, COUNT(*) FROM usuarios WHERE activo = 1 GROUP BY rol")->fetchAll(PDO::FETCH_KEY_PAIR);
 
+// Quién revisa y quién autoriza los procesos de cada puesto: usuarios activos con la facultad, en el
+// rango del organigrama (enRango) y, si su alcance es una selección, que eligieron a alguien del puesto
+$facs = $pdo->query("SELECT u.id, u.nombre, u.rol, f.facultad, f.alcance FROM usuario_facultades f
+    JOIN usuarios u ON u.id = f.usuario_id AND u.activo = 1 WHERE u.rol <> 'admin' AND f.facultad IN ('revisar', 'autorizar') ORDER BY u.nombre")->fetchAll();
+$elegidos = [];
+foreach ($pdo->query("SELECT e.usuario_id, e.facultad, u.rol FROM usuario_facultad_usuarios e JOIN usuarios u ON u.id = e.sobre_usuario_id") as $e) {
+    $elegidos[$e['usuario_id']][$e['facultad']][$e['rol']] = true;
+}
+$quienes = [];        // [puesto][facultad] => [html del nombre]
+$conFacultades = [];  // puestos con algún usuario que revisa o autoriza (organigrama)
+foreach ($facs as $f) {
+    if (!empty($roles[$f['rol']]['solo_propios'])) continue;
+    $conFacultades[$f['rol']] = true;
+    foreach ($roles as $k => $_) {
+        if ($k === 'admin' || !enRango($f['rol'], $k)) continue;
+        if ($f['alcance'] === 'seleccion' && empty($elegidos[$f['id']][$f['facultad']][$k])) continue;
+        $quienes[$k][$f['facultad']][] = htmlspecialchars($f['nombre'])
+            . ($f['alcance'] === 'seleccion' ? ' <span class="text-muted" title="Solo los usuarios que eligió en Usuarios">(algunos)</span>' : '');
+    }
+}
+
 // Organigrama: hijos de cada puesto (un superior inexistente cuenta como raíz)
 $hijos = [];
 foreach ($roles as $k => $r) $hijos[isset($roles[$r['depende_de'] ?? '']) ? $r['depende_de'] : ''][] = $k;
-function ramaOrganigrama(array $hijos, array $roles, array $conteo, string $padre): string {
+function ramaOrganigrama(array $hijos, array $roles, array $conteo, array $conFacultades, string $padre): string {
     if (empty($hijos[$padre])) return '';
     $html = '<ul>';
     foreach ($hijos[$padre] as $k) {
         $n = (int)($conteo[$k] ?? 0);
-        $html .= '<li><span class="org-nodo' . ($roles[$k]['aprueba'] ? ' aprueba' : '') . '">'
+        $aprueba = $k === 'admin' || isset($conFacultades[$k]);
+        $html .= '<li><span class="org-nodo' . ($aprueba ? ' aprueba' : '') . '">'
             . htmlspecialchars($roles[$k]['nombre'])
-            . ($roles[$k]['aprueba'] ? ' <i class="fas fa-stamp" title="Aprueba procesos"></i>' : '')
+            . ($aprueba ? ' <i class="fas fa-stamp" title="Alguno de sus usuarios revisa o autoriza procesos"></i>' : '')
             . ' <small>' . $n . '</small></span>'
-            . ramaOrganigrama($hijos, $roles, $conteo, $k) . '</li>';
+            . ramaOrganigrama($hijos, $roles, $conteo, $conFacultades, $k) . '</li>';
     }
     return $html . '</ul>';
 }
@@ -182,7 +205,7 @@ include __DIR__ . '/includes/header.php';
       <div class="card-header"><i class="fas fa-sitemap"></i> Puestos y jerarquía</div>
       <div class="card-body p-0" style="overflow-x:auto;">
         <table class="table table-sm table-hover mb-0 tbl-puestos">
-          <thead><tr><th>Puesto</th><th>Depende de</th><th class="text-center">Aprueba procesos</th><th>Sus procesos los aprueban</th><th class="text-center">Usuarios</th><th></th></tr></thead>
+          <thead><tr><th>Puesto</th><th>Depende de</th><th>Sus procesos los revisan</th><th>Sus procesos los autorizan</th><th class="text-center">Usuarios</th><th></th></tr></thead>
           <tbody>
             <?php foreach ($roles as $k => $r): ?>
             <tr>
@@ -190,19 +213,17 @@ include __DIR__ . '/includes/header.php';
                 <?php if ($k === 'admin'): ?><span class="badge bg-danger ms-1">acceso total</span><?php endif; ?>
                 <?php if ($r['solo_propios'] && $k !== 'admin'): ?><span class="badge bg-warning text-dark ms-1" title="Solo ve y edita sus propias solicitudes">solo las suyas</span><?php endif; ?></td>
               <td><?= $r['depende_de'] && isset($roles[$r['depende_de']]) ? htmlspecialchars($roles[$r['depende_de']]['nombre']) : '<span class="text-muted">— (nivel superior)</span>' ?></td>
-              <td class="text-center"><?= $r['aprueba'] ? '<i class="fas fa-check text-success"></i>' : '<span class="text-muted">—</span>' ?></td>
+              <?php foreach (['revisar', 'autorizar'] as $fac): ?>
               <td style="font-size:.78rem;"><?php
-                // Superiores de su rama que aprueban (config/aprobaciones.php → esSuperiorDe), más el Administrador
-                $aprobadores = [];
-                // Colegas del mismo puesto, si se aprueban entre sí (cima del organigrama u opción del puesto)
-                if ($k !== 'admin' && puedenAprobarseEntreColegas($k)) $aprobadores[] = '<em>colegas de ' . htmlspecialchars($r['nombre']) . '</em>';
-                foreach ($roles as $k2 => $r2) if ($k2 !== 'admin' && $r2['aprueba'] && esSuperiorDe($k2, $k)) $aprobadores[] = htmlspecialchars($r2['nombre']);
+                // Usuarios con la facultad sobre este puesto (calculado arriba), más el Administrador
+                $nombres = $quienes[$k][$fac] ?? [];
                 echo $k === 'admin' ? '<span class="text-muted">Otro Administrador</span>'
-                    : implode(', ', $aprobadores) . ($aprobadores ? ' y ' : '') . '<span class="text-muted">Administrador</span>';
+                    : implode(', ', $nombres) . ($nombres ? ' y ' : '') . '<span class="text-muted">Administrador</span>';
               ?></td>
+              <?php endforeach; ?>
               <td class="text-center"><?= (int)($conteo[$k] ?? 0) ?></td>
               <td class="text-end" style="white-space:nowrap">
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba' => (int)$r['aprueba'], 'aprueba_colegas' => (int)($r['aprueba_colegas'] ?? 0)], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba_colegas' => (int)($r['aprueba_colegas'] ?? 0)], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
                 <?php if (!in_array($k, ROLES_SISTEMA, true)): ?>
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar" onclick='eliminarPuesto(<?= json_encode($k) ?>, <?= json_encode($r['nombre'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-trash"></i></button>
                 <?php endif; ?>
@@ -217,8 +238,8 @@ include __DIR__ . '/includes/header.php';
   <div class="col-lg-5">
     <div class="card h-100">
       <div class="card-header"><i class="fas fa-diagram-project"></i> Organigrama
-        <span class="ms-auto text-muted fw-normal" style="font-size:.72rem;"><i class="fas fa-stamp"></i> aprueba · número = usuarios activos</span></div>
-      <div class="card-body organigrama"><?= ramaOrganigrama($hijos, $roles, $conteo, '') ?></div>
+        <span class="ms-auto text-muted fw-normal" style="font-size:.72rem;"><i class="fas fa-stamp"></i> alguien revisa o autoriza · número = usuarios activos</span></div>
+      <div class="card-body organigrama"><?= ramaOrganigrama($hijos, $roles, $conteo, $conFacultades, '') ?></div>
     </div>
   </div>
 </div>
@@ -229,11 +250,14 @@ include __DIR__ . '/includes/header.php';
   <strong>Usuarios</strong> y <strong>Roles y Permisos</strong> son exclusivos del Administrador. Todos los usuarios pueden entrar a <strong>Mi Perfil</strong>.
   Cada puesto puede imprimir los documentos de los módulos a los que tiene acceso.
   Quien crea una solicitud puede <strong>editarla mientras nadie la haya revisado, autorizado ni rechazado</strong>.
-  Los puestos que <strong>aprueban procesos</strong> pueden revisarlos, autorizarlos, rechazarlos y corregirlos, nunca los que ellos mismos crearon
-  y solo si están <strong>por encima</strong> de quien creó el proceso en el organigrama (el Administrador puede con todos).
-  Los <strong>colegas del mismo puesto</strong> se revisan y corrigen entre sí en los puestos de la cima del organigrama (los que aprueban y no dependen de nadie: no hay nadie por encima)
+  Quién <strong>revisa</strong>, quién <strong>autoriza</strong> y quién <strong>corrige</strong> se define <strong>por usuario</strong> en
+  <a href="<?= BASE_URL ?>usuarios.php">Usuarios</a> (sección <em>Facultades</em>): cada facultad es independiente y tiene su alcance,
+  todos los puestos por debajo o solo los usuarios que se elijan. Quien revisa también puede rechazar lo que espera revisión; quien autoriza, lo ya revisado.
+  Siempre se respeta el organigrama: solo se aprueba lo de quien está <strong>por debajo</strong> en la misma rama, nunca lo propio (el Administrador puede con todos),
+  y los avisos le llegan a cada uno solo por lo que le toca (a quien solo autoriza no le llegan los de revisar).
+  Los <strong>colegas del mismo puesto</strong> se revisan y corrigen entre sí en los puestos de la cima del organigrama (no dependen de nadie: no hay nadie por encima)
   y en los que tienen marcado <em>"Sus miembros se revisan entre sí"</em> (editar el puesto).
-  Ejemplo: si Empleado depende de Contabilidad y Contabilidad de Finanzas, los procesos de un empleado los aprueban Contabilidad, Finanzas y sus superiores.
+  Ejemplo: si Empleado depende de Contabilidad y Contabilidad de Dirección Ejecutiva, la contadora puede revisar lo de los empleados y la directora autorizarlo.
 </div>
 <div class="card"><div class="card-body p-0" style="overflow-x:auto;">
   <form id="form-permisos">
@@ -304,16 +328,13 @@ include __DIR__ . '/includes/header.php';
             </select>
             <div class="form-text">El puesto inmediato superior: define dónde va en el organigrama.</div>
           </div>
-          <div class="form-check mb-3">
-            <input type="checkbox" name="aprueba" id="puesto-aprueba" class="form-check-input" value="1">
-            <label class="form-check-label" for="puesto-aprueba">Aprueba procesos <span class="text-muted">(revisar, autorizar, rechazar y corregir)</span></label>
-          </div>
-          <div class="form-check mb-3 ms-4" id="puesto-colegas-wrap">
+          <div class="form-check mb-3" id="puesto-colegas-wrap">
             <input type="checkbox" name="aprueba_colegas" id="puesto-colegas" class="form-check-input" value="1">
             <label class="form-check-label" for="puesto-colegas">Sus miembros se revisan entre sí
-              <span class="d-block text-muted small">Una persona de este puesto puede revisar, autorizar y corregir lo que creó otra del mismo puesto (nunca lo suyo).
+              <span class="d-block text-muted small">Una persona de este puesto puede revisar, autorizar y corregir lo que creó otra del mismo puesto (nunca lo suyo), según sus facultades en Usuarios.
                 En los puestos que no dependen de nadie ya es así.</span></label>
           </div>
+          <div class="form-text mb-3"><i class="fas fa-circle-info"></i> Quién revisa, autoriza y corrige se define por usuario en <a href="<?= BASE_URL ?>usuarios.php">Usuarios</a>.</div>
           <div class="mb-1" id="puesto-copiar-wrap">
             <label class="form-label">Copiar los módulos de</label>
             <select name="copiar_de" class="form-select">
@@ -347,10 +368,8 @@ function abrirPuesto(p) {
   document.getElementById('puesto-titulo').textContent = p.clave ? 'Editar puesto' : 'Nuevo puesto';
   document.getElementById('puesto-clave').value = p.clave || '';
   document.getElementById('puesto-nombre').value = p.nombre || '';
-  document.getElementById('puesto-aprueba').checked = !!p.aprueba;
-  document.getElementById('puesto-aprueba').disabled = p.clave === 'admin';
   document.getElementById('puesto-colegas').checked = !!p.aprueba_colegas;
-  document.getElementById('puesto-colegas-wrap').hidden = p.clave === 'admin' || !p.aprueba;
+  document.getElementById('puesto-colegas-wrap').hidden = p.clave === 'admin';
   document.getElementById('puesto-copiar-wrap').style.display = p.clave ? 'none' : '';
   // Un puesto no puede depender de sí mismo
   const sel = document.getElementById('puesto-depende');
@@ -358,11 +377,6 @@ function abrirPuesto(p) {
   sel.value = p.depende_de || '';
   new bootstrap.Modal(document.getElementById('modal-puesto')).show();
 }
-// "Se revisan entre sí" solo tiene sentido si el puesto aprueba procesos
-document.getElementById('puesto-aprueba')?.addEventListener('change', e => {
-  document.getElementById('puesto-colegas-wrap').hidden = !e.target.checked;
-  if (!e.target.checked) document.getElementById('puesto-colegas').checked = false;
-});
 function nuevoPuesto() { abrirPuesto({}); }
 function editarPuesto(p) { abrirPuesto(p); }
 async function guardarPuesto() {

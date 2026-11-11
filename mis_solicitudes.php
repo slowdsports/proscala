@@ -45,10 +45,10 @@ foreach (MIS_SOLICITUDES as $modulo => $q) {
         } elseif (in_array($r['estado'], PROCESOS[$modulo]['abiertos'], true)) {
             $falta = $flujo['revisado'] ? 'autorizar' : 'revisar';
             $excluir = array_filter([(int)($flujo['creado']['usuario_id'] ?? 0), (int)($flujo['revisado']['usuario_id'] ?? 0)]);
-            $quienes = aprobadoresProceso($pdo, $modulo, (int)$r['id'], $excluir);
+            $quienes = aprobadoresProceso($pdo, $modulo, (int)$r['id'], $excluir, $falta);
             $nombres = $quienes ? $pdo->query("SELECT nombre FROM usuarios WHERE id IN (" . implode(',', $quienes) . ") ORDER BY nombre")->fetchAll(PDO::FETCH_COLUMN) : [];
             $paso = ($falta === 'revisar' ? 'Esperando revisión' : 'Revisado; esperando autorización')
-                  . ($nombres ? ' de ' . implode(', ', $nombres) : ': no hay nadie más que pueda aprobarlo (revise el organigrama en Roles y Permisos)');
+                  . ($nombres ? ' de ' . implode(', ', $nombres) : ': no hay nadie más que pueda aprobarlo (revise el organigrama en Roles y Permisos y las facultades en Usuarios)');
             $clase = 'warning';
         } else {
             [$paso, $clase] = ['', 'secondary'];

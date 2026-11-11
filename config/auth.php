@@ -4,7 +4,8 @@ require_once __DIR__ . '/db.php';
 
 // ── Roles ──────────────────────────────────────────────────────────
 // Cada empresa define sus puestos en Roles y Permisos (tabla roles: nombre, de quién
-// depende, si aprueba procesos, si solo ve sus solicitudes). El Administrador (y el
+// depende, si sus miembros se revisan entre sí, si solo ve sus solicitudes; quién revisa,
+// autoriza y corrige es de cada usuario: config/aprobaciones.php). El Administrador (y el
 // super administrador) tiene acceso total; los demás puestos ven solo los módulos que
 // se les asignan (tabla rol_modulos). 'admin' y 'empleado' existen siempre: el sistema
 // los usa (administradores de empresa y usuarios creados desde Empleados).
@@ -220,11 +221,11 @@ function cargarPermisos(PDO $pdo, string $rol): void {
     $s = $pdo->prepare("SELECT modulo FROM rol_modulos WHERE rol = ?");
     $s->execute([$rol]);
     $_SESSION['modulos'] = $s->fetchAll(PDO::FETCH_COLUMN);
-    $s = $pdo->prepare("SELECT solo_propios, aprueba FROM roles WHERE clave = ?");
+    $s = $pdo->prepare("SELECT solo_propios FROM roles WHERE clave = ?");
     $s->execute([$rol]);
-    $o = $s->fetch() ?: ['solo_propios' => 0, 'aprueba' => 0];
-    $_SESSION['solo_propios'] = (bool)$o['solo_propios'];
-    $_SESSION['rol_aprueba']  = (bool)$o['aprueba'];
+    $_SESSION['solo_propios'] = (bool)$s->fetchColumn();
+    unset($_SESSION['rol_aprueba']);   // antes de 1.31.0: aprobar era del puesto; ahora, facultades de cada usuario
+    if (function_exists('facultadesUsuario')) facultadesUsuario(0, true);
 }
 
 // ¿El usuario solo puede ver y editar sus propias solicitudes?

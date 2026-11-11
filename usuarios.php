@@ -6,6 +6,82 @@ requireLogin();
 if (!tieneAccesoTotal()) { header('Location: ' . BASE_URL . paginaInicio()); exit; }
 $pagina = 'Usuarios del Sistema';
 
+/**
+ * Facultades enviadas en el formulario (fac[revisar|autorizar|corregir][on|alcance|usuarios][]),
+ * validadas para el puesto $rol: [facultad => true (todos por debajo) | [ids elegidos]]. Los elegidos
+ * deben estar dentro de su rango en el organigrama (config/aprobaciones.php → enRango). El
+ * Administrador las tiene todas sin guardarlas; un puesto con "solo sus solicitudes", ninguna.
+ */
+function facultadesDelFormulario(PDO $pdo, int $uid, string $rol): array {
+    if ($rol === 'admin' || !empty(roles()[$rol]['solo_propios'])) return [];
+    $nombres = $pdo->query("SELECT id, nombre, rol FROM usuarios")->fetchAll(PDO::FETCH_UNIQUE);
+    $f = [];
+    foreach (FACULTADES as $fac => [$etiqueta]) {
+        $dato = $_POST['fac'][$fac] ?? [];
+        if (empty($dato['on'])) continue;
+        if (($dato['alcance'] ?? 'todos') !== 'seleccion') { $f[$fac] = true; continue; }
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array)($dato['usuarios'] ?? [])))));
+        if (!$ids) jsonErr("$etiqueta: elija al menos un usuario, o use \"Todos los puestos por debajo\".");
+        foreach ($ids as $id) {
+            $o = $nombres[$id] ?? null;
+            if (!$o) jsonErr("$etiqueta: uno de los usuarios elegidos ya no existe.");
+            if ($id === $uid) jsonErr("$etiqueta: nadie aprueba ni corrige lo suyo; quítese de la lista.");
+            if (!enRango($rol, $o['rol'])) {
+                jsonErr("$etiqueta: {$o['nombre']} (" . rolLabel($o['rol']) . ') no está por debajo de ' . rolLabel($rol)
+                    . ' en el organigrama. Solo se eligen usuarios de puestos por debajo del suyo' . (puedenAprobarseEntreColegas($rol) ? ' o colegas de su mismo puesto.' : '.'));
+            }
+        }
+        $f[$fac] = $ids;
+    }
+    return $f;
+}
+
+/** Texto de unas facultades para la bitácora y la lista: "Revisar (todos), Autorizar (2 elegidos)". */
+function resumenFacultades(array $f): string {
+    $p = [];
+    foreach (FACULTADES as $fac => [$etiqueta]) {
+        if (isset($f[$fac])) $p[] = $etiqueta . ($f[$fac] === true ? ' (todos por debajo)' : ' (' . count($f[$fac]) . ' elegido' . (count($f[$fac]) === 1 ? '' : 's') . ')');
+    }
+    return $p ? implode(', ', $p) : 'ninguna';
+}
+
+/** Facultades guardadas de todos los usuarios: [usuario_id => [facultad => true | [ids]]]. */
+function facultadesGuardadas(PDO $pdo): array {
+    $f = [];
+    foreach ($pdo->query("SELECT usuario_id, facultad, alcance FROM usuario_facultades") as $r) {
+        $f[(int)$r['usuario_id']][$r['facultad']] = $r['alcance'] === 'todos' ? true : [];
+    }
+    foreach ($pdo->query("SELECT usuario_id, facultad, sobre_usuario_id FROM usuario_facultad_usuarios ORDER BY sobre_usuario_id") as $r) {
+        if (is_array($f[(int)$r['usuario_id']][$r['facultad']] ?? null)) $f[(int)$r['usuario_id']][$r['facultad']][] = (int)$r['sobre_usuario_id'];
+    }
+    return $f;
+}
+
+/** Guarda las facultades del usuario y deja constancia si cambiaron. */
+function guardarFacultades(PDO $pdo, int $uid, string $nombre, array $nuevas): void {
+    $antes = facultadesGuardadas($pdo)[$uid] ?? [];
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM usuario_facultad_usuarios WHERE usuario_id = ?")->execute([$uid]);
+        $pdo->prepare("DELETE FROM usuario_facultades WHERE usuario_id = ?")->execute([$uid]);
+        $ins = $pdo->prepare("INSERT INTO usuario_facultades (usuario_id, facultad, alcance) VALUES (?,?,?)");
+        $sel = $pdo->prepare("INSERT INTO usuario_facultad_usuarios (usuario_id, facultad, sobre_usuario_id) VALUES (?,?,?)");
+        foreach ($nuevas as $fac => $alcance) {
+            $ins->execute([$uid, $fac, $alcance === true ? 'todos' : 'seleccion']);
+            if (is_array($alcance)) foreach ($alcance as $id) $sel->execute([$uid, $fac, $id]);
+        }
+        $pdo->commit();
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        jsonErr('No se pudieron guardar las facultades: ' . $e->getMessage());
+    }
+    facultadesUsuario(0, true);
+    $normal = function (array $f): array { ksort($f); foreach ($f as &$v) if (is_array($v)) sort($v); return $f; };
+    if ($normal($antes) !== $normal($nuevas)) {
+        registrarAuditoria($pdo, 'UPDATE', 'usuario_facultades', $uid, "Facultades de $nombre: " . resumenFacultades($nuevas) . ' (antes: ' . resumenFacultades($antes) . ')');
+    }
+}
+
 if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $_act = $_POST['_action'] ?? '';
@@ -45,6 +121,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (emailEnUso($pdoMaster, $d['email'], $empresaId, $actual['email'] ?? '')) jsonErr('Ese correo ya está registrado en esta empresa.');
         if (!empty($actual['proveedor_id'])) $empleadoId = null;   // consultor: no es empleado
+        $facultades = facultadesDelFormulario($pdo, $uid, $d['rol']);   // se valida antes de guardar nada
 
         try {
             if ($uid) {
@@ -55,6 +132,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare("UPDATE usuarios SET password=?, pendiente_activacion=0, debe_cambiar_password=1 WHERE id=?")
                         ->execute([password_hash($_POST['new_password'], PASSWORD_BCRYPT), $uid]);
                 }
+                guardarFacultades($pdo, $uid, $d['nombre'], $facultades);
                 jsonOk([],'Usuario actualizado.');
             } else {
                 // Usuario nuevo: crea su propia contraseña con el enlace que recibe por correo
@@ -67,6 +145,7 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw $e;
                 }
                 $nuevoId = (int)$pdo->lastInsertId();
+                if ($facultades) guardarFacultades($pdo, $nuevoId, $d['nombre'], $facultades);
                 if (!$d['activo']) jsonOk(['id' => $nuevoId], 'Usuario creado (inactivo). Al activarlo, envíele la invitación con el botón del sobre.');
                 $envio = enviarActivacion($pdo, $pdoMaster, (int)$empresaId, $nuevoId);
                 jsonOk(['id' => $nuevoId], $envio === true
@@ -113,6 +192,19 @@ $bloqueados = count(array_filter($usuarios, fn($u) => $u['bloqueado_en']));
 $_s = $pdoMaster->prepare("SELECT email FROM accesos WHERE empresa_id=? AND superadmin=1");
 $_s->execute([$_SESSION['empresa_id']]);
 $superadmins = array_map('strtolower', $_s->fetchAll(PDO::FETCH_COLUMN));
+
+// Facultades: las de cada usuario; para el formulario, a qué puestos alcanza cada puesto (su rango en el
+// organigrama) y por qué algunos no tienen (Administrador: todas; "solo sus solicitudes": ninguna)
+$facGuardadas = facultadesGuardadas($pdo);
+$rangoPuestos = $notaPuestos = [];
+foreach (roles() as $k => $r) {
+    $rangoPuestos[$k] = array_values(array_filter(array_keys(roles()), fn($o) => $o !== 'admin' && enRango($k, $o)));
+    if ($k === 'admin') $notaPuestos[$k] = 'El Administrador tiene todas las facultades sobre todos los usuarios.';
+    elseif ($r['solo_propios']) $notaPuestos[$k] = 'Este puesto solo ve sus propias solicitudes: no revisa, autoriza ni corrige.';
+    elseif (!$rangoPuestos[$k]) $notaPuestos[$k] = 'Este puesto no tiene puestos por debajo en el organigrama: no hay a quién revisar, autorizar ni corregir.';
+}
+$datosFacultades = ['rango' => $rangoPuestos, 'nota' => $notaPuestos,
+    'usuarios' => array_map(fn($u) => ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'rol' => $u['rol'], 'puesto' => rolLabel($u['rol']), 'activo' => (bool)$u['activo']], $usuarios)];
 include __DIR__ . '/includes/header.php';
 ?>
 <div class="page-header">
@@ -128,7 +220,7 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 <div class="card"><div class="card-body p-0">
   <table id="tbl-usr" class="table-proscala w-100">
-    <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Último Acceso</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Facultades</th><th>Último Acceso</th><th>Estado</th><th></th></tr></thead>
     <tbody>
       <?php foreach($usuarios as $u): ?>
       <tr>
@@ -142,6 +234,16 @@ include __DIR__ . '/includes/header.php';
           <?php endif; ?></td>
         <td><?= htmlspecialchars($u['email']) ?></td>
         <td><span class="badge bg-<?= $u['rol'] === 'admin' ? 'danger' : 'primary' ?>"><?= htmlspecialchars(rolLabel($u['rol'])) ?></span><?php if (in_array(strtolower($u['email']), $superadmins, true)): ?> <span class="badge bg-dark"><i class="fas fa-crown"></i> Super Admin</span><?php endif; ?></td>
+        <td style="font-size:.78rem;"><?php
+          $uf = $u['rol'] === 'admin' ? [] : (!empty(roles()[$u['rol']]['solo_propios']) ? [] : ($facGuardadas[(int)$u['id']] ?? []));
+          if ($u['rol'] === 'admin') echo '<span class="text-muted">Todas</span>';
+          elseif (!$uf) echo '<span class="text-muted">—</span>';
+          else foreach (FACULTADES as $fac => [$etiqueta]) {
+              if (!isset($uf[$fac])) continue;
+              $todos = $uf[$fac] === true;
+              echo '<span class="badge bg-' . ($todos ? 'info text-dark' : 'light text-dark border') . ' me-1" title="'
+                  . ($todos ? 'Sobre todos los puestos por debajo' : count($uf[$fac]) . ' usuario(s) elegido(s)') . '">' . $etiqueta . ($todos ? '' : ' (' . count($uf[$fac]) . ')') . '</span>';
+          } ?></td>
         <td><?= $u['ultimo_acceso']?date('d/m/Y H:i',strtotime($u['ultimo_acceso'])):'—' ?></td>
         <td><?= $u['activo']?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-danger">Inactivo</span>' ?>
           <?php if ($u['pendiente_activacion']): ?><span class="badge bg-warning text-dark" title="Aún no crea su contraseña con el enlace que recibió por correo"><i class="fas fa-envelope"></i> Sin activar</span><?php endif; ?>
@@ -154,7 +256,7 @@ include __DIR__ . '/includes/header.php';
           <?php if ($u['bloqueado_en']): ?>
           <button class="btn btn-sm btn-danger py-0 px-2" title="Desbloquear" onclick='desbloquearUsuario(<?= (int)$u['id'] ?>, <?= json_encode($u['nombre'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-lock-open"></i></button>
           <?php endif; ?>
-          <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='editUser(<?= json_encode(['id'=>$u['id'],'nombre'=>$u['nombre'],'email'=>$u['email'],'rol'=>$u['rol'],'activo'=>$u['activo'],'empleado_id'=>$u['empleado_id'],'proveedor_id'=>$u['proveedor_id']], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button></td>
+          <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='editUser(<?= json_encode(['id'=>$u['id'],'nombre'=>$u['nombre'],'email'=>$u['email'],'rol'=>$u['rol'],'activo'=>$u['activo'],'empleado_id'=>$u['empleado_id'],'proveedor_id'=>$u['proveedor_id'],'fac'=>(object)($facGuardadas[(int)$u['id']] ?? [])], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button></td>
       </tr>
       <?php endforeach; ?>
     </tbody>
@@ -162,7 +264,7 @@ include __DIR__ . '/includes/header.php';
 </div></div>
 
 <div class="modal fade" id="modal-user" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title"><i class="fas fa-user-shield"></i> <span id="usr-title">Nuevo Usuario</span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
@@ -191,6 +293,30 @@ include __DIR__ . '/includes/header.php';
             </select>
             <div class="form-text">Su ficha en Empleados. Con ella el sistema lo reconoce como responsable de su caja chica, firmante y dueño de sus solicitudes.</div>
           </div>
+          <div class="border rounded p-2 mb-3" id="u-fac-grupo">
+            <div class="fw-semibold mb-1"><i class="fas fa-stamp"></i> Facultades en el flujo de aprobación</div>
+            <div class="form-text mt-0 mb-2">Cada una es independiente. Solo alcanzan a usuarios de puestos por debajo del suyo en el
+              <a href="<?= BASE_URL ?>roles.php">organigrama</a>, y los avisos le llegan solo por lo que puede hacer
+              (si solo autoriza, no recibe los de revisar). Nadie aprueba ni corrige lo que él mismo creó.</div>
+            <div class="text-muted small" id="u-fac-nota" hidden></div>
+            <?php foreach (FACULTADES as $fac => [$etiqueta, $desc]): ?>
+            <div class="fac-item mb-2" data-fac="<?= $fac ?>">
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input fac-on" id="fac-<?= $fac ?>" name="fac[<?= $fac ?>][on]" value="1">
+                <label class="form-check-label" for="fac-<?= $fac ?>"><strong><?= $etiqueta ?></strong> <span class="text-muted small">— <?= htmlspecialchars($desc) ?></span></label>
+              </div>
+              <div class="fac-detalle ms-4 mt-1" hidden>
+                <select class="form-select form-select-sm fac-alcance no-search" name="fac[<?= $fac ?>][alcance]">
+                  <option value="todos">Todos los puestos por debajo del suyo</option>
+                  <option value="seleccion">Solo los usuarios que elija</option>
+                </select>
+                <div class="fac-sel mt-1" hidden>
+                  <select class="form-select fac-usuarios" name="fac[<?= $fac ?>][usuarios][]" multiple data-placeholder="Elija los usuarios"></select>
+                </div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
           <div class="alert alert-info py-2 small" id="u-aviso-nuevo"><i class="fas fa-envelope"></i> El usuario recibirá un correo con un enlace para crear su contraseña y activar su cuenta.</div>
           <div class="mb-3" id="u-pass-grupo" style="display:none"><label class="form-label">Nueva contraseña <small class="text-muted">(vacío para no cambiarla; el usuario deberá cambiarla al entrar)</small></label><input type="password" name="new_password" id="u-pass" class="form-control" minlength="8"></div>
           <div class="form-check"><input type="checkbox" name="activo" class="form-check-input" id="u-activo" checked><label class="form-check-label" for="u-activo">Activo</label></div>
@@ -204,8 +330,46 @@ include __DIR__ . '/includes/header.php';
   </div>
 </div>
 <?php
-$extraJs = <<<'JS'
+$extraJs = str_replace('__FACULTADES__', json_encode($datosFacultades, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), <<<'JS'
 initDataTable('#tbl-usr');
+// ── Facultades: según el puesto elegido, a quién se puede elegir (su rango en el organigrama) ──
+const FAC = __FACULTADES__;
+// fac: las facultades a mostrar ({revisar: true | [ids], …}); null conserva lo marcado (cambio de puesto)
+function mostrarFacultades(fac) {
+  const rol = document.getElementById('u-rol').value;
+  const uid = +document.getElementById('u-id').value;
+  const nota = FAC.nota[rol] || '';
+  const notaEl = document.getElementById('u-fac-nota');
+  notaEl.textContent = nota;
+  notaEl.hidden = !nota;
+  const rango = FAC.rango[rol] || [];
+  const candidatos = FAC.usuarios.filter(u => u.id !== uid && rango.includes(u.rol));
+  document.querySelectorAll('#u-fac-grupo .fac-item').forEach(item => {
+    const f = item.dataset.fac;
+    const on = item.querySelector('.fac-on'), alcance = item.querySelector('.fac-alcance'), sel = item.querySelector('.fac-usuarios');
+    item.hidden = !!nota;
+    if (fac) {
+      on.checked = f in fac;
+      alcance.value = Array.isArray(fac[f]) ? 'seleccion' : 'todos';
+    }
+    const elegidos = (fac ? (Array.isArray(fac[f]) ? fac[f] : []) : ($(sel).val() || [])).map(String);
+    $(sel).empty();
+    candidatos.forEach(u => sel.add(new Option(u.nombre + ' — ' + u.puesto + (u.activo ? '' : ' (inactivo)'), u.id, false, elegidos.includes(String(u.id)))));
+    $(sel).trigger('change');
+    detalleFacultad(item);
+  });
+}
+function detalleFacultad(item) {
+  const on = item.querySelector('.fac-on').checked;
+  item.querySelector('.fac-detalle').hidden = !on;
+  item.querySelector('.fac-sel').hidden = !on || item.querySelector('.fac-alcance').value !== 'seleccion';
+}
+document.querySelectorAll('#u-fac-grupo .fac-item').forEach(item => {
+  item.querySelector('.fac-on').addEventListener('change', () => detalleFacultad(item));
+  item.querySelector('.fac-alcance').addEventListener('change', () => detalleFacultad(item));
+});
+$('#u-rol').on('change', () => mostrarFacultades(null));
+mostrarFacultades({});
 // Nuevo: sin contraseña (la crea con el enlace del correo). Editar: se puede poner una nueva
 function modoFormUsuario(editando) {
   document.getElementById('u-aviso-nuevo').style.display = editando ? 'none' : '';
@@ -217,6 +381,7 @@ function editUser(u){
   document.getElementById('u-email').value=u.email;
   document.getElementById('u-rol').value=u.rol;
   $('#u-rol').trigger('change');
+  mostrarFacultades(u.fac || {});
   document.getElementById('u-activo').checked=u.activo==1;
   document.getElementById('u-empleado').value=u.empleado_id||'';
   document.getElementById('u-empleado-grupo').hidden=!!u.proveedor_id;   // consultor: no es empleado
@@ -240,6 +405,8 @@ document.getElementById('modal-user').addEventListener('hidden.bs.modal', () => 
   document.getElementById('u-id').value = 0;
   document.getElementById('usr-title').textContent = 'Nuevo Usuario';
   modoFormUsuario(false);
+  $('#u-rol').val('empleado').trigger('change.select2');
+  mostrarFacultades({});
 });
 async function accionUsuario(accion, id) {
   const fd = new FormData();
@@ -264,7 +431,7 @@ async function saveUser(){
     setTimeout(() => Nav.recargar(), 1200);
   } catch (e) { Toast.show(e.message, 'error'); }
 }
-JS;
+JS);
 include __DIR__ . '/includes/footer.php';
 ?>
 

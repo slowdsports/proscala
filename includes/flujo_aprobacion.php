@@ -45,9 +45,11 @@ if ($flujo):
       <button class="btn btn-sm btn-danger" onclick="flujoRechazar('<?= $flujoUrl ?>', <?= (int)$flujoId ?>, '<?= $flujoDef['rechazado'] ?>')"><i class="fas fa-times"></i> Rechazar</button>
       <?php endif; ?>
       <?php
-      // Por qué no puede actuar (solo si el proceso sigue pendiente y su puesto aprueba)
+      // Por qué no puede actuar (solo si el proceso sigue pendiente y tiene facultades): el motivo del
+      // paso en que va; quien autoriza y aún espera la revisión ve "Primero debe ser revisado"
       $flujoMotivo = $flujoAcc['autorizar'] !== true && $flujoAcc['revisar'] !== true && puedeAprobar()
-          && !$flujo['autorizado'] && !$flujo['rechazado'] ? $flujoAcc['autorizar'] : '';
+          && !$flujo['autorizado'] && !$flujo['rechazado']
+          ? ($flujo['revisado'] || $flujoAcc['autorizar'] === 'Primero debe ser revisado.' ? $flujoAcc['autorizar'] : $flujoAcc['revisar']) : '';
       if ($flujoMotivo && $flujoMotivo !== 'El proceso ya no está pendiente.'): ?>
       <span class="text-muted" style="font-size:.78rem"><i class="fas fa-circle-info"></i> <?= htmlspecialchars($flujoMotivo) ?></span>
       <?php endif; ?>

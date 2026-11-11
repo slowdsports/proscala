@@ -1,9 +1,17 @@
 <?php
 // ── Flujo de aprobación: Creado → Revisado → Autorizado ─────────────
-// Pueden revisar, autorizar y rechazar los puestos marcados "Aprueba procesos" en Roles y
-// Permisos (roles.aprueba), además del Administrador y el super administrador. La revisión
-// es obligatoria antes de autorizar, quien revisa no autoriza el mismo proceso y nadie
-// revisa, autoriza ni rechaza lo que él mismo creó.
+// Cada usuario tiene sus propias facultades, independientes entre sí (Usuarios → Facultades;
+// tablas usuario_facultades y usuario_facultad_usuarios):
+//   revisar   → revisa el proceso o lo rechaza mientras espera revisión;
+//   autorizar → lo autoriza o lo rechaza ya revisado;
+//   corregir  → edita el proceso que creó otro (config/edicion.php).
+// Cada facultad tiene su alcance: todos los puestos por debajo del suyo en el organigrama, o solo
+// los usuarios que se elijan (siempre dentro de ese rango: nunca alguien de su mismo nivel o de
+// otra rama, salvo los colegas de un puesto que se revisa entre sí). El Administrador y el super
+// administrador tienen todas sobre todos. La revisión es obligatoria antes de autorizar, quien
+// revisa no autoriza el mismo proceso y nadie revisa, autoriza ni rechaza lo que él mismo creó.
+// Los avisos (config/notificaciones.php) siguen las mismas facultades: a quien solo autoriza no le
+// llegan los de "revisar".
 // Quién creó el proceso está en registro_usuarios; los demás pasos, en aprobaciones.
 
 //   tabla      → tabla del proceso                    docs → tipos de print.php del proceso
@@ -28,18 +36,117 @@ const PROCESOS = [
     'liquidaciones.php'        => ['tabla' => 'liquidaciones',       'docs' => ['liq'],                    'autorizado' => 'aprobada', 'rechazado' => null, 'abiertos' => ['borrador']],
 ];
 
-// ── Delegación de aprobaciones (tabla delegaciones; se configura en Mi Perfil) ──
-// Quien aprueba procesos puede delegar sus aprobaciones en otro usuario por un rango de fechas
-// (p. ej. sus vacaciones). Mientras esté vigente, el delegado aprueba como si tuviera el puesto
-// de quien delegó: su jerarquía y el acceso a los módulos de procesos. No puede aprobar lo que
-// creó quien delegó ni autorizar lo que esa persona revisó. Cada paso queda "en nombre de" ella.
+// ── Facultades de cada usuario ──────────────────────────────────────
+const FACULTADES = [
+    'revisar'   => ['Revisar',   'Revisa los procesos y los rechaza mientras esperan revisión'],
+    'autorizar' => ['Autorizar', 'Autoriza los procesos ya revisados o los rechaza'],
+    'corregir'  => ['Corregir',  'Edita los procesos que crearon otros'],
+];
 
-/** ¿Un puesto aprueba procesos? */
-function rolApruebaProcesos(string $rol): bool {
-    if ($rol === 'admin') return true;
-    $r = roles()[$rol] ?? null;
-    return $r && $r['aprueba'] && !$r['solo_propios'];
+/**
+ * Facultades de un usuario: [facultad => true (todos los puestos por debajo) | [ids de usuarios elegidos]],
+ * solo las que tiene. El Administrador, todas sobre todos; un puesto con "solo sus solicitudes", ninguna.
+ * $refrescar vacía la memoria (tras guardarlas en Usuarios, y en las pruebas).
+ */
+function facultadesUsuario(int $uid, bool $refrescar = false): array {
+    static $cache = [];
+    if ($refrescar) { $cache = []; rolDeUsuario(0, true); }
+    if (!$uid || empty($GLOBALS['pdo'])) return [];
+    if (isset($cache[$uid])) return $cache[$uid];
+    $pdo = $GLOBALS['pdo'];
+    $rol = rolDeUsuario($uid);
+    if ($rol === 'admin') return $cache[$uid] = array_fill_keys(array_keys(FACULTADES), true);
+    if ($rol === null || !empty(roles()[$rol]['solo_propios'])) return $cache[$uid] = [];
+    $f = [];
+    try {
+        $s = $pdo->prepare("SELECT facultad, alcance FROM usuario_facultades WHERE usuario_id = ?");
+        $s->execute([$uid]);
+        $sel = $pdo->prepare("SELECT sobre_usuario_id FROM usuario_facultad_usuarios WHERE usuario_id = ? AND facultad = ?");
+        foreach ($s->fetchAll() as $r) {
+            if ($r['alcance'] === 'todos') { $f[$r['facultad']] = true; continue; }
+            $sel->execute([$uid, $r['facultad']]);
+            $f[$r['facultad']] = array_map('intval', $sel->fetchAll(PDO::FETCH_COLUMN));
+        }
+    } catch (PDOException $e) { /* base sin las tablas todavía (actualizar_bd.php) */ }
+    return $cache[$uid] = $f;
 }
+
+/** Puesto de un usuario activo (null si no existe o está inactivo). */
+function rolDeUsuario(int $uid, bool $refrescar = false): ?string {
+    static $cache = [];
+    if ($refrescar) $cache = [];
+    if (!$uid) return null;
+    if (array_key_exists($uid, $cache)) return $cache[$uid];
+    $s = $GLOBALS['pdo']->prepare("SELECT rol FROM usuarios WHERE id = ? AND activo = 1");
+    $s->execute([$uid]);
+    return $cache[$uid] = ($s->fetchColumn() ?: null);
+}
+
+/**
+ * ¿El puesto $rol está en el rango para aprobar o corregir lo que crea alguien del puesto $rolCreador?
+ * Por encima de él en su rama del organigrama, o su colega si el puesto se revisa entre sí.
+ */
+function enRango(string $rol, string $rolCreador): bool {
+    return $rol === 'admin' || esSuperiorDe($rol, $rolCreador) || ($rol === $rolCreador && puedenAprobarseEntreColegas($rol));
+}
+
+/**
+ * ¿El usuario $uid puede ejercer $facultad sobre lo creado por $creadorId (de puesto $rolCreador)?
+ * Hace falta tener la facultad, estar en el rango del organigrama y, si su alcance es una selección,
+ * que quien lo creó esté en ella. Sin creador conocido (procesos antiguos) basta el alcance "todos".
+ */
+function cubreFacultad(int $uid, string $facultad, ?int $creadorId, ?string $rolCreador): bool {
+    $f = facultadesUsuario($uid)[$facultad] ?? null;
+    if ($f === null) return false;
+    $rol = rolDeUsuario($uid);
+    if ($rol === 'admin') return true;
+    if (!$creadorId || !$rolCreador || !isset(roles()[$rolCreador])) return $f === true;
+    return enRango($rol, $rolCreador) && ($f === true || in_array($creadorId, $f, true));
+}
+
+/**
+ * ¿Con qué puede el usuario actual ejercer $facultad sobre lo creado por $creadorId? 'propia' (sus
+ * facultades), ['id', 'nombre'] de quien le delegó, o null si no puede. Nunca en nombre de quien lo creó.
+ */
+function habilitacion(string $facultad, ?int $creadorId, ?string $rolCreador) {
+    if (tieneAccesoTotal()) return 'propia';
+    if (soloRegistrosPropios()) return null;
+    if (cubreFacultad((int)($_SESSION['usuario_id'] ?? 0), $facultad, $creadorId, $rolCreador)) return 'propia';
+    foreach (delegantesActivos() as $id => $d) {
+        if ($id !== $creadorId && cubreFacultad($id, $facultad, $creadorId, $rolCreador)) return ['id' => $id, 'nombre' => $d['nombre']];
+    }
+    return null;
+}
+
+/** ¿Tiene el usuario actual la facultad sobre alguien (propia o por una delegación vigente)? */
+function tieneFacultad(string $facultad): bool {
+    if (tieneAccesoTotal()) return true;
+    if (soloRegistrosPropios()) return false;
+    if (isset(facultadesUsuario((int)($_SESSION['usuario_id'] ?? 0))[$facultad])) return true;
+    foreach (delegantesActivos() as $id => $_) if (isset(facultadesUsuario($id)[$facultad])) return true;
+    return false;
+}
+
+/** Por qué el usuario actual no puede ejercer $facultad sobre el proceso de $creador (['usuario_id', 'rol']). */
+function motivoSinFacultad(string $facultad, ?array $creador): string {
+    $verbo = ['revisar' => 'revisar', 'autorizar' => 'autorizar', 'corregir' => 'corregir'][$facultad];
+    if (!tieneFacultad($facultad)) return "Usted no tiene la facultad de $verbo procesos.";
+    $cid = (int)($creador['usuario_id'] ?? 0);
+    if ($cid && isset(delegantesActivos()[$cid]) && !cubreFacultad((int)$_SESSION['usuario_id'], $facultad, $cid, $creador['rol'] ?? null)) {
+        return 'No puede aprobar ni corregir, en nombre de quien le delegó, un proceso que esa persona creó.';
+    }
+    $rol = $creador['rol'] ?? null;
+    if ($rol && isset(roles()[$rol]) && !enRango($_SESSION['usuario_rol'] ?? '', $rol)) {
+        return 'Según el organigrama, solo un puesto superior a ' . roles()[$rol]['nombre'] . " puede $verbo este proceso.";
+    }
+    return "Su facultad de $verbo no incluye los procesos de esta persona (alcance definido en Usuarios).";
+}
+
+// ── Delegación de aprobaciones (tabla delegaciones; se configura en Mi Perfil) ──
+// Quien tiene facultades puede delegarlas en otro usuario por un rango de fechas (p. ej. sus
+// vacaciones). Mientras esté vigente, el delegado ejerce las facultades de quien delegó, con su
+// mismo alcance, y entra a los módulos de procesos de su puesto. No puede aprobar lo que creó
+// quien delegó ni autorizar lo que esa persona revisó. Cada paso queda "en nombre de" ella.
 
 /** Quienes delegaron hoy sus aprobaciones en el usuario actual: [usuario_id => ['rol', 'nombre', 'modulos']]. */
 function delegantesActivos(): array {
@@ -54,7 +161,7 @@ function delegantesActivos(): array {
         $s->execute([$uid]);
         $m = $GLOBALS['pdo']->prepare("SELECT modulo FROM rol_modulos WHERE rol = ?");
         foreach ($s->fetchAll() as $d) {
-            if (!rolApruebaProcesos($d['rol'])) continue;
+            if (!facultadesUsuario((int)$d['usuario_id'])) continue;
             $m->execute([$d['rol']]);
             $cache[$uid][(int)$d['usuario_id']] = ['rol' => $d['rol'], 'nombre' => $d['nombre'], 'modulos' => $m->fetchAll(PDO::FETCH_COLUMN)];
         }
@@ -69,15 +176,15 @@ function accesoPorDelegacion(string $modulo): bool {
     return false;
 }
 
-// ¿El puesto puede revisar y autorizar procesos? (propio o por delegación)
+// ¿El usuario puede revisar o autorizar procesos? (facultad propia o por delegación)
 function puedeAprobar(): bool {
-    if (soloRegistrosPropios()) return false;
-    return tieneAccesoTotal() || !empty($_SESSION['rol_aprueba']) || (bool)delegantesActivos();
+    return tieneFacultad('revisar') || tieneFacultad('autorizar');
 }
 
 // ── Jerarquía (organigrama de Roles y Permisos: roles.depende_de) ───
-// Los procesos de un puesto solo los revisan, autorizan, rechazan o corrigen los puestos que
-// están por encima de él en su rama del organigrama (y el Administrador, que tiene acceso total).
+// Los procesos de un puesto solo los revisan, autorizan, rechazan o corrigen usuarios de los puestos
+// que están por encima de él en su rama del organigrama (y el Administrador, que tiene acceso total),
+// según las facultades y el alcance de cada uno.
 
 /** ¿$superior está por encima de $rol en el organigrama (jefe directo o más arriba)? */
 function esSuperiorDe(string $superior, string $rol): bool {
@@ -89,59 +196,38 @@ function esSuperiorDe(string $superior, string $rol): bool {
 }
 
 /**
- * ¿La jerarquía permite al usuario actual aprobar un proceso creado por alguien del puesto $rolCreador?
- * null si sí; si no, el motivo. Sin creador conocido (procesos antiguos) no hay restricción.
- * Entre colegas del mismo puesto (nunca lo propio: eso lo impiden accionesFlujo y puedeEditar), si
- * el puesto aprueba procesos y: está en la cima del organigrama (no depende de nadie, p. ej.
- * Administrador: no hay nadie por encima), o tiene "sus miembros se revisan entre sí"
- * (roles.aprueba_colegas, en Roles y Permisos; p. ej. Administración).
+ * ¿Los colegas de un mismo puesto se aprueban y corrigen entre sí? (nunca lo propio: eso lo impiden
+ * accionesFlujo y puedeEditar). Sí, si el puesto está en la cima del organigrama (no depende de
+ * nadie: no hay nadie por encima) o tiene "sus miembros se revisan entre sí" (roles.aprueba_colegas,
+ * en Roles y Permisos; p. ej. Administración). Cada uno, además, necesita la facultad.
  */
 function puedenAprobarseEntreColegas(string $rol): bool {
     $p = roles()[$rol] ?? null;
-    return $p && !empty($p['aprueba']) && (empty($p['depende_de']) || !empty($p['aprueba_colegas']));
-}
-
-function motivoJerarquia(?string $rolCreador): ?string {
-    if (tieneAccesoTotal() || !$rolCreador || !isset(roles()[$rolCreador])) return null;
-    if (esSuperiorDe($_SESSION['usuario_rol'] ?? '', $rolCreador)) return null;
-    if (($_SESSION['usuario_rol'] ?? '') === $rolCreador && puedenAprobarseEntreColegas($rolCreador)) return null;
-    if (delegacionQueHabilita($rolCreador)) return null;
-    return 'Según el organigrama, solo un puesto superior a ' . roles()[$rolCreador]['nombre'] . ' puede aprobar o corregir este proceso.';
-}
-
-/** ¿Lo aprueba con su propio puesto (sin delegación)? */
-function apruebaConPuestoPropio(?string $rolCreador): bool {
-    if (tieneAccesoTotal()) return true;
-    if (empty($_SESSION['rol_aprueba'])) return false;
-    return !$rolCreador || !isset(roles()[$rolCreador]) || esSuperiorDe($_SESSION['usuario_rol'] ?? '', $rolCreador);
-}
-
-/** Quien delegó y permite aprobar un proceso creado por $rolCreador: ['id', 'nombre'] o null. */
-function delegacionQueHabilita(?string $rolCreador): ?array {
-    foreach (delegantesActivos() as $id => $d) {
-        if ($d['rol'] === 'admin' || !$rolCreador || !isset(roles()[$rolCreador]) || esSuperiorDe($d['rol'], $rolCreador)) {
-            return ['id' => $id, 'nombre' => $d['nombre']];
-        }
-    }
-    return null;
+    return $p && empty($p['solo_propios']) && (empty($p['depende_de']) || !empty($p['aprueba_colegas']));
 }
 
 /**
- * Puesto que define quién puede aprobar el proceso: el de quien lo creó. Una orden de pago
- * generada por otro proceso es parte de él: cuenta el creador del proceso de origen (no quien
- * la generó al autorizar, que es un jefe y dejaría la OP solo en manos de sus superiores).
+ * Quién define a quién le toca aprobar el proceso: quien lo creó (['usuario_id', 'rol']), o null.
+ * Una orden de pago generada por otro proceso es parte de él: cuenta el creador del proceso de origen
+ * (no quien la generó al autorizar, que es un jefe y dejaría la OP solo en manos de sus superiores).
  */
-function rolCreador(PDO $pdo, string $tabla, int $id): ?string {
+function creadorProceso(PDO $pdo, string $tabla, int $id): ?array {
     if ($tabla === 'ordenes_pago') {
         $s = $pdo->prepare("SELECT origen_tabla, origen_id FROM ordenes_pago WHERE id = ?");
         $s->execute([$id]);
         $o = $s->fetch();
-        if ($o && $o['origen_tabla'] && ($rol = rolCreador($pdo, $o['origen_tabla'], (int)$o['origen_id']))) return $rol;
+        if ($o && $o['origen_tabla'] && ($c = creadorProceso($pdo, $o['origen_tabla'], (int)$o['origen_id']))) return $c;
     }
-    $s = $pdo->prepare("SELECT u.rol FROM registro_usuarios r JOIN usuarios u ON u.id = r.usuario_id
+    $s = $pdo->prepare("SELECT u.id AS usuario_id, u.rol FROM registro_usuarios r JOIN usuarios u ON u.id = r.usuario_id
                         WHERE r.tabla = ? AND r.registro_id = ? AND r.participacion = 'creador' LIMIT 1");
     $s->execute([$tabla, $id]);
-    return $s->fetchColumn() ?: null;
+    $c = $s->fetch();
+    return $c ? ['usuario_id' => (int)$c['usuario_id'], 'rol' => $c['rol']] : null;
+}
+
+/** Puesto de quien creó el proceso (creadorProceso). */
+function rolCreador(PDO $pdo, string $tabla, int $id): ?string {
+    return creadorProceso($pdo, $tabla, $id)['rol'] ?? null;
 }
 
 /**
@@ -180,32 +266,41 @@ function accionesFlujo(array $flujo, string $modulo): array {
     $revisadoPor = (int)($flujo['revisado']['usuario_id'] ?? 0);
     $creador = $flujo['creado'] && $creadoPor === $uid;
     $abierto = in_array($flujo['estado'], $def['abiertos'], true) && !$flujo['autorizado'] && !$flujo['rechazado'];
+    $origen  = creadorProceso($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id']);
+    // Cada paso pide su facultad: revisar (y rechazar sin revisar) o autorizar (y rechazar ya revisado)
+    $puede = function (string $facultad) use ($abierto, $creador, $origen) {
+        if (!$abierto) return 'El proceso ya no está pendiente.';
+        if ($creador)  return 'No puede revisar, autorizar ni rechazar un proceso que usted creó.';
+        return habilitacion($facultad, $origen['usuario_id'] ?? null, $origen['rol'] ?? null) !== null ? true : motivoSinFacultad($facultad, $origen);
+    };
 
-    $base = !puedeAprobar() ? 'Su puesto no puede revisar ni autorizar procesos.'
-          : (!$abierto      ? 'El proceso ya no está pendiente.'
-          : ($creador       ? 'No puede revisar, autorizar ni rechazar un proceso que usted creó.'
-          : (in_array($creadoPor, $delegantes, true) && !apruebaConPuestoPropio(rolCreador($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id']))
-                            ? 'No puede aprobar, en nombre de quien le delegó, un proceso que esa persona creó.'
-          : (motivoJerarquia(rolCreador($GLOBALS['pdo'], $def['tabla'], (int)$flujo['id'])) ?? true))));
-    if ($base !== true)                                            $autorizar = $base;
-    elseif (!$flujo['revisado'])                                   $autorizar = 'Primero debe ser revisado.';
-    elseif ($revisadoPor === $uid)                                 $autorizar = 'Quien revisó no puede autorizar el mismo proceso.';
-    elseif (in_array($revisadoPor, $delegantes, true))             $autorizar = 'Lo revisó quien le delegó: la autorización le corresponde a otra persona.';
-    // Una OP generada por un proceso editado espera a que el proceso se autorice de nuevo
-    elseif ($modulo === 'compras_pago.php')                        $autorizar = origenOrdenPagoAutorizado($GLOBALS['pdo'], (int)$flujo['id']);
-    else                                                           $autorizar = true;
+    $autorizar = $puede('autorizar');
+    if ($autorizar === true) $autorizar = match (true) {
+        !$flujo['revisado']                       => 'Primero debe ser revisado.',
+        $revisadoPor === $uid                     => 'Quien revisó no puede autorizar el mismo proceso.',
+        in_array($revisadoPor, $delegantes, true) => 'Lo revisó quien le delegó: la autorización le corresponde a otra persona.',
+        // Una OP generada por un proceso editado espera a que el proceso se autorice de nuevo
+        $modulo === 'compras_pago.php'            => origenOrdenPagoAutorizado($GLOBALS['pdo'], (int)$flujo['id']),
+        default                                   => true,
+    };
+    $revisar = $puede('revisar');
+    if ($revisar === true && $flujo['revisado']) $revisar = 'El proceso ya fue revisado.';
     return [
-        'revisar'   => $base !== true ? $base : ($flujo['revisado'] ? 'El proceso ya fue revisado.' : true),
+        'revisar'   => $revisar,
         'autorizar' => $autorizar,
-        'rechazar'  => $def['rechazado'] === null ? 'Este proceso no se rechaza desde el flujo.' : $base,
+        'rechazar'  => $def['rechazado'] === null ? 'Este proceso no se rechaza desde el flujo.' : $puede($flujo['revisado'] ? 'autorizar' : 'revisar'),
     ];
 }
 
+/** Facultad que pide un paso del flujo. */
+const FACULTAD_DEL_PASO = ['revisado' => 'revisar', 'autorizado' => 'autorizar', 'rechazado' => null];
+
 function registrarPasoFlujo(PDO $pdo, string $modulo, int $id, string $paso, ?string $comentario = null): void {
     // Aprobado gracias a una delegación: queda "en nombre de" quien delegó
-    if ($comentario === null && in_array($paso, ['revisado', 'autorizado'], true)) {
-        $rolCreador = rolCreador($pdo, PROCESOS[$modulo]['tabla'], $id);
-        if (!apruebaConPuestoPropio($rolCreador) && ($d = delegacionQueHabilita($rolCreador))) $comentario = 'En nombre de ' . $d['nombre'];
+    if ($comentario === null && ($facultad = FACULTAD_DEL_PASO[$paso] ?? null)) {
+        $c = creadorProceso($pdo, PROCESOS[$modulo]['tabla'], $id);
+        $h = habilitacion($facultad, $c['usuario_id'] ?? null, $c['rol'] ?? null);
+        if (is_array($h)) $comentario = 'En nombre de ' . $h['nombre'];
     }
     $pdo->prepare("INSERT INTO aprobaciones (tabla, registro_id, paso, usuario_id, comentario) VALUES (?,?,?,?,?)
                    ON DUPLICATE KEY UPDATE usuario_id = VALUES(usuario_id), comentario = VALUES(comentario), created_at = CURRENT_TIMESTAMP")

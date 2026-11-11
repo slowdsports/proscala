@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.26.0';
+const VERSION_BD = '1.31.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -87,6 +87,13 @@ $PASOS = [
         'descripcion' => 'Consultores con acceso al sistema: categoría "Consultor" en proveedores y el puesto Consultor (sus anticipos y liquidaciones) (1.22.0)',
         'pendiente' => fn(PDO $db) => (bool)cambiosConsultores($db),
         'aplicar' => function (PDO $db) { foreach (cambiosConsultores($db) as $sql) $db->exec($sql); },
+    ],
+    [
+        // Después de las tablas del esquema (usuario_facultades); una sola vez (marca paso_facultades_usuarios): config/esquema.php
+        'base' => 'empresa',
+        'descripcion' => 'Facultades de aprobación por usuario: quien tiene un puesto que "aprueba procesos" recibe revisar, autorizar y corregir sobre todos los puestos por debajo — una sola vez (1.31.0)',
+        'pendiente' => fn(PDO $db) => !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_facultades_usuarios'")->fetchColumn(),
+        'aplicar' => function (PDO $db) { pasarFacultadesAUsuarios($db); },
     ],
 ];
 

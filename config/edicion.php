@@ -2,8 +2,9 @@
 // ── Edición de procesos ────────────────────────────────────────────
 // Cualquiera con el módulo puede crear un proceso. Quien lo creó puede editarlo mientras nadie
 // lo haya revisado, autorizado ni rechazado (procesos con flujo: PROCESOS); después, editarlo (o
-// eliminarlo) le corresponde a los puestos que aprueban procesos (puedeAprobar: roles.aprueba)
-// por encima de él. El Administrador y el super administrador pueden editar todo.
+// eliminarlo) le corresponde a quien tiene la facultad "corregir" sobre él (config/aprobaciones.php:
+// por encima en el organigrama y dentro de su alcance). El Administrador y el super administrador
+// pueden editar todo.
 // Se puede editar incluso ya autorizado, mientras no esté cerrado ni pagado: la edición
 // anula revisión y autorización, devuelve el proceso a su estado inicial y actualiza su
 // orden de pago (que también vuelve a pendiente).
@@ -79,8 +80,8 @@ function puedeEditar(PDO $pdo, string $modulo, int $id, string $accion = 'editar
             ? 'Ya fue revisado, autorizado o rechazado: ya no puede editarlo. Si hay que cambiarlo, debe corregirlo un rango superior.'
             : true;
     }
-    if (!puedeAprobar()) return 'Solo los puestos que aprueban procesos pueden editarlos.';
-    return motivoJerarquia(rolCreador($pdo, $def['tabla'], $id)) ?? true;
+    $c = creadorProceso($pdo, $def['tabla'], $id);
+    return habilitacion('corregir', $c['usuario_id'] ?? null, $c['rol'] ?? null) !== null ? true : motivoSinFacultad('corregir', $c);
 }
 
 /**
@@ -97,13 +98,14 @@ function motivoCierreSuperior(PDO $pdo, string $modulo, int $id, string $accion)
     if ($accion === 'eliminar') return "El proceso ya está cerrado ($estado) y no se puede eliminar.";
     if (tieneAccesoTotal()) return '';
     $motivo = "Ya está $estado: solo un rango superior a su responsable puede editarlo.";
-    if (esResponsableProceso($pdo, $modulo, $id) || !puedeAprobar()) return $motivo;
-    // Superior al responsable (su usuario); si no tiene usuario, a quien lo creó
-    $s = $pdo->prepare("SELECT u.rol FROM usuarios u JOIN `{$def['tabla']}` t ON u.empleado_id = t.`{$def['responsable']}`
+    if (esResponsableProceso($pdo, $modulo, $id)) return $motivo;
+    // Con la facultad "corregir" sobre el responsable (su usuario); si no tiene usuario, sobre quien lo creó
+    $s = $pdo->prepare("SELECT u.id AS usuario_id, u.rol FROM usuarios u JOIN `{$def['tabla']}` t ON u.empleado_id = t.`{$def['responsable']}`
                         WHERE t.id = ? AND u.activo = 1 LIMIT 1");
     $s->execute([$id]);
-    $rol = $s->fetchColumn() ?: rolCreador($pdo, $def['tabla'], $id);
-    return motivoJerarquia($rol) === null ? '' : $motivo;
+    $r = $s->fetch();
+    $r = $r ? ['usuario_id' => (int)$r['usuario_id'], 'rol' => $r['rol']] : creadorProceso($pdo, $def['tabla'], $id);
+    return habilitacion('corregir', $r['usuario_id'] ?? null, $r['rol'] ?? null) !== null ? '' : $motivo;
 }
 
 /** ¿El usuario es el empleado a cargo del proceso (EDICION_PROCESOS → responsable)? */

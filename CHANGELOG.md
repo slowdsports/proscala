@@ -11,6 +11,19 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.31.0 — 2026-11-11
+**Facultades de aprobación por usuario: revisar, autorizar y corregir**
+- Quién revisa, quién autoriza y quién corrige ahora se define **por usuario** y no por puesto. Se configura en **Usuarios → Facultades en el flujo de aprobación**. Las tres facultades son independientes:
+  - **Revisar**: revisa el proceso, o lo rechaza mientras espera revisión.
+  - **Autorizar**: autoriza lo ya revisado, o lo rechaza.
+  - **Corregir**: edita un proceso que creó otra persona.
+- Cada facultad tiene su **alcance**: *todos los puestos por debajo del suyo* o *solo los usuarios que elija*. Se sigue respetando el organigrama: solo se elige a personas de puestos por debajo del suyo en la misma rama, o colegas si el puesto se revisa entre sí. El sistema no deja guardar a alguien fuera de ese rango.
+- **Los avisos y correos siguen las facultades.** El aviso de "pendiente de su revisión" le llega a la persona más cercana por encima de quien creó el proceso que tiene *Revisar* sobre ella. El de "pendiente de su autorización" le llega a quien tiene *Autorizar*. Por ejemplo, una directora ejecutiva que solo autoriza ya no recibe los avisos de revisar. Los recordatorios y el escalamiento siguen la misma regla, y *Mis solicitudes* muestra a quién espera cada paso.
+- **Roles y Permisos**: el puesto ya no tiene "Aprueba procesos". Define el rango (organigrama) y la opción *Sus miembros se revisan entre sí*. Las columnas *Sus procesos los revisan* y *Sus procesos los autorizan* muestran quién atiende cada puesto.
+- **Delegación**: el delegado ejerce las mismas facultades de quien delegó, con el mismo alcance. Para delegar hay que tener alguna facultad.
+- **Migración**: al actualizar, cada usuario de un puesto que aprobaba procesos recibe las tres facultades sobre todos los puestos por debajo, así que nada cambia hasta que se ajusten en Usuarios.
+- Base de datos (`actualizar_bd.php`): tablas `usuario_facultades` y `usuario_facultad_usuarios`, y el paso único que asigna las facultades (marca `paso_facultades_usuarios`). La columna `roles.aprueba` queda sin uso.
+
 ## 1.30.0 — 2026-11-09
 **Corrector ortográfico y operaciones en los campos numéricos**
 - **Corrector ortográfico** en todo el sistema: los campos de texto subrayan las palabras mal escritas y ofrecen sugerencias con clic derecho (corrector del navegador, activado en `includes/header.php` y en la página principal). No se aplica a los campos de código, RTN, identidad, teléfono, cuenta bancaria, número de cheque, fechas ni a los buscadores (barra superior y Auditoría). El inicio de sesión y la recuperación de contraseña no cambian.

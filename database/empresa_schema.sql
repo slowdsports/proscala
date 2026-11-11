@@ -998,6 +998,22 @@ CREATE TABLE `solicitud_gastos_detalle` (
   CONSTRAINT `solicitud_gastos_detalle_ibfk_1` FOREIGN KEY (`solicitud_id`) REFERENCES `solicitud_gastos` (`id`) ON DELETE CASCADE,
   CONSTRAINT `solicitud_gastos_detalle_ibfk_2` FOREIGN KEY (`cuenta_id`) REFERENCES `cuentas_contables` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `usuario_facultad_usuarios` (
+  `usuario_id` int(11) NOT NULL,
+  `facultad` enum('revisar','autorizar','corregir') NOT NULL,
+  `sobre_usuario_id` int(11) NOT NULL,
+  PRIMARY KEY (`usuario_id`,`facultad`,`sobre_usuario_id`),
+  KEY `idx_sobre_usuario` (`sobre_usuario_id`),
+  CONSTRAINT `fk_facusr_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_facusr_sobre` FOREIGN KEY (`sobre_usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `usuario_facultades` (
+  `usuario_id` int(11) NOT NULL,
+  `facultad` enum('revisar','autorizar','corregir') NOT NULL,
+  `alcance` enum('todos','seleccion') NOT NULL DEFAULT 'todos',
+  PRIMARY KEY (`usuario_id`,`facultad`),
+  CONSTRAINT `fk_facultad_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `usuarios` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,

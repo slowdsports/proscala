@@ -149,7 +149,7 @@ Pulse su nombre en la barra superior. Allí puede:
 - **Cambiar su foto**: pulse la foto o **Cambiar foto** y elija una imagen JPG, PNG, GIF o WEBP de hasta 5 MB.
 - **Actualizar su nombre y correo.**
 - **Activar o desactivar los avisos por correo** (vea [Notificaciones](#7-notificaciones)).
-- **Delegar sus aprobaciones** si su puesto aprueba procesos (vea [Delegación](#66-delegación-de-aprobaciones)).
+- **Delegar sus aprobaciones** si tiene facultades de revisar, autorizar o corregir (vea [Delegación](#66-delegación-de-aprobaciones)).
 - **Cambiar su contraseña**: escriba la actual y la nueva dos veces.
 
 ### Mis solicitudes
@@ -170,13 +170,24 @@ Se aplica en: **Solicitud de Compra, Orden de Compra, Orden de Pago, Anticipos, 
 
 ### 6.1 Quién puede revisar y autorizar
 
-- Solo los puestos marcados como **"Aprueba procesos"** (y el Administrador).
-- Solo si el puesto está **por encima de quien creó el proceso** en el organigrama de la empresa.
+Cada usuario tiene sus propias **facultades**, que el administrador asigna en **Usuarios** (vea [Usuarios](#124-usuarios)). Son independientes entre sí:
+
+| Facultad | Qué permite |
+|---|---|
+| **Revisar** | Revisar el proceso, o rechazarlo mientras espera revisión. |
+| **Autorizar** | Autorizar el proceso ya revisado, o rechazarlo. |
+| **Corregir** | Editar un proceso que creó otra persona (vea [Corregir](#63-corregir-un-proceso)). |
+
+- Cada facultad tiene su **alcance**: **todos los puestos por debajo** del suyo, o **solo los usuarios que se elijan**.
+- Siempre se respeta el organigrama: solo se aprueba lo de quien está **por debajo** en la misma rama. No se puede elegir a alguien del mismo nivel o de otra rama, salvo los colegas de un puesto que se revisa entre sí.
 - **Nadie revisa, autoriza ni rechaza lo que él mismo creó.**
 - **Quien revisó no puede autorizar** el mismo proceso: se necesitan dos personas distintas.
 - La revisión es obligatoria antes de autorizar.
+- El Administrador tiene todas las facultades sobre todos.
 
-Ejemplo: si *Asistente* depende de *Coordinación* y *Coordinación* de *Dirección*, los procesos de un asistente los aprueban Coordinación, Dirección y el Administrador. Un puesto del mismo nivel (por ejemplo, otra coordinación) no puede aprobarlos.
+Ejemplo: *Asistente* depende de *Coordinación* y *Coordinación* de *Dirección*. Si la coordinadora tiene **Revisar** y la directora solo **Autorizar**, la coordinadora revisa los procesos de los asistentes y la directora los autoriza. A la directora no le llegan los avisos de "revisar"; solo los de "autorizar". Un puesto del mismo nivel (por ejemplo, otra coordinación) no puede aprobarlos.
+
+**Avisos.** Cada aviso le llega a quien puede dar el paso: el de "pendiente de su revisión" va a la persona más cercana por encima de quien creó el proceso que tiene **Revisar** sobre esa persona. El de "pendiente de su autorización" va a la más cercana que tiene **Autorizar**. Si nadie tiene la facultad, va al Administrador.
 
 ### 6.2 Revisar, autorizar o rechazar
 
@@ -188,7 +199,7 @@ Ejemplo: si *Asistente* depende de *Coordinación* y *Coordinación* de *Direcci
 
 ### 6.3 Corregir un proceso
 
-- Un proceso lo corrige un **puesto superior**, nunca quien lo creó.
+- Un proceso ya revisado lo corrige quien tiene la facultad **Corregir** sobre quien lo creó (un puesto superior), nunca quien lo creó. Revisar o autorizar no da permiso de corregir.
 - Se puede corregir aunque ya esté autorizado, mientras no esté cerrado ni pagado. Al corregirlo, **vuelve a revisión**: hay que revisarlo y autorizarlo de nuevo. Si tenía orden de pago, esta se actualiza y vuelve a pendiente.
 
 ### 6.4 Numeración y orden de pago
@@ -204,16 +215,16 @@ Los documentos impresos muestran **"Elaborado por", "Revisado por" y "Autorizado
 
 ### 6.6 Delegación de aprobaciones
 
-Si usted aprueba procesos y va a ausentarse (vacaciones, viaje), puede **delegar sus aprobaciones** en otra persona por un rango de fechas, desde **Mi Perfil → Delegación de aprobaciones**:
+Si usted tiene facultades (revisar, autorizar o corregir) y va a ausentarse (vacaciones, viaje), puede **delegar sus aprobaciones** en otra persona por un rango de fechas, desde **Mi Perfil → Delegación de aprobaciones**:
 
 1. Elija a la persona, las fechas (máximo 90 días) y, si quiere, el motivo.
 2. Pulse **Delegar aprobaciones**. La persona recibe un aviso.
 
-Mientras la delegación esté vigente, esa persona puede revisar y autorizar los procesos que le corresponden a usted, con su mismo nivel en el organigrama. En el panel del flujo queda **"En nombre de"** usted. No puede aprobar lo que usted creó ni autorizar lo que usted revisó. Puede cancelar la delegación en cualquier momento.
+Mientras la delegación esté vigente, esa persona puede hacer lo que usted puede hacer, con sus mismas facultades y el mismo alcance. En el panel del flujo queda **"En nombre de"** usted. No puede aprobar lo que usted creó ni autorizar lo que usted revisó. Puede cancelar la delegación en cualquier momento.
 
 ### 6.7 Recordatorios y escalamiento
 
-Si un proceso lleva varios días esperando su revisión o autorización, el sistema **le recuerda** a quien le toca. Si sigue esperando, **avisa al siguiente nivel del organigrama** para que lo atienda, y luego al siguiente. Los días se definen en **Configuración** (por defecto, recordatorio a los 2 días y escalamiento a los 5).
+Si un proceso lleva varios días esperando su revisión o autorización, el sistema **le recuerda** a quien le toca. Si sigue esperando, **avisa al siguiente nivel del organigrama** que tiene esa misma facultad (revisar o autorizar) para que lo atienda, y luego al siguiente. Los días se definen en **Configuración** (por defecto, recordatorio a los 2 días y escalamiento a los 5).
 
 ---
 
@@ -417,8 +428,8 @@ El catálogo contable se puede cargar desde **Excel**: descargue la **Plantilla 
 
 Aquí se define cómo se organiza su empresa en el sistema:
 
-- **Puestos y jerarquía**: cree los puestos e indique **de quién depende** cada uno. El **organigrama** se dibuja solo y define quién aprueba los procesos de quién (vea [Aprobaciones](#6-cómo-funcionan-las-aprobaciones)).
-- **Aprueba procesos**: marque los puestos que pueden revisar, autorizar, rechazar y corregir procesos.
+- **Puestos y jerarquía**: cree los puestos e indique **de quién depende** cada uno. El **organigrama** se dibuja solo y define el **rango**: quién puede aprobar los procesos de quién (vea [Aprobaciones](#6-cómo-funcionan-las-aprobaciones)). Quién revisa, autoriza y corrige se asigna a cada persona en [Usuarios](#124-usuarios).
+- **Sus miembros se revisan entre sí** (al editar un puesto): las personas de ese puesto pueden aprobar y corregir lo que crea otra del mismo puesto, según sus facultades.
 - **Solo sus propias solicitudes**: los puestos marcados solo ven y editan las solicitudes que crearon o que están a su nombre, y no pueden aprobarlas. Es lo habitual para el personal en general.
 - **Módulos**: marque qué módulos abre cada puesto y pulse **Guardar Permisos**.
 
@@ -426,13 +437,19 @@ El **Administrador** tiene acceso total. Los módulos Usuarios y Roles y Permiso
 
 El puesto **Consultor** (con "solo sus propias solicitudes" y los módulos Anticipos y Liquidaciones / Reembolsos) es el de los [consultores externos](#11-consultores-externos) con acceso. Como cualquier puesto, aquí se ajusta de quién depende (quién aprueba sus solicitudes) y qué módulos abre.
 
-> **Consejo:** revise que cada puesto que aprueba tenga al menos un usuario activo. La columna **"Sus procesos los aprueban"** muestra, para cada puesto, quién puede aprobar sus procesos. Si un puesto superior no tiene usuarios, los procesos de sus subordinados solo los podrán aprobar los puestos más arriba o el Administrador.
+> **Consejo:** las columnas **"Sus procesos los revisan"** y **"Sus procesos los autorizan"** muestran, para cada puesto, quién puede dar cada paso. *(algunos)* indica que esa persona solo atiende a los usuarios que eligió. Si un puesto no tiene a nadie que lo revise, sus procesos los revisa el Administrador.
 
 ### 12.4 Usuarios
 
 Cree usuarios, asígneles su puesto, actívelos o desactívelos y **desbloquee** a quien haya superado los intentos de contraseña. Los empleados reciben su usuario desde el módulo Empleados, y los consultores desde Proveedores.
 
 **Empleado vinculado.** Indique a qué ficha de Empleados corresponde cada usuario. Con ese vínculo, el sistema lo reconoce como **responsable de su caja chica**, como firmante de lo que solicita y como dueño de sus solicitudes. Al escribir el correo se sugiere el empleado con ese mismo correo. Un empleado solo puede estar vinculado a un usuario. La lista muestra *Sin empleado vinculado* en los usuarios que aún no lo tienen; revíselos, sobre todo los creados directamente en Usuarios.
+
+**Facultades en el flujo de aprobación.** Marque lo que puede hacer cada persona: **Revisar**, **Autorizar** y **Corregir**, cada una por separado (vea [Quién puede revisar y autorizar](#61-quién-puede-revisar-y-autorizar)). Para cada una elija el alcance:
+- **Todos los puestos por debajo del suyo**: por ejemplo, la directora ejecutiva que autoriza lo de toda la organización.
+- **Solo los usuarios que elija**: la lista solo ofrece personas de puestos por debajo del suyo en el organigrama. Si cambia el puesto del usuario, revise su selección; el sistema no deja guardar a alguien fuera de su rango.
+
+La columna **Facultades** de la lista muestra las de cada usuario; un número indica cuántos usuarios eligió.
 
 Cada usuario nuevo recibe por correo un enlace para crear su propia contraseña; mientras no lo use, aparece como **Sin activar**. Con el botón del sobre se le reenvía la invitación (el enlace anterior deja de servir).
 
@@ -457,7 +474,7 @@ El super administrador también puede descargar el **respaldo** del sistema; cad
 Su puesto no lo tiene permitido. Pida al administrador que se lo asigne en Roles y Permisos.
 
 **No me aparece el botón para revisar o autorizar.**
-El panel del flujo explica el motivo. Los más comunes son: usted creó el proceso, su puesto no está por encima de quien lo creó en el organigrama, su puesto no tiene "Aprueba procesos", o usted ya lo revisó y la autorización le toca a otra persona.
+El panel del flujo explica el motivo. Los más comunes son: usted creó el proceso, su puesto no está por encima de quien lo creó en el organigrama, usted no tiene la facultad de ese paso (por ejemplo, solo autoriza y el proceso aún espera revisión), su alcance no incluye a quien lo creó, o usted ya lo revisó y la autorización le toca a otra persona.
 
 **Me rechazaron una solicitud, ¿qué hago?**
 Abra el proceso y lea el motivo (y la evidencia, si la hay) en el panel del flujo. Un puesto superior puede corregirlo; al corregirse vuelve a revisión.

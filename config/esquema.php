@@ -175,6 +175,22 @@ function cambiosConsultores(PDO $db): array {
 }
 
 /**
+ * 1.31.0 · Las facultades del flujo de aprobación pasan del puesto a cada usuario (config/aprobaciones.php).
+ * Una sola vez (marca paso_facultades_usuarios: después se configuran en Usuarios y no se vuelven a
+ * copiar): cada usuario de un puesto que "aprobaba procesos" (roles.aprueba) recibe revisar, autorizar y
+ * corregir sobre todos los puestos por debajo, como hasta ahora. Devuelve cuántas facultades asignó.
+ */
+function pasarFacultadesAUsuarios(PDO $db): int {
+    $n = $db->exec("INSERT IGNORE INTO usuario_facultades (usuario_id, facultad, alcance)
+                    SELECT u.id, f.facultad, 'todos' FROM usuarios u JOIN roles r ON r.clave = u.rol
+                    JOIN (SELECT 'revisar' AS facultad UNION ALL SELECT 'autorizar' UNION ALL SELECT 'corregir') f
+                    WHERE r.aprueba = 1 AND r.solo_propios = 0 AND u.rol <> 'admin'");
+    $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
+               ('paso_facultades_usuarios', '1', 'actualizar_bd.php ya pasó las facultades de aprobación de los puestos a cada usuario')");
+    return (int)$n;
+}
+
+/**
  * 1.15.1 · Pedido expreso, una sola vez y solo en AHDECO: anula (no borra) las planillas
  * quincenales de octubre de 2026 para pagar ese mes con una planilla mensual. Se conservan con su
  * detalle, como constancia; sus órdenes de pago aún no pagadas se anulan y las ya pagadas quedan

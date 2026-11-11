@@ -1,7 +1,8 @@
 <?php
 // ── Notificaciones ─────────────────────────────────────────────────
 // Avisos de los procesos con flujo de aprobación (config/aprobaciones.php):
-//   - a quien le toca revisarlo o autorizarlo: que hay uno esperándolo;
+//   - a quien le toca revisarlo o autorizarlo (según sus facultades y su alcance: a quien solo
+//     autoriza no le llegan los de revisar): que hay uno esperándolo;
 //   - a quien lo creó y al empleado a cuyo nombre está: que fue revisado, autorizado,
 //     rechazado (con el motivo) o corregido.
 // Se guardan en la tabla notificaciones (campana de la barra superior → notificaciones.php) y
@@ -35,33 +36,45 @@ function nombreProceso(PDO $pdo, string $modulo, int $id): string {
 }
 
 /**
- * A quién le toca revisar o autorizar el proceso: los usuarios del puesto superior más cercano
- * (en la rama del organigrama de quien lo creó) que aprueba procesos; si ninguno tiene usuarios
- * activos, los Administradores. Nunca los de $excluir (quien lo creó, quien ya lo revisó).
+ * A quién le toca el paso ('revisar' o 'autorizar') del proceso: los usuarios del puesto superior más
+ * cercano (en la rama del organigrama de quien lo creó) que tienen esa facultad sobre quien lo creó;
+ * si no hay ninguno, los Administradores. Nunca los de $excluir (quien lo creó, quien ya lo revisó).
  */
-function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir, int $saltar = 0): array {
-    return conDelegados($pdo, nivelesAprobadores($pdo, $modulo, $id, $excluir)[$saltar] ?? [], $excluir);
+function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir, string $paso = 'revisar'): array {
+    return conDelegados($pdo, nivelesAprobadores($pdo, $modulo, $id, $excluir, $paso)[0] ?? [], $excluir);
 }
 
 /**
- * Niveles del organigrama que pueden aprobar el proceso, del más cercano a quien lo creó hacia
- * arriba: [[ids del nivel 1], [ids del nivel 2], …], terminando con los Administradores. Solo
- * cuentan los puestos que aprueban procesos y tienen usuarios activos (sin los de $excluir).
- * El nivel 0 recibe los avisos; los siguientes, el escalamiento (cron/recordatorios.php).
+ * Niveles del organigrama que pueden dar el paso ('revisar' o 'autorizar'), del más cercano a quien
+ * creó el proceso hacia arriba: [[ids del nivel 1], [ids del nivel 2], …], terminando con los
+ * Administradores. Solo cuentan los usuarios activos con la facultad del paso y un alcance que
+ * incluye a quien lo creó (cubreFacultad), sin los de $excluir: a quien solo autoriza no le llegan
+ * los avisos de revisar. Los colegas que eligieron expresamente a quien lo creó (puesto que se revisa
+ * entre sí) van en el primer nivel. El nivel 0 recibe los avisos; los siguientes, el escalamiento
+ * (cron/recordatorios.php).
  */
-function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir): array {
+function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir, string $paso = 'revisar'): array {
     $roles = roles();
-    $s = $pdo->prepare("SELECT id FROM usuarios WHERE rol = ? AND activo = 1");
-    $usuarios = function (string $rol) use ($s, $excluir): array {
-        $s->execute([$rol]);
-        return array_values(array_diff(array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)), $excluir));
+    $c = creadorProceso($pdo, PROCESOS[$modulo]['tabla'], $id);
+    [$cid, $rol] = [$c['usuario_id'] ?? null, $c['rol'] ?? null];
+    $s = $pdo->prepare("SELECT u.id FROM usuarios u JOIN usuario_facultades f ON f.usuario_id = u.id AND f.facultad = ?
+                        WHERE u.rol = ? AND u.activo = 1 ORDER BY u.id");
+    $usuarios = function (string $puesto, bool $soloElegido = false) use ($s, $paso, $excluir, $cid, $rol): array {
+        $s->execute([$paso, $puesto]);
+        return array_values(array_filter(array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)),
+            fn($u) => !in_array($u, $excluir, true) && cubreFacultad($u, $paso, $cid, $rol)
+                      && (!$soloElegido || is_array(facultadesUsuario($u)[$paso] ?? null))));
     };
     $niveles = [];
-    $rol = rolCreador($pdo, PROCESOS[$modulo]['tabla'], $id);
     for ($p = $rol ? ($roles[$rol]['depende_de'] ?? null) : null, $n = 0; $p !== null && $p !== 'admin' && $n < 50; $p = $roles[$p]['depende_de'] ?? null, $n++) {
-        if (!empty($roles[$p]['aprueba']) && empty($roles[$p]['solo_propios']) && ($ids = $usuarios($p))) $niveles[] = $ids;
+        if (empty($roles[$p]['solo_propios']) && ($ids = $usuarios($p))) $niveles[] = $ids;
     }
-    if ($admins = $usuarios('admin')) $niveles[] = $admins;
+    if ($rol && $rol !== 'admin' && puedenAprobarseEntreColegas($rol) && ($colegas = $usuarios($rol, true))) {
+        $niveles[0] = array_values(array_unique(array_merge($colegas, $niveles[0] ?? [])));
+    }
+    $s = $pdo->prepare("SELECT id FROM usuarios WHERE rol = 'admin' AND activo = 1 ORDER BY id");
+    $s->execute();
+    if ($admins = array_values(array_diff(array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN)), $excluir))) $niveles[] = $admins;
     return $niveles;
 }
 
@@ -169,7 +182,7 @@ function avisarPendiente(PDO $pdo, string $modulo, int $id, string $paso): void 
     $excluir = [(int)($flujo['creado']['usuario_id'] ?? 0)];
     if ($paso === 'autorizar') $excluir[] = (int)($flujo['revisado']['usuario_id'] ?? 0);
     $proceso = nombreProceso($pdo, $modulo, $id) . ($flujo['creado'] ? ' de ' . $flujo['creado']['nombre'] : '');
-    notificar($pdo, aprobadoresProceso($pdo, $modulo, $id, $excluir), 'pendiente',
+    notificar($pdo, aprobadoresProceso($pdo, $modulo, $id, $excluir, $paso), 'pendiente',
         $paso === 'revisar' ? 'Pendiente de su revisión' : 'Pendiente de su autorización',
         $paso === 'revisar' ? "$proceso espera su revisión." : "$proceso ya fue revisado y espera su autorización.",
         $modulo, $id);
@@ -234,7 +247,7 @@ function recordarPendientes(PDO $pdo, bool $enviar = true): array {
             // Nivel que corresponde hoy: 0 = recordatorio; 1, 2… = escalamiento cada $diasEsc días
             $nivel = $dias >= $diasEsc ? (int)floor($dias / $diasEsc) : 0;
             $excluir = array_filter([(int)($flujo['creado']['usuario_id'] ?? 0), $paso === 'autorizar' ? (int)($flujo['revisado']['usuario_id'] ?? 0) : 0]);
-            $niveles = nivelesAprobadores($pdo, $modulo, (int)$r['id'], $excluir);
+            $niveles = nivelesAprobadores($pdo, $modulo, (int)$r['id'], $excluir, $paso);
             $nivel = min($nivel, count($niveles) - 1);
             if ($nivel < 0) continue;   // nadie que pueda aprobarlo
             $ya->execute([$def['tabla'], $r['id'], $paso, $inicio, $nivel]);

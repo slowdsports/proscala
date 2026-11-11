@@ -30,7 +30,8 @@ INSERT INTO configuracion (clave, valor, descripcion) VALUES
 ('prefijo_nr', 'NR', 'Prefijo nota de recepción'),
 ('recordatorio_dias', '2', 'Días que un proceso espera antes de recordar a quien le toca aprobarlo'),
 ('escalamiento_dias', '5', 'Días que un proceso espera antes de avisar al siguiente nivel del organigrama'),
-('paso_colegas_administracion', '1', 'actualizar_bd.php ya activó que en Administración los colegas se revisen entre sí');
+('paso_colegas_administracion', '1', 'actualizar_bd.php ya activó que en Administración los colegas se revisen entre sí'),
+('paso_facultades_usuarios', '1', 'actualizar_bd.php ya pasó las facultades de aprobación de los puestos a cada usuario');
 
 -- Puestos iniciales (se agregan, renombran y ordenan en Roles y Permisos)
 -- aprueba_colegas: los miembros del puesto se revisan y corrigen entre sí (config/aprobaciones.php)
