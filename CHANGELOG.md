@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.33.0 — 2026-11-12
+**Formatos en Excel de los documentos**
+- Nueva carpeta **formatos/** con los 29 documentos que imprime el sistema (print.php) como formatos en blanco de Excel (.xlsx). Respetan el diseño del documento impreso: colores, encabezado con la organización, tipo y número del documento, datos generales, tablas, montos destacados, firmas y pie.
+- Las tablas calculan sus totales con fórmulas, las opciones fijas son listas desplegables y el resumen de cotizaciones marca en verde el menor precio de cada artículo y calcula la recomendación.
+- `php formatos/generar.php` los vuelve a generar (genéricos o, con `--empresa=<base>`, con el nombre, RTN, dirección, logo y prefijos de una empresa). No usa librerías externas.
+- Pruebas: el generador produce libros válidos y los de formatos/ están al día con él.
+
 ## 1.32.0 — 2026-11-11
 **Borradores automáticos de los formularios**
 - Lo que el usuario va llenando en cualquier formulario de un módulo se guarda solo como **borrador**, unos segundos después de cada cambio y de inmediato al cambiar de pantalla o cerrar la página. Ya no se pierde lo escrito si se cierra el navegador, se corta la conexión o vence la sesión.

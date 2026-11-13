@@ -288,6 +288,23 @@ Desde el detalle de un proceso, pulse el botón **PDF** (o su ícono en la lista
 
 Documentos disponibles: solicitud de compra, resumen de cotizaciones, orden de compra, orden de pago, proceso de compra completo, planillas (general, por proyecto, Credimpulsa y recibos individuales), planillas de asignación y de beneficios con sus recibos, anticipos y voucher de alimentación, liquidaciones de gastos, vacaciones, permisos, constancias (de trabajo, de salario, de tiempo de servicio y referencia laboral), caja chica, liquidación laboral, memorandos, circulares, comunicados y actas.
 
+### Formatos en Excel
+
+La carpeta **formatos/** contiene cada uno de estos documentos como formato en blanco de Excel (29 libros, numerados por módulo: Compras, Gastos, Planillas, RRHH y Administración). Conservan el diseño del documento impreso: barra de color, encabezado con la organización, número y tipo de documento, datos generales, tablas de detalle, montos destacados, firmas y pie.
+
+- Los campos quedan en blanco para llenarse; las tablas calculan sus totales con fórmulas (cantidad × precio, deducciones, neto, saldo a reintegrar o a pagar, resumen por proyecto o por cuenta).
+- Las opciones fijas (urgencia, forma de pago, quincena, tipo de permiso o de beneficio, estado, motivo de salida…) son listas desplegables. En algunos formatos el título cambia con la lista (planilla quincenal o mensual; memorándum, circular o comunicado).
+- En el resumen de cotizaciones se marca en verde el menor precio de cada artículo y se calcula la recomendación (un solo proveedor o compra por artículo).
+- Se imprimen en A4 ajustados al ancho de la página (las planillas, en horizontal).
+
+Los formatos son genéricos: el nombre, RTN, dirección y logo de la organización aparecen como campos por llenar. Para generarlos con los datos de una empresa (incluido su logo y sus prefijos de numeración), o después de cambiar una plantilla de impresión, ejecute en el servidor o en el equipo de desarrollo:
+
+```
+php formatos/generar.php                      # formatos genéricos en formatos/
+php formatos/generar.php --empresa=<base>     # con los datos de la empresa de esa base de datos
+php formatos/generar.php --salida=<carpeta>   # en otra carpeta
+```
+
 ---
 
 ## 10. Guía de módulos

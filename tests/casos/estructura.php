@@ -68,3 +68,34 @@ prueba('El despliegue protege los datos del servidor (.deployfilter)', function 
     foreach (['P /assets/uploads/***', 'P /storage/***', '- /tests/', '- /.git/'] as $regla) afirmar(str_contains($f, $regla), "falta la regla \"$regla\"");
     afirmar(str_contains((string)file_get_contents(RAIZ . '/.cpanel.yml'), "--filter='merge .deployfilter'"), '.cpanel.yml no usa .deployfilter');
 });
+
+prueba('Formatos en Excel: el generador produce libros válidos y los de formatos/ están al día', function () {
+    $tmp = sys_get_temp_dir() . '/proscala_formatos_' . bin2hex(random_bytes(3));
+    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(RAIZ . '/formatos/generar.php') . ' --salida=' . escapeshellarg($tmp) . ' 2>&1', $salida, $codigo);
+    try {
+        iguales(0, $codigo, 'formatos/generar.php terminó con error: ' . implode(' ', $salida));
+        $nuevos = glob("$tmp/*.xlsx");
+        $guardados = array_map('basename', glob(RAIZ . '/formatos/*.xlsx'));
+        afirmar(count($nuevos) >= 29, 'se generaron ' . count($nuevos) . ' formatos');
+        iguales(array_map('basename', $nuevos), $guardados, 'formatos de la carpeta formatos/');
+        foreach ($nuevos as $archivo) {
+            $zip = new ZipArchive();
+            afirmar($zip->open($archivo) === true, basename($archivo) . ' no es un .xlsx');
+            $zipG = new ZipArchive();
+            $zipG->open(RAIZ . '/formatos/' . basename($archivo));
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $parte = $zip->getNameIndex($i);
+                $xml = (string)$zip->getFromIndex($i);
+                if (str_ends_with($parte, '.xml') || str_ends_with($parte, '.rels')) afirmar(@simplexml_load_string($xml) !== false, basename($archivo) . ": $parte no es XML válido");
+                // Las hojas guardadas deben ser las que produce el generador (si cambió, vuelva a generarlos)
+                if (str_starts_with($parte, 'xl/worksheets/sheet') || $parte === 'xl/styles.xml') {
+                    afirmar($zipG->getFromName($parte) === $xml, basename($archivo) . ": $parte no está al día → ejecute php formatos/generar.php");
+                }
+            }
+            $zip->close(); $zipG->close();
+        }
+    } finally {
+        array_map('unlink', glob("$tmp/*") ?: []);
+        @rmdir($tmp);
+    }
+});

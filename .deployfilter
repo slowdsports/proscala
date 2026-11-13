@@ -14,6 +14,8 @@
 - /.deployfilter
 - /.gitignore
 - /.gitattributes
+- /formatos/generar.php
+- /formatos/lib/
 
 # Datos del servidor: nunca se borran
 P /assets/uploads/***
