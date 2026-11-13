@@ -191,6 +191,7 @@ Cada usuario tiene sus propias **facultades**, que el administrador asigna en **
 
 - Cada facultad tiene su **alcance**: **todos los puestos por debajo** del suyo, o **solo los usuarios que se elijan**.
 - Siempre se respeta el organigrama: solo se aprueba lo de quien está **por debajo** en la misma rama. No se puede elegir a alguien del mismo nivel o de otra rama, salvo los colegas de un puesto que se revisa entre sí.
+- Excepción para los puestos más altos: si un puesto tiene marcado que **lo aprueban sus subordinados directos** (p. ej. Dirección Ejecutiva), quienes dependen directamente de él pueden revisar y autorizar sus procesos (vea [Roles y Permisos](#123-roles-y-permisos)).
 - **Nadie revisa, autoriza ni rechaza lo que él mismo creó.**
 - **Quien revisó no puede autorizar** el mismo proceso: se necesitan dos personas distintas.
 - La revisión es obligatoria antes de autorizar.
@@ -458,6 +459,7 @@ Aquí se define cómo se organiza su empresa en el sistema:
 
 - **Puestos y jerarquía**: cree los puestos e indique **de quién depende** cada uno. El **organigrama** se dibuja solo y define el **rango**: quién puede aprobar los procesos de quién (vea [Aprobaciones](#6-cómo-funcionan-las-aprobaciones)). Quién revisa, autoriza y corrige se asigna a cada persona en [Usuarios](#124-usuarios).
 - **Sus miembros se revisan entre sí** (al editar un puesto): las personas de ese puesto pueden aprobar y corregir lo que crea otra del mismo puesto, según sus facultades.
+- **Sus subordinados directos revisan y autorizan sus procesos** (al editar un puesto): para los puestos más altos, como Dirección Ejecutiva, cuando por encima no hay nadie que use el sistema. Las personas de un puesto que depende directamente de él pueden revisar, autorizar o rechazar sus procesos (no corregirlos), según sus facultades. Quien revisa no autoriza el mismo proceso, y a ellos les llegan los avisos. Al actualizar a la versión 1.34.0 queda marcado en Dirección Ejecutiva.
 - **Solo sus propias solicitudes**: los puestos marcados solo ven y editan las solicitudes que crearon o que están a su nombre, y no pueden aprobarlas. Es lo habitual para el personal en general.
 - **Módulos**: marque qué módulos abre cada puesto y pulse **Guardar Permisos**.
 

@@ -7,7 +7,9 @@
 //   corregir  → edita el proceso que creó otro (config/edicion.php).
 // Cada facultad tiene su alcance: todos los puestos por debajo del suyo en el organigrama, o solo
 // los usuarios que se elijan (siempre dentro de ese rango: nunca alguien de su mismo nivel o de
-// otra rama, salvo los colegas de un puesto que se revisa entre sí). El Administrador y el super
+// otra rama, salvo los colegas de un puesto que se revisa entre sí). En un puesto alto marcado
+// "lo aprueban sus subordinados directos" (p. ej. Dirección Ejecutiva), quienes dependen
+// directamente de él también revisan y autorizan sus procesos (no los corrigen). El Administrador y el super
 // administrador tienen todas sobre todos. La revisión es obligatoria antes de autorizar, quien
 // revisa no autoriza el mismo proceso y nadie revisa, autoriza ni rechaza lo que él mismo creó.
 // Los avisos (config/notificaciones.php) siguen las mismas facultades: a quien solo autoriza no le
@@ -83,11 +85,14 @@ function rolDeUsuario(int $uid, bool $refrescar = false): ?string {
 }
 
 /**
- * ¿El puesto $rol está en el rango para aprobar o corregir lo que crea alguien del puesto $rolCreador?
- * Por encima de él en su rama del organigrama, o su colega si el puesto se revisa entre sí.
+ * ¿El puesto $rol está en el rango para ejercer $facultad sobre lo que crea alguien del puesto $rolCreador?
+ * Por encima de él en su rama del organigrama, o su colega si el puesto se revisa entre sí. Para revisar
+ * y autorizar (no para corregir), también su subordinado directo si el puesto de quien lo creó tiene
+ * "lo aprueban sus subordinados directos" (apruebanSubordinados). Sin $facultad, solo el rango común.
  */
-function enRango(string $rol, string $rolCreador): bool {
-    return $rol === 'admin' || esSuperiorDe($rol, $rolCreador) || ($rol === $rolCreador && puedenAprobarseEntreColegas($rol));
+function enRango(string $rol, string $rolCreador, ?string $facultad = null): bool {
+    return $rol === 'admin' || esSuperiorDe($rol, $rolCreador) || ($rol === $rolCreador && puedenAprobarseEntreColegas($rol))
+        || (in_array($facultad, ['revisar', 'autorizar'], true) && esSubordinadoQueAprueba($rol, $rolCreador));
 }
 
 /**
@@ -101,7 +106,7 @@ function cubreFacultad(int $uid, string $facultad, ?int $creadorId, ?string $rol
     $rol = rolDeUsuario($uid);
     if ($rol === 'admin') return true;
     if (!$creadorId || !$rolCreador || !isset(roles()[$rolCreador])) return $f === true;
-    return enRango($rol, $rolCreador) && ($f === true || in_array($creadorId, $f, true));
+    return enRango($rol, $rolCreador, $facultad) && ($f === true || in_array($creadorId, $f, true));
 }
 
 /**
@@ -136,8 +141,9 @@ function motivoSinFacultad(string $facultad, ?array $creador): string {
         return 'No puede aprobar ni corregir, en nombre de quien le delegó, un proceso que esa persona creó.';
     }
     $rol = $creador['rol'] ?? null;
-    if ($rol && isset(roles()[$rol]) && !enRango($_SESSION['usuario_rol'] ?? '', $rol)) {
-        return 'Según el organigrama, solo un puesto superior a ' . roles()[$rol]['nombre'] . " puede $verbo este proceso.";
+    if ($rol && isset(roles()[$rol]) && !enRango($_SESSION['usuario_rol'] ?? '', $rol, $facultad)) {
+        return 'Según el organigrama, solo un puesto superior a ' . roles()[$rol]['nombre']
+            . ($facultad !== 'corregir' && apruebanSubordinados($rol) ? ' o uno que dependa directamente de él' : '') . " puede $verbo este proceso.";
     }
     return "Su facultad de $verbo no incluye los procesos de esta persona (alcance definido en Usuarios).";
 }
@@ -204,6 +210,21 @@ function esSuperiorDe(string $superior, string $rol): bool {
 function puedenAprobarseEntreColegas(string $rol): bool {
     $p = roles()[$rol] ?? null;
     return $p && empty($p['solo_propios']) && (empty($p['depende_de']) || !empty($p['aprueba_colegas']));
+}
+
+/**
+ * ¿Los procesos del puesto $rol los revisan y autorizan también los puestos que dependen directamente
+ * de él? (roles.aprueban_subordinados, en Roles y Permisos). Para los puestos más altos (p. ej.
+ * Dirección Ejecutiva), cuando por encima no hay nadie que use el sistema. No incluye corregir.
+ */
+function apruebanSubordinados(string $rol): bool {
+    return $rol !== 'admin' && !empty(roles()[$rol]['aprueban_subordinados']);
+}
+
+/** ¿$rol depende directamente de $jefe y $jefe deja que sus subordinados directos aprueben sus procesos? */
+function esSubordinadoQueAprueba(string $rol, string $jefe): bool {
+    $r = roles()[$rol] ?? null;
+    return $r && empty($r['solo_propios']) && ($r['depende_de'] ?? null) === $jefe && apruebanSubordinados($jefe);
 }
 
 /**

@@ -52,11 +52,14 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // Quién revisa, autoriza y corrige es de cada usuario (Usuarios → Facultades); el puesto define
         // el rango (organigrama) y si sus miembros se revisan entre sí
         $colegas = $clave !== 'admin' && isset($_POST['aprueba_colegas']) ? 1 : 0;
+        $subordinados = $clave !== 'admin' && isset($_POST['aprueban_subordinados']) ? 1 : 0;
 
         if ($clave !== '') {
-            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba_colegas = ? WHERE clave = ?")->execute([$nombre, $padre, $colegas, $clave]);
+            $pdo->prepare("UPDATE roles SET nombre = ?, depende_de = ?, aprueba_colegas = ?, aprueban_subordinados = ? WHERE clave = ?")
+                ->execute([$nombre, $padre, $colegas, $subordinados, $clave]);
             registrarAuditoria($pdo, 'UPDATE', 'roles', 0, "Puesto $nombre ($clave): depende de " . ($padre ? $roles[$padre]['nombre'] : '—')
-                . ($colegas ? ', sus miembros se revisan entre sí' : ''));
+                . ($colegas ? ', sus miembros se revisan entre sí' : '')
+                . ($subordinados ? ', sus subordinados directos revisan y autorizan sus procesos' : ''));
             jsonOk([], 'Puesto actualizado.');
         }
 
@@ -65,9 +68,9 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $soloPropios = isset($roles[$copiar]) ? (int)$roles[$copiar]['solo_propios'] : 0;
         $pdo->beginTransaction();
         try {
-            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba_colegas, solo_propios, orden)
-                           SELECT ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
-                ->execute([$clave, $nombre, $padre, $colegas, $soloPropios]);
+            $pdo->prepare("INSERT INTO roles (clave, nombre, depende_de, aprueba_colegas, aprueban_subordinados, solo_propios, orden)
+                           SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(orden), 0) + 1 FROM roles")
+                ->execute([$clave, $nombre, $padre, $colegas, $subordinados, $soloPropios]);
             // Copiar los módulos de un puesto parecido (opcional)
             if (isset($roles[$copiar]) && $copiar !== 'admin') {
                 $pdo->prepare("INSERT INTO rol_modulos (rol, modulo) SELECT ?, modulo FROM rol_modulos WHERE rol = ?")->execute([$clave, $copiar]);
@@ -144,7 +147,7 @@ foreach ($facs as $f) {
     if (!empty($roles[$f['rol']]['solo_propios'])) continue;
     $conFacultades[$f['rol']] = true;
     foreach ($roles as $k => $_) {
-        if ($k === 'admin' || !enRango($f['rol'], $k)) continue;
+        if ($k === 'admin' || !enRango($f['rol'], $k, $f['facultad'])) continue;
         if ($f['alcance'] === 'seleccion' && empty($elegidos[$f['id']][$f['facultad']][$k])) continue;
         $quienes[$k][$f['facultad']][] = htmlspecialchars($f['nombre'])
             . ($f['alcance'] === 'seleccion' ? ' <span class="text-muted" title="Solo los usuarios que eligió en Usuarios">(algunos)</span>' : '');
@@ -211,7 +214,8 @@ include __DIR__ . '/includes/header.php';
             <tr>
               <td><strong><?= htmlspecialchars($r['nombre']) ?></strong>
                 <?php if ($k === 'admin'): ?><span class="badge bg-danger ms-1">acceso total</span><?php endif; ?>
-                <?php if ($r['solo_propios'] && $k !== 'admin'): ?><span class="badge bg-warning text-dark ms-1" title="Solo ve y edita sus propias solicitudes">solo las suyas</span><?php endif; ?></td>
+                <?php if ($r['solo_propios'] && $k !== 'admin'): ?><span class="badge bg-warning text-dark ms-1" title="Solo ve y edita sus propias solicitudes">solo las suyas</span><?php endif; ?>
+                <?php if (apruebanSubordinados($k)): ?><span class="badge bg-info text-dark ms-1" title="Los puestos que dependen directamente de él revisan y autorizan sus procesos">lo aprueban sus subordinados</span><?php endif; ?></td>
               <td><?= $r['depende_de'] && isset($roles[$r['depende_de']]) ? htmlspecialchars($roles[$r['depende_de']]['nombre']) : '<span class="text-muted">— (nivel superior)</span>' ?></td>
               <?php foreach (['revisar', 'autorizar'] as $fac): ?>
               <td style="font-size:.78rem;"><?php
@@ -223,7 +227,7 @@ include __DIR__ . '/includes/header.php';
               <?php endforeach; ?>
               <td class="text-center"><?= (int)($conteo[$k] ?? 0) ?></td>
               <td class="text-end" style="white-space:nowrap">
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba_colegas' => (int)($r['aprueba_colegas'] ?? 0)], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Editar" onclick='editarPuesto(<?= json_encode(['clave' => $k, 'nombre' => $r['nombre'], 'depende_de' => $r['depende_de'], 'aprueba_colegas' => (int)($r['aprueba_colegas'] ?? 0), 'aprueban_subordinados' => (int)($r['aprueban_subordinados'] ?? 0)], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-edit"></i></button>
                 <?php if (!in_array($k, ROLES_SISTEMA, true)): ?>
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar" onclick='eliminarPuesto(<?= json_encode($k) ?>, <?= json_encode($r['nombre'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="fas fa-trash"></i></button>
                 <?php endif; ?>
@@ -257,6 +261,8 @@ include __DIR__ . '/includes/header.php';
   y los avisos le llegan a cada uno solo por lo que le toca (a quien solo autoriza no le llegan los de revisar).
   Los <strong>colegas del mismo puesto</strong> se revisan y corrigen entre sí en los puestos de la cima del organigrama (no dependen de nadie: no hay nadie por encima)
   y en los que tienen marcado <em>"Sus miembros se revisan entre sí"</em> (editar el puesto).
+  En un puesto alto con <em>"Sus subordinados directos revisan y autorizan sus procesos"</em> (p. ej. Dirección Ejecutiva, si la Junta Directiva no usa el sistema),
+  quienes dependen directamente de él pueden revisar y autorizar sus procesos.
   Ejemplo: si Empleado depende de Contabilidad y Contabilidad de Dirección Ejecutiva, la contadora puede revisar lo de los empleados y la directora autorizarlo.
 </div>
 <div class="card"><div class="card-body p-0" style="overflow-x:auto;">
@@ -334,6 +340,13 @@ include __DIR__ . '/includes/header.php';
               <span class="d-block text-muted small">Una persona de este puesto puede revisar, autorizar y corregir lo que creó otra del mismo puesto (nunca lo suyo), según sus facultades en Usuarios.
                 En los puestos que no dependen de nadie ya es así.</span></label>
           </div>
+          <div class="form-check mb-3" id="puesto-subordinados-wrap">
+            <input type="checkbox" name="aprueban_subordinados" id="puesto-subordinados" class="form-check-input" value="1">
+            <label class="form-check-label" for="puesto-subordinados">Sus subordinados directos revisan y autorizan sus procesos
+              <span class="d-block text-muted small">Para los puestos más altos (p. ej. Dirección Ejecutiva), cuando por encima no hay nadie que use el sistema:
+                quienes están en un puesto que depende directamente de este pueden revisar, autorizar o rechazar sus procesos (no corregirlos), según sus facultades en Usuarios.
+                Quien revisa no autoriza el mismo proceso.</span></label>
+          </div>
           <div class="form-text mb-3"><i class="fas fa-circle-info"></i> Quién revisa, autoriza y corrige se define por usuario en <a href="<?= BASE_URL ?>usuarios.php">Usuarios</a>.</div>
           <div class="mb-1" id="puesto-copiar-wrap">
             <label class="form-label">Copiar los módulos de</label>
@@ -370,6 +383,8 @@ function abrirPuesto(p) {
   document.getElementById('puesto-nombre').value = p.nombre || '';
   document.getElementById('puesto-colegas').checked = !!p.aprueba_colegas;
   document.getElementById('puesto-colegas-wrap').hidden = p.clave === 'admin';
+  document.getElementById('puesto-subordinados').checked = !!p.aprueban_subordinados;
+  document.getElementById('puesto-subordinados-wrap').hidden = p.clave === 'admin';
   document.getElementById('puesto-copiar-wrap').style.display = p.clave ? 'none' : '';
   // Un puesto no puede depender de sí mismo
   const sel = document.getElementById('puesto-depende');

@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.34.0 — 2026-11-13
+**Los subordinados directos aprueban los procesos de los puestos más altos**
+- Antes, lo que creaba la directora ejecutiva solo podía aprobarlo el Administrador, porque la Junta Directiva no usa el sistema.
+- Nueva opción al editar un puesto en Roles y Permisos: **"Sus subordinados directos revisan y autorizan sus procesos"**. Con ella, las personas de un puesto que depende directamente de él (p. ej. Administración, bajo Dirección Ejecutiva) pueden revisar, autorizar o rechazar sus procesos, según sus facultades en Usuarios. No pueden corregirlos.
+- Se mantienen las reglas del flujo: nadie aprueba lo propio y quien revisa no autoriza el mismo proceso.
+- Los avisos y recordatorios de esos procesos les llegan a los subordinados directos. En Usuarios, la lista para elegir a quién revisan o autorizan incluye a su jefe directo, y Roles y Permisos los muestra en "Sus procesos los revisan / autorizan".
+- Base de datos (`actualizar_bd.php`): columna `roles.aprueban_subordinados`. Un paso único la activa en Dirección Ejecutiva.
+- Pruebas: los subordinados directos revisan, autorizan y reciben los avisos solo con la opción activa, sin corregir; quien no depende directamente del puesto no revisa.
+
 ## 1.33.0 — 2026-11-12
 **Formatos en Excel de los documentos**
 - Nueva carpeta **formatos/** con los 29 documentos que imprime el sistema (print.php) como formatos en blanco de Excel (.xlsx). Respetan el diseño del documento impreso: colores, encabezado con la organización, tipo y número del documento, datos generales, tablas, montos destacados, firmas y pie.

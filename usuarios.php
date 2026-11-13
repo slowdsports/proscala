@@ -26,9 +26,10 @@ function facultadesDelFormulario(PDO $pdo, int $uid, string $rol): array {
             $o = $nombres[$id] ?? null;
             if (!$o) jsonErr("$etiqueta: uno de los usuarios elegidos ya no existe.");
             if ($id === $uid) jsonErr("$etiqueta: nadie aprueba ni corrige lo suyo; quítese de la lista.");
-            if (!enRango($rol, $o['rol'])) {
+            if (!enRango($rol, $o['rol'], $fac)) {
                 jsonErr("$etiqueta: {$o['nombre']} (" . rolLabel($o['rol']) . ') no está por debajo de ' . rolLabel($rol)
-                    . ' en el organigrama. Solo se eligen usuarios de puestos por debajo del suyo' . (puedenAprobarseEntreColegas($rol) ? ' o colegas de su mismo puesto.' : '.'));
+                    . ' en el organigrama. Solo se eligen usuarios de puestos por debajo del suyo' . (puedenAprobarseEntreColegas($rol) ? ' o colegas de su mismo puesto' : '')
+                    . ($fac !== 'corregir' && ($jefe = roles()[$rol]['depende_de'] ?? null) && apruebanSubordinados($jefe) ? ' o de ' . rolLabel($jefe) . ' (su jefe directo).' : '.'));
             }
         }
         $f[$fac] = $ids;
@@ -198,10 +199,13 @@ $superadmins = array_map('strtolower', $_s->fetchAll(PDO::FETCH_COLUMN));
 $facGuardadas = facultadesGuardadas($pdo);
 $rangoPuestos = $notaPuestos = [];
 foreach (roles() as $k => $r) {
-    $rangoPuestos[$k] = array_values(array_filter(array_keys(roles()), fn($o) => $o !== 'admin' && enRango($k, $o)));
+    // Por facultad: revisar y autorizar pueden incluir al jefe directo (apruebanSubordinados); corregir, no
+    foreach (FACULTADES as $fac => $_) {
+        $rangoPuestos[$k][$fac] = array_values(array_filter(array_keys(roles()), fn($o) => $o !== 'admin' && enRango($k, $o, $fac)));
+    }
     if ($k === 'admin') $notaPuestos[$k] = 'El Administrador tiene todas las facultades sobre todos los usuarios.';
     elseif ($r['solo_propios']) $notaPuestos[$k] = 'Este puesto solo ve sus propias solicitudes: no revisa, autoriza ni corrige.';
-    elseif (!$rangoPuestos[$k]) $notaPuestos[$k] = 'Este puesto no tiene puestos por debajo en el organigrama: no hay a quién revisar, autorizar ni corregir.';
+    elseif (!array_merge(...array_values($rangoPuestos[$k]))) $notaPuestos[$k] = 'Este puesto no tiene puestos por debajo en el organigrama: no hay a quién revisar, autorizar ni corregir.';
 }
 $datosFacultades = ['rango' => $rangoPuestos, 'nota' => $notaPuestos,
     'usuarios' => array_map(fn($u) => ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'rol' => $u['rol'], 'puesto' => rolLabel($u['rol']), 'activo' => (bool)$u['activo']], $usuarios)];
@@ -296,7 +300,8 @@ include __DIR__ . '/includes/header.php';
           <div class="border rounded p-2 mb-3" id="u-fac-grupo">
             <div class="fw-semibold mb-1"><i class="fas fa-stamp"></i> Facultades en el flujo de aprobación</div>
             <div class="form-text mt-0 mb-2">Cada una es independiente. Solo alcanzan a usuarios de puestos por debajo del suyo en el
-              <a href="<?= BASE_URL ?>roles.php">organigrama</a>, y los avisos le llegan solo por lo que puede hacer
+              <a href="<?= BASE_URL ?>roles.php">organigrama</a> (revisar y autorizar alcanzan también a su jefe directo si su puesto
+              tiene marcado que lo aprueban sus subordinados), y los avisos le llegan solo por lo que puede hacer
               (si solo autoriza, no recibe los de revisar). Nadie aprueba ni corrige lo que él mismo creó.</div>
             <div class="text-muted small" id="u-fac-nota" hidden></div>
             <?php foreach (FACULTADES as $fac => [$etiqueta, $desc]): ?>
@@ -342,10 +347,10 @@ function mostrarFacultades(fac) {
   const notaEl = document.getElementById('u-fac-nota');
   notaEl.textContent = nota;
   notaEl.hidden = !nota;
-  const rango = FAC.rango[rol] || [];
-  const candidatos = FAC.usuarios.filter(u => u.id !== uid && rango.includes(u.rol));
   document.querySelectorAll('#u-fac-grupo .fac-item').forEach(item => {
     const f = item.dataset.fac;
+    const rango = (FAC.rango[rol] || {})[f] || [];
+    const candidatos = FAC.usuarios.filter(u => u.id !== uid && rango.includes(u.rol));
     const on = item.querySelector('.fac-on'), alcance = item.querySelector('.fac-alcance'), sel = item.querySelector('.fac-usuarios');
     item.hidden = !!nota;
     if (fac) {

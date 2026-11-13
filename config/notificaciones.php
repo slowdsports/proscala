@@ -50,7 +50,8 @@ function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir, s
  * Administradores. Solo cuentan los usuarios activos con la facultad del paso y un alcance que
  * incluye a quien lo creó (cubreFacultad), sin los de $excluir: a quien solo autoriza no le llegan
  * los avisos de revisar. Los colegas que eligieron expresamente a quien lo creó (puesto que se revisa
- * entre sí) van en el primer nivel. El nivel 0 recibe los avisos; los siguientes, el escalamiento
+ * entre sí) y los subordinados directos de un puesto que ellos aprueban (apruebanSubordinados) van en
+ * el primer nivel. El nivel 0 recibe los avisos; los siguientes, el escalamiento
  * (cron/recordatorios.php).
  */
 function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir, string $paso = 'revisar'): array {
@@ -71,6 +72,12 @@ function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir, s
     }
     if ($rol && $rol !== 'admin' && puedenAprobarseEntreColegas($rol) && ($colegas = $usuarios($rol, true))) {
         $niveles[0] = array_values(array_unique(array_merge($colegas, $niveles[0] ?? [])));
+    }
+    // Puesto alto que aprueban sus subordinados directos: ellos van en el primer nivel
+    if ($rol && apruebanSubordinados($rol)) {
+        $subordinados = [];
+        foreach ($roles as $k => $r) if (esSubordinadoQueAprueba($k, $rol)) $subordinados = array_merge($subordinados, $usuarios($k));
+        if ($subordinados) $niveles[0] = array_values(array_unique(array_merge($niveles[0] ?? [], $subordinados)));
     }
     $s = $pdo->prepare("SELECT id FROM usuarios WHERE rol = 'admin' AND activo = 1 ORDER BY id");
     $s->execute();

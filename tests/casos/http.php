@@ -379,7 +379,7 @@ try {
         foreach (array_keys(roles()) as $r) {
             if ($r === 'admin' || !empty(roles()[$r]['solo_propios'])) continue;
             $a = array_values(array_filter($usuarios, fn($u) => enRango($r, $u['rol']) && $u['rol'] !== $r));
-            $f = array_values(array_filter($usuarios, fn($u) => !enRango($r, $u['rol'])));
+            $f = array_values(array_filter($usuarios, fn($u) => !enRango($r, $u['rol'], 'revisar')));   // se elige para revisar
             if ($a && $f) { [$rol, $abajo, $fuera] = [$r, (int)$a[0]['id'], (int)$f[0]['id']]; break; }
         }
         if (!$rol) throw new Omitir('no hay un puesto con usuarios por debajo y fuera de su rango');

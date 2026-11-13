@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/db.php';   // credenciales, conectarBD() y $pdoM
 require_once __DIR__ . '/config/functions.php';
 require_once __DIR__ . '/config/esquema.php';   // leerEsquema, cambiosEsquema, requisitosServidor
 
-const VERSION_BD = '1.32.0';
+const VERSION_BD = '1.34.0';
 
 // ── PASOS DE LA VERSIÓN ──────────────────────────────────────────────
 // 'base': 'central' o 'empresa' · 'pendiente': fn(PDO) → bool · 'aplicar': fn(PDO) → void
@@ -94,6 +94,18 @@ $PASOS = [
         'descripcion' => 'Facultades de aprobación por usuario: quien tiene un puesto que "aprueba procesos" recibe revisar, autorizar y corregir sobre todos los puestos por debajo — una sola vez (1.31.0)',
         'pendiente' => fn(PDO $db) => !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_facultades_usuarios'")->fetchColumn(),
         'aplicar' => function (PDO $db) { pasarFacultadesAUsuarios($db); },
+    ],
+    [
+        // Después de la columna del esquema (roles.aprueban_subordinados); una sola vez: si después se
+        // desactiva en Roles y Permisos, no se vuelve a activar
+        'base' => 'empresa',
+        'descripcion' => 'Dirección Ejecutiva: los puestos que dependen directamente de ella revisan y autorizan sus procesos — una sola vez (1.34.0)',
+        'pendiente' => fn(PDO $db) => !$db->query("SELECT 1 FROM configuracion WHERE clave = 'paso_subordinados_direccion'")->fetchColumn(),
+        'aplicar' => function (PDO $db) {
+            $db->exec("UPDATE roles SET aprueban_subordinados = 1 WHERE clave = 'direccion_ejecutiva'");
+            $db->exec("INSERT IGNORE INTO configuracion (clave, valor, descripcion) VALUES
+                ('paso_subordinados_direccion', '1', 'actualizar_bd.php ya activó que los subordinados directos de Dirección Ejecutiva aprueben sus procesos')");
+        },
     ],
 ];
 

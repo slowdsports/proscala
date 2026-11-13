@@ -421,6 +421,50 @@ prueba('Jerarquía: en la cima del organigrama los colegas del mismo puesto se a
         comoUsuario($pdo, $u['par']); afirmar($accion($pdo, $deMedio, 'revisar') !== true, 'con la opción, tampoco se revisa lo propio');
     });
 });
+prueba('Jerarquía: los subordinados directos revisan y autorizan los procesos de un puesto alto que lo permite (no los corrigen)', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u) use ($pdo, $accion) {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        // zz_nieto depende del asistente: no es subordinado directo del jefe
+        $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_nieto', 'ZZ Nieto', 'zz_asistente', 0, 0, 93)");
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES ('ZZ Nieto', ?, 'x', 'zz_nieto', 1)")->execute(['zz.nieto.' . bin2hex(random_bytes(3)) . '@prueba.local']);
+        $nieto = (int)$pdo->lastInsertId();
+        $pdo->prepare("INSERT INTO permisos (numero, empleado_id, fecha_solicitud, fecha_inicio, fecha_fin, dias, tipo, motivo, estado)
+                       VALUES ('ZZPRUEBA-JEFE', ?, CURDATE(), CURDATE(), CURDATE(), 1, 'personal', 'Prueba automática', 'pendiente')")->execute([$emp]);
+        $deJefe = (int)$pdo->lastInsertId();
+        $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('permisos', ?, ?, 'creador')")->execute([$deJefe, $u['jefe']]);
+        roles(true);
+        darFacultades($pdo, $u['asistente'], TODAS_FACULTADES);
+        darFacultades($pdo, $nieto, TODAS_FACULTADES);
+
+        comoUsuario($pdo, $u['asistente']);
+        afirmar(str_contains((string)$accion($pdo, $deJefe, 'revisar'), 'organigrama'), 'sin la opción, el subordinado no revisa lo del jefe');
+        afirmar(!in_array($u['asistente'], nivelesAprobadores($pdo, 'permisos.php', $deJefe, [$u['jefe']])[0] ?? [], true), 'sin la opción, no le llegan los avisos');
+
+        $pdo->exec("UPDATE roles SET aprueban_subordinados = 1 WHERE clave = 'zz_jefe'");
+        roles(true);
+        iguales(true, $accion($pdo, $deJefe, 'revisar'), 'con la opción, el subordinado directo revisa');
+        iguales(true, $accion($pdo, $deJefe, 'rechazar'), 'con la opción, el subordinado directo puede rechazar');
+        afirmar(puedeEditar($pdo, 'permisos.php', $deJefe) !== true, 'el subordinado no corrige lo del jefe');
+        iguales([$u['asistente']], nivelesAprobadores($pdo, 'permisos.php', $deJefe, [$u['jefe']])[0] ?? [], 'los avisos de revisar le llegan al subordinado');
+        comoUsuario($pdo, $nieto);
+        afirmar($accion($pdo, $deJefe, 'revisar') !== true, 'quien no depende directamente del jefe no revisa');
+        comoUsuario($pdo, $u['jefe']);
+        afirmar($accion($pdo, $deJefe, 'revisar') !== true, 'el jefe no revisa lo propio');
+
+        // Revisa el asistente; quien revisó no autoriza, pero otro subordinado directo sí
+        comoUsuario($pdo, $u['asistente']);
+        registrarPasoFlujo($pdo, 'permisos.php', $deJefe, 'revisado');
+        afirmar(str_contains((string)$accion($pdo, $deJefe, 'autorizar'), 'Quien revisó'), 'quien revisó no autoriza');
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES ('ZZ Asistente 2', ?, 'x', 'zz_asistente', 1)")->execute(['zz.asistente2.' . bin2hex(random_bytes(3)) . '@prueba.local']);
+        $asis2 = (int)$pdo->lastInsertId();
+        darFacultades($pdo, $asis2, ['autorizar' => [$u['jefe']]]);
+        comoUsuario($pdo, $asis2);
+        iguales(true, $accion($pdo, $deJefe, 'autorizar'), 'otro subordinado directo, que eligió al jefe, autoriza');
+        // Corregir sigue siendo solo hacia abajo
+        iguales(false, enRango('zz_asistente', 'zz_jefe', 'corregir'), 'corregir no alcanza al jefe');
+        iguales(true, enRango('zz_asistente', 'zz_jefe', 'autorizar'), 'autorizar alcanza al jefe');
+    });
+});
 prueba('Caja chica: el responsable la edita (no la elimina) mientras está abierta; liquidada, solo un rango superior', function () use ($pdo) {
     conEscenario($pdo, function ($u) use ($pdo) {
         // Un empleado sin usuario: el asistente pasa a ser su único usuario (el responsable de la caja)

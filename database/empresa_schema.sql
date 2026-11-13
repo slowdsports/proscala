@@ -917,6 +917,7 @@ CREATE TABLE `roles` (
   `depende_de` varchar(30) DEFAULT NULL,
   `aprueba` tinyint(1) NOT NULL DEFAULT 0,
   `aprueba_colegas` tinyint(1) NOT NULL DEFAULT 0,
+  `aprueban_subordinados` tinyint(1) NOT NULL DEFAULT 0,
   `solo_propios` tinyint(1) NOT NULL DEFAULT 0,
   `orden` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
