@@ -352,6 +352,40 @@ prueba('Planillas quincenales y mensuales: días trabajados, deducciones y nombr
     iguales('Mensual', nombrePeriodoPlanilla($m, true), 'nombre corto');
 });
 
+prueba('Recibos propios: cada empleado ve solo su recibo de las planillas pagadas, no la planilla ni el de otros', function () use ($pdo) {
+    $pdo->beginTransaction();
+    try {
+        $emps = array_map('intval', $pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 2")->fetchAll(PDO::FETCH_COLUMN));
+        if (count($emps) < 2) throw new Omitir('se necesitan dos empleados');
+        [$yo, $otro] = $emps;
+        $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_emp', 'ZZ Empleado', 'admin', 0, 1, 93)");
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, empleado_id, activo) VALUES ('ZZ Emp', ?, 'x', 'zz_emp', ?, 1)")
+            ->execute(['zz.emp.' . bin2hex(random_bytes(3)) . '@prueba.local', $yo]);
+        $uid = (int)$pdo->lastInsertId();
+        $pdo->exec("INSERT INTO planilla_periodos (numero, anio, mes, quincena, fecha_inicio, fecha_fin, estado) VALUES
+            ('ZZPL-1', 2099, 1, 'primera', '2099-01-01', '2099-01-15', 'pagada'), ('ZZPL-2', 2099, 1, 'segunda', '2099-01-16', '2099-01-31', 'aprobada')");
+        $pagada = (int)$pdo->query("SELECT id FROM planilla_periodos WHERE numero = 'ZZPL-1'")->fetchColumn();
+        $aprobada = (int)$pdo->query("SELECT id FROM planilla_periodos WHERE numero = 'ZZPL-2'")->fetchColumn();
+        foreach ([[$pagada, $yo], [$pagada, $otro], [$aprobada, $yo]] as [$p, $e]) {
+            $pdo->prepare("INSERT INTO planilla_detalle (periodo_id, empleado_id) VALUES (?, ?)")->execute([$p, $e]);
+        }
+        roles(true);
+        comoUsuario($pdo, $uid);
+        afirmar(!puedeAcceder('planillas.php'), 'el empleado no abre el módulo de planillas');
+        afirmar(!puedeVerDocumento('plv'), 'por su puesto no ve los recibos');
+        iguales(true, esReciboPropio($pdo, 'plv', $pagada, (string)$yo), 've su recibo de la planilla pagada');
+        iguales(false, esReciboPropio($pdo, 'plv', $pagada, (string)$otro), 'no ve el recibo de un compañero');
+        iguales(false, esReciboPropio($pdo, 'plv', $pagada, null), 'sin emp_id no ve los recibos de todos');
+        iguales(false, esReciboPropio($pdo, 'plv', $pagada, "$yo,$otro"), 'emp_id que no es exactamente el suyo');
+        iguales(false, esReciboPropio($pdo, 'plv', $aprobada, (string)$yo), 'planilla aún no pagada');
+        iguales(false, esReciboPropio($pdo, 'pl', $pagada, (string)$yo), 'la planilla completa sigue bloqueada');
+        iguales(false, esReciboPropio($pdo, 'plp', $pagada, (string)$yo), 'la planilla por proyecto sigue bloqueada');
+    } finally {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        roles(true);
+    }
+});
+
 prueba('Edición: quien creó el proceso lo edita hasta que alguien lo revisa; después, solo un superior', function () use ($pdo) {
     conEscenario($pdo, function ($u, $per) use ($pdo) {
         comoUsuario($pdo, $u['asistente']); iguales(true, puedeEditar($pdo, 'permisos.php', $per), 'el creador edita su permiso sin revisar');

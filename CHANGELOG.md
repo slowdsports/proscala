@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.36.0 — 2026-11-17
+**Mis recibos de pago**
+- Nueva página **Mis recibos de pago** en el menú, para todo usuario vinculado a un empleado: lista sus recibos de las planillas **pagadas** (sueldos, beneficios y asignación) con el neto recibido, y los abre o descarga en PDF.
+- Solo su propio recibo: aunque su puesto no tenga acceso a los módulos de planillas, puede abrir el recibo de una planilla pagada en la que aparece, y nada más. No abre la planilla, la planilla por proyecto, otros documentos de ella ni el recibo de un compañero (cambiar el empleado en la dirección responde "No tiene permiso"). Quien tiene acceso a Planillas sigue igual.
+- Sin cambios en la base de datos.
+- Pruebas: el empleado ve su recibo de la planilla pagada y no el de otro, ni sin filtro de empleado, ni de una planilla no pagada, ni la planilla completa.
+
 ## 1.35.0 — 2026-11-17
 **Planilla de un solo proyecto**
 - En una planilla de sueldos, cada fila del **Resumen por Proyecto** tiene un botón para imprimir la planilla solo de ese proyecto, aislada de los demás, para liquidar al socio (`print.php?tipo=plp&id=…&proyecto=…`).

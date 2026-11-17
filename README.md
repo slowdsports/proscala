@@ -167,6 +167,10 @@ Pulse su nombre en la barra superior. Allí puede:
 
 En el menú, **Mis solicitudes** reúne todo lo suyo: las solicitudes que usted creó y las que están a su nombre (compras, anticipos, liquidaciones, vacaciones, permisos y sus órdenes de pago). Para cada una muestra el estado, **en qué va** (por ejemplo, "Esperando revisión de Ana Ruiz") y, si se rechazó, el motivo. Arriba están los botones para crear una solicitud nueva.
 
+### Mis recibos de pago
+
+Si su usuario está vinculado a un empleado, en el menú verá **Mis recibos de pago**: sus recibos de las planillas ya **pagadas** (sueldos, décimo tercer y cuarto mes, asignaciones), con el neto recibido. Pulse **Ver** para abrirlo o **PDF** para descargarlo. Solo usted ve sus recibos: no se muestran la planilla ni los recibos de sus compañeros.
+
 ---
 
 ## 6. Cómo funcionan las aprobaciones

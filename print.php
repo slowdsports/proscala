@@ -17,7 +17,7 @@ requireLogin();
 $tipo = $_GET['tipo'] ?? '';
 $id   = (int)($_GET['id'] ?? 0);
 if (!$id || !isset(DOCUMENTOS_MODULO[$tipo])) { http_response_code(400); die('Parámetros inválidos.'); }
-if (!puedeVerDocumento($tipo)) { http_response_code(403); die('No tiene permiso para ver este documento.'); }
+if (!puedeImprimirDocumento($pdo, $tipo, $id)) { http_response_code(403); die('No tiene permiso para ver este documento.'); }
 
 // Plantilla de cada tipo (las constancias comparten una)
 $plantilla = in_array($tipo, ['trabajo', 'salario', 'referencia', 'tiempo'], true) ? 'constancia' : $tipo;

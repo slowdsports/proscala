@@ -42,7 +42,7 @@ $sesAdmin = sesionDePrueba($pdo, $empresa, $admin);
 try {
     prueba('Páginas principales cargan sin errores (como administrador)', function () use ($baseUrl, $sesAdmin) {
         $fallas = [];
-        $paginas = ['dashboard.php', 'mis_solicitudes.php', 'perfil.php', 'empleados.php', 'planillas.php', 'gastos_solicitud.php', 'gastos_solicitud.php?action=nuevo',
+        $paginas = ['dashboard.php', 'mis_solicitudes.php', 'mis_recibos.php','perfil.php', 'empleados.php', 'planillas.php', 'gastos_solicitud.php', 'gastos_solicitud.php?action=nuevo',
                     'gastos_viajes.php', 'compras_solicitud.php', 'compras_orden.php', 'compras_pago.php', 'vacaciones.php', 'permisos.php', 'caja_chica.php',
                     'prestamos.php', 'liquidaciones.php', 'catalogos.php', 'configuracion.php', 'usuarios.php', 'roles.php', 'auditoria.php', 'reportes.php',
                     'reportes_legales.php', 'presupuesto.php', 'proyectos.php', 'proveedores.php', 'activos.php', 'memorandos.php', 'actas.php', 'constancias.php', 'asistencia.php'];

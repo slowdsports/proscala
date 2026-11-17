@@ -28,7 +28,9 @@ function sidebarModulos(string $title, array $items, string $cur): string {
   <?php foreach (MODULOS as $_sbTitulo => $_sbItems): ?>
     <?php if ($_sbTitulo === ''): // Dashboard y, para todos, Mis solicitudes ?>
   <?= sidebarSection('', ...array_merge(array_map(fn($f) => sidebarItem($f, $_sbItems[$f][0], $_sbItems[$f][1], $cur), array_keys($_sbItems)),
-                                        [sidebarItem('mis_solicitudes.php', 'fa-folder-open', 'Mis solicitudes', $cur)])) ?>
+                                        [sidebarItem('mis_solicitudes.php', 'fa-folder-open', 'Mis solicitudes', $cur),
+                                         // Solo quien está vinculado a un empleado: sus recibos de planillas pagadas
+                                         !empty($_SESSION['empleado_id']) ? sidebarItem('mis_recibos.php', 'fa-receipt', 'Mis recibos de pago', $cur) : ''])) ?>
       <?php continue; ?>
     <?php endif; ?>
     <?php if ($_sbTitulo === 'Administración'): ?>

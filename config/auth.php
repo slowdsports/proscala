@@ -132,11 +132,12 @@ const MODULOS_SOLO_ADMIN = ['usuarios.php', 'roles.php'];
 const PAGINAS_SUPERADMIN = ['empresas.php', 'prueba_correo.php'];
 
 // Archivos de apoyo que no son módulos: abiertos a todos (los de impresión
-// validan el documento con puedeVerDocumento; adjuntos.php, el proceso con puedeVerProceso)
+// validan el documento con puedeImprimirDocumento; mis_recibos.php muestra solo los del propio empleado; adjuntos.php, el proceso con puedeVerProceso)
 // (respaldo.php valida que sea el super administrador; mis_solicitudes.php y buscar.php muestran
 // solo lo que cada usuario puede ver; alta_rapida.php, que tenga acceso a un módulo que use el tipo)
 const PAGINAS_LIBRES = ['perfil.php', 'print.php', 'pdf_download.php', 'index.php', 'login.php', 'logout.php', 'adjuntos.php', 'sesion.php',
-                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php', 'alta_rapida.php', 'borradores.php'];
+                        'notificaciones.php', 'respaldo.php', 'mis_solicitudes.php', 'buscar.php', 'exportar_excel.php', 'alta_rapida.php', 'borradores.php',
+                        'mis_recibos.php'];
 
 // Tipos de documento de print.php / pdf_download.php → módulo(s) donde se generan
 const DOCUMENTOS_MODULO = [
@@ -160,7 +161,7 @@ function moduloLabel(?string $archivo): string {
         $mapa = ['login.php' => 'Inicio de sesión', 'index.php' => 'Inicio de sesión', 'logout.php' => 'Cierre de sesión', 'perfil.php' => 'Mi Perfil',
                  'print.php' => 'Impresión de documentos', 'pdf_download.php' => 'Descarga de PDF',
                  'empresas.php' => 'Empresas', 'prueba_correo.php' => 'Prueba de correo', 'adjuntos.php' => 'Documentos adjuntos', 'notificaciones.php' => 'Notificaciones',
-                 'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'buscar.php' => 'Búsqueda', 'borradores.php' => 'Borradores'];
+                 'respaldo.php' => 'Respaldo del sistema', 'mis_solicitudes.php' => 'Mis solicitudes', 'mis_recibos.php' => 'Mis recibos de pago', 'buscar.php' => 'Búsqueda', 'borradores.php' => 'Borradores'];
         foreach (MODULOS as $items) foreach ($items as $f => [, $label]) $mapa[$f] = $label;
     }
     return $mapa[$archivo] ?? (string)$archivo;
@@ -401,6 +402,34 @@ function puedeVerDocumento(string $tipo): bool {
         if (puedeAcceder($modulo)) return true;
     }
     return false;
+}
+
+// ── Recibos propios (mis_recibos.php) ──────────────────────────────
+// Todo usuario vinculado a un empleado ve SOLO su propio recibo de las planillas pagadas, aunque
+// su puesto no tenga acceso a los módulos de planillas: print.php / pdf_download.php con el tipo
+// de recibo, el id de la planilla y ?emp_id= igual a su propio empleado. No abre la planilla,
+// otros documentos de ella ni el recibo de otro empleado.
+const RECIBOS_PROPIOS = [
+    'plv' => ['tabla' => 'planilla_periodos',   'detalle' => 'planilla_detalle',            'fk' => 'periodo_id'],
+    'pbv' => ['tabla' => 'planilla_beneficios', 'detalle' => 'planilla_beneficios_detalle', 'fk' => 'beneficio_id'],
+    'pav' => ['tabla' => 'planilla_asignacion', 'detalle' => 'planilla_asignacion_detalle', 'fk' => 'asignacion_id'],
+];
+
+/** ¿Es el recibo del propio empleado del usuario, de una planilla pagada en la que aparece? */
+function esReciboPropio(PDO $pdo, string $tipo, int $id, $empIdPedido): bool {
+    $emp = (int)($_SESSION['empleado_id'] ?? 0);
+    // emp_id exacto (sin "5abc" ni vacío): el recibo se filtra por ese empleado
+    if (!isset(RECIBOS_PROPIOS[$tipo]) || !$emp || !$id || (string)$empIdPedido !== (string)$emp) return false;
+    $r = RECIBOS_PROPIOS[$tipo];
+    $s = $pdo->prepare("SELECT 1 FROM `{$r['tabla']}` t JOIN `{$r['detalle']}` d ON d.`{$r['fk']}` = t.id
+                        WHERE t.id = ? AND t.estado = 'pagada' AND d.empleado_id = ? LIMIT 1");
+    $s->execute([$id, $emp]);
+    return (bool)$s->fetchColumn();
+}
+
+/** ¿Puede abrir este documento de print.php / pdf_download.php? Por su módulo o por ser su recibo. */
+function puedeImprimirDocumento(PDO $pdo, string $tipo, int $id): bool {
+    return puedeVerDocumento($tipo) || esReciboPropio($pdo, $tipo, $id, $_GET['emp_id'] ?? null);
 }
 
 // Página de inicio: Mis solicitudes para quien solo ve las suyas; si no, la primera página
