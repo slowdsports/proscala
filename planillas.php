@@ -580,6 +580,7 @@ include __DIR__ . '/includes/header.php';
             <th>Proyecto</th><th class="text-center">Empleados</th><th class="text-end">Bruto</th>
             <th class="text-end">Deducciones</th><th class="text-end">Neto a Pagar</th>
             <th class="text-end">IHSS Pat.</th><th class="text-end">RAP Pat.</th><th class="text-end">Costo Total</th>
+            <th class="no-print"></th>
           </tr>
         </thead>
         <tbody>
@@ -594,6 +595,12 @@ include __DIR__ . '/includes/header.php';
             <td class="font-mono text-end text-warning"><?= lps($r['ihss_patronal']) ?></td>
             <td class="font-mono text-end text-warning"><?= lps($r['rap_patronal']) ?></td>
             <td class="font-mono text-end fw-bold"><?= lps($r['costo_total']) ?></td>
+            <td class="text-center no-print">
+              <a href="<?= BASE_URL ?>print.php?tipo=plp&id=<?= $periodo['id'] ?>&proyecto=<?= (int)$pid ?>" target="_blank"
+                 class="btn btn-sm btn-outline-secondary py-0" title="Imprimir la planilla solo de este proyecto">
+                <i class="fas fa-print"></i>
+              </a>
+            </td>
           </tr>
           <?php endforeach; ?>
         </tbody>
@@ -606,6 +613,7 @@ include __DIR__ . '/includes/header.php';
             <td class="font-mono text-end text-warning"><?= lps($tr['ihss_patronal']) ?></td>
             <td class="font-mono text-end text-warning"><?= lps($tr['rap_patronal']) ?></td>
             <td class="font-mono text-end fw-bold"><?= lps($tr['costo_total']) ?></td>
+            <td class="no-print"></td>
           </tr>
         </tfoot>
       </table>

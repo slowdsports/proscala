@@ -14,6 +14,13 @@ $s2->execute([$id]); $detalle = $s2->fetchAll();
 $proyMap = proyectosMap($pdo);
 [$repartos, $resumenProy] = distribuirQuincenal($detalle,
     cargarDistribucion($pdo, 'planilla_detalle_proyectos', array_column($detalle, 'id')));
+// ?proyecto=<id>: planilla de un solo proyecto, aislada de los demás (para liquidar al socio).
+// 0 = "Sin proyecto".
+$proyFiltro = (isset($_GET['proyecto']) && $_GET['proyecto'] !== '') ? (int)$_GET['proyecto'] : null;
+if ($proyFiltro !== null) {
+    if (!isset($resumenProy[$proyFiltro])) die('Este proyecto no tiene empleados en esta planilla.');
+    $resumenProy = [$proyFiltro => $resumenProy[$proyFiltro]];
+}
 $mes    = $meses[$doc['mes'] - 1] ?? '';
 $quin   = nombrePeriodoPlanilla($doc);
 $title  = esPlanillaMensual($doc) ? 'PLANILLA MENSUAL POR PROYECTO' : 'PLANILLA QUINCENAL POR PROYECTO';
@@ -41,12 +48,18 @@ require __DIR__ . '/_pagina_inicio.php';
         <div class="meta-value"><?= fmtFecha($doc['fecha_pago'] ?? '') ?></div>
       </div>
       <div class="meta-item">
+        <?php if ($proyFiltro !== null): ?>
+        <div class="meta-label">Proyecto</div>
+        <div class="meta-value"><?= htmlspecialchars(proyectoLabel($proyMap, $proyFiltro, true)) ?></div>
+        <?php else: ?>
         <div class="meta-label">No. Proyectos</div>
         <div class="meta-value"><?= count($resumenProy) ?></div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
 
+  <?php if ($proyFiltro === null): ?>
   <div class="section-head">Resumen por Proyecto</div>
   <div class="items-wrap">
     <table class="items" style="font-size:8pt">
@@ -84,9 +97,10 @@ require __DIR__ . '/_pagina_inicio.php';
       </tfoot>
     </table>
   </div>
+  <?php endif; ?>
 
   <?php foreach ($resumenProy as $pid => $r): ?>
-  <div class="section-head" style="margin-top:12px"><?= htmlspecialchars(proyectoLabel($proyMap, $pid, true)) ?></div>
+  <div class="section-head" style="margin-top:<?= $proyFiltro === null ? '12px' : '0' ?>"><?= htmlspecialchars(proyectoLabel($proyMap, $pid, true)) ?></div>
   <div class="items-wrap">
     <table class="items" style="font-size:7.5pt">
       <thead>
@@ -115,7 +129,7 @@ require __DIR__ . '/_pagina_inicio.php';
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="4" style="font-weight:700;color:#0D3F6A">SUBTOTAL</td>
+          <td colspan="4" style="font-weight:700;color:#0D3F6A"><?= $proyFiltro === null ? 'SUBTOTAL' : 'TOTAL' ?></td>
           <td class="r"><?= lps($r['total_bruto']) ?></td>
           <td class="r" style="color:#dc2626"><?= lps($r['total_deducciones']) ?></td>
           <td class="r" style="color:#16a34a"><?= lps($r['sueldo_neto']) ?></td>

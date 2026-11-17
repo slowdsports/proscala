@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.35.0 — 2026-11-17
+**Planilla de un solo proyecto**
+- En una planilla de sueldos, cada fila del **Resumen por Proyecto** tiene un botón para imprimir la planilla solo de ese proyecto, aislada de los demás, para liquidar al socio (`print.php?tipo=plp&id=…&proyecto=…`).
+- Muestra el proyecto en el encabezado, sus empleados con el % y los montos que le corresponden, el total y las firmas, sin el resumen de los otros proyectos. El PDF descargado lleva el código del proyecto en el nombre.
+- El botón **Por Proyecto** sigue imprimiendo todos los proyectos.
+- Sin cambios en la base de datos.
+
 ## 1.34.0 — 2026-11-13
 **Los subordinados directos aprueban los procesos de los puestos más altos**
 - Antes, lo que creaba la directora ejecutiva solo podía aprobarlo el Administrador, porque la Junta Directiva no usa el sistema.

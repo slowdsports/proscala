@@ -395,7 +395,7 @@ table.items tfoot tr:last-child td {
   </a>
   <?php else: ?>
   <a class="btn-print primary" id="btn-download"
-     href="<?= BASE_URL ?>pdf_download.php?tipo=<?= urlencode($tipo) ?>&id=<?= $id ?>">
+     href="<?= BASE_URL ?>pdf_download.php?tipo=<?= urlencode($tipo) ?>&id=<?= $id ?><?= isset($proyFiltro) && $proyFiltro !== null ? '&proyecto=' . $proyFiltro : '' ?>">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
     Descargar PDF
   </a>

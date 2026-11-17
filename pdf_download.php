@@ -107,7 +107,8 @@ if ($browser) {
 if (!file_exists($tmpPdf) || filesize($tmpPdf) === 0) {
     @unlink($tmpHtml);
     $printUrl = BASE_URL . 'print.php?tipo=' . urlencode($tipo) . '&id=' . $id
-              . (!empty($_GET['emp_id']) ? '&emp_id=' . (int)$_GET['emp_id'] : '');
+              . (!empty($_GET['emp_id']) ? '&emp_id=' . (int)$_GET['emp_id'] : '')
+              . (isset($proyFiltro) && $proyFiltro !== null ? '&proyecto=' . $proyFiltro : '');
     http_response_code(500);
     header('Content-Type: text/html; charset=utf-8');
     die('<p><strong>Error generando PDF en el servidor.</strong><br>'
@@ -125,6 +126,10 @@ if (!empty($_GET['emp_id'])) {
     $se = $pdo->prepare("SELECT CONCAT(nombre,' ',apellidos) FROM empleados WHERE id=?");
     $se->execute([(int)$_GET['emp_id']]);
     $empSlug = '-' . preg_replace('/[^\w]/', '_', $se->fetchColumn() ?: $_GET['emp_id']);
+}
+// Planilla de un solo proyecto (plp&proyecto=): el código del proyecto en el nombre
+if (isset($proyFiltro) && $proyFiltro !== null) {
+    $empSlug .= '-' . preg_replace('/[^\w\-]/', '_', proyectoLabel($proyMap, $proyFiltro));
 }
 $filename = "Proscala-{$docNum}{$empSlug}.pdf";
 
