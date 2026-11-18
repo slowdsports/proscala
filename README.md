@@ -310,6 +310,17 @@ php formatos/generar.php --empresa=<base>     # con los datos de la empresa de e
 php formatos/generar.php --salida=<carpeta>   # en otra carpeta
 ```
 
+### Formatos en PDF (ejemplos)
+
+En la misma carpeta están los 29 documentos en **PDF**, idénticos a los que imprime el sistema (mismas plantillas y mismo motor de PDF), llenos con **datos de prueba inventados**: una organización, empleados, proveedores y proyectos ficticios. Sirven de muestra de cada documento. Para volver a generarlos (en el equipo de desarrollo, con MySQL encendido y Edge o Chrome instalado):
+
+```
+php formatos/generar_pdf.php                      # los 29 PDF en formatos/
+php formatos/generar_pdf.php --salida=<carpeta>   # en otra carpeta
+```
+
+Crea una base temporal con los datos de prueba, imprime cada documento y la borra al terminar; no lee ninguna base de una empresa.
+
 ---
 
 ## 10. Guía de módulos
@@ -464,6 +475,7 @@ Aquí se define cómo se organiza su empresa en el sistema:
 - **Puestos y jerarquía**: cree los puestos e indique **de quién depende** cada uno. El **organigrama** se dibuja solo y define el **rango**: quién puede aprobar los procesos de quién (vea [Aprobaciones](#6-cómo-funcionan-las-aprobaciones)). Quién revisa, autoriza y corrige se asigna a cada persona en [Usuarios](#124-usuarios).
 - **Sus miembros se revisan entre sí** (al editar un puesto): las personas de ese puesto pueden aprobar y corregir lo que crea otra del mismo puesto, según sus facultades.
 - **Sus subordinados directos revisan y autorizan sus procesos** (al editar un puesto): para los puestos más altos, como Dirección Ejecutiva, cuando por encima no hay nadie que use el sistema. Las personas de un puesto que depende directamente de él pueden revisar, autorizar o rechazar sus procesos (no corregirlos), según sus facultades. Quien revisa no autoriza el mismo proceso, y a ellos les llegan los avisos. Al actualizar a la versión 1.34.0 queda marcado en Dirección Ejecutiva.
+- **Revisa los procesos de todos** (al editar un puesto): para puestos como Administración, Finanzas o Contabilidad. Todas las personas del puesto pueden revisar (y rechazar mientras espera revisión) los procesos de cualquier puesto, sin importar el organigrama y aunque no tengan la facultad marcada en Usuarios; les llegan los avisos de revisar de todos. No autorizan ni corrigen por eso. Nadie revisa lo suyo y quien revisa no autoriza el mismo proceso. Para ver los procesos, el puesto necesita sus módulos en la tabla de permisos.
 - **Solo sus propias solicitudes**: los puestos marcados solo ven y editan las solicitudes que crearon o que están a su nombre, y no pueden aprobarlas. Es lo habitual para el personal en general.
 - **Módulos**: marque qué módulos abre cada puesto y pulse **Guardar Permisos**.
 

@@ -15,7 +15,7 @@ $TIPOS_PER = [
     'maternidad'=>'Maternidad','paternidad'=>'Paternidad',
     'luto'=>'Luto / Duelo','capacitacion'=>'Capacitación','otro'=>'Otro',
 ];
-$title  = 'PERMISO — ' . strtoupper($TIPOS_PER[$doc['tipo']] ?? $doc['tipo']);
+$title  = 'PERMISO — ' . mb_strtoupper($TIPOS_PER[$doc['tipo']] ?? $doc['tipo']);
 $docNum = $doc['numero'];
 
 // Firmas: el empleado que solicita (en lugar de "Elaborado por"), Revisado por y Autorizado por

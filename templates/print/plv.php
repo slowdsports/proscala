@@ -137,7 +137,7 @@ foreach ($detalle as $i => $d):
   <?php endif; ?>
   <div style="margin:18px 28px 0;padding:18px 20px;border:1.5px dashed #cbd5e1;border-radius:8px;background:#fafafa">
     <p style="font-size:9pt;line-height:1.7;color:#374151;margin-bottom:16px">
-      Yo, <strong><?= htmlspecialchars(strtoupper($d['empleado_nombre'])) ?></strong><?php if ($d['identidad']): ?>,
+      Yo, <strong><?= htmlspecialchars(mb_strtoupper($d['empleado_nombre'])) ?></strong><?php if ($d['identidad']): ?>,
       portador/a de la Tarjeta de Identidad número <strong><?= htmlspecialchars($d['identidad']) ?></strong><?php endif; ?>,
       declaro haber recibido la suma de <strong><?= lps($d['sueldo_neto']) ?></strong> correspondiente a la
       <?= $quinceNamePlv ?> del período <strong><?= htmlspecialchars($mesNombrePlv . ' ' . $doc['anio']) ?></strong>,

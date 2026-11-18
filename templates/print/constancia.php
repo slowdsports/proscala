@@ -54,7 +54,7 @@ require __DIR__ . '/_pagina_inicio.php';
       $tiempoSrv = 'menos de un mes';
   }
   $idStr  = $doc['identidad'] ? htmlspecialchars($doc['identidad']) : 'no registrada';
-  $nombre = htmlspecialchars(strtoupper($doc['nombre_completo'] ?? ($doc['nombre'] . ' ' . $doc['apellidos'])));
+  $nombre = htmlspecialchars(mb_strtoupper($doc['nombre_completo'] ?? ($doc['nombre'] . ' ' . $doc['apellidos'])));
   $cargo  = htmlspecialchars($doc['cargo'] ?? '');
   $salStr = lps($doc['sueldo_mensual'] ?? 0);
   ?>

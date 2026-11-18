@@ -12,7 +12,7 @@ $s2 = $pdo->prepare("SELECT pbd.*, CONCAT(e.nombre,' ',e.apellidos) AS emp_nombr
     WHERE pbd.beneficio_id = ? ORDER BY e.apellidos, e.nombre");
 $s2->execute([$id]); $detalle = $s2->fetchAll();
 $pbTipos = ['decimo_tercero' => 'Décimo Tercer Mes', 'decimo_cuarto' => 'Décimo Cuarto Mes'];
-$title  = 'PLANILLA DE BENEFICIOS — ' . strtoupper($pbTipos[$doc['tipo']] ?? $doc['tipo']);
+$title  = 'PLANILLA DE BENEFICIOS — ' . mb_strtoupper($pbTipos[$doc['tipo']] ?? $doc['tipo']);
 $docNum = $doc['numero'];
 
 // Firmas

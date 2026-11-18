@@ -11,6 +11,16 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.37.0 — 2026-11-18
+**Puestos que revisan los procesos de todos, y formatos en PDF**
+- Nueva opción al editar un puesto en Roles y Permisos: **"Revisa los procesos de todos"** (p. ej. Administración, Finanzas o Contabilidad). Todas las personas del puesto pueden revisar, y rechazar mientras espera revisión, los procesos de cualquier puesto, sin importar el organigrama (también los de sus superiores y de otras ramas), aunque no tengan la facultad en Usuarios. No da permiso de autorizar ni de corregir. Se mantienen las reglas: nadie revisa lo suyo y quien revisa no autoriza el mismo proceso.
+- Les llegan los avisos de revisar de todos los procesos (primer nivel), no los de autorizar. Roles y Permisos los muestra en "Sus procesos los revisan" de cada puesto, con el distintivo "revisa los de todos"; en Usuarios, "Revisar" aparece marcada y fija para ellos.
+- Carpeta **formatos/**: los 29 documentos también en **PDF**, idénticos a los que imprime el sistema y llenos con datos de prueba inventados. `php formatos/generar_pdf.php` los vuelve a generar con una base temporal que borra al terminar.
+- Corregido: en muchos documentos de una página, el pie pasaba a una segunda hoja en blanco al imprimir o descargar en PDF (la página medía exactamente la hoja y el redondeo la desbordaba).
+- Corregido: los nombres en mayúsculas perdían la tilde en recibos, vouchers y constancias ("MEJíA"), y los títulos de las planillas de beneficios en el pie ("DéCIMO CUARTO MES").
+- Base de datos (`actualizar_bd.php`): columna `roles.revisa_todos` (desactivada en todos los puestos).
+- Pruebas: con la opción, el puesto revisa lo de cualquiera (también de un superior y de otra rama) y puede rechazar, sin revisar lo suyo, corregir ni autorizar fuera del organigrama; recibe los avisos de revisar y no los de autorizar; sin la opción o con "solo sus solicitudes", no revisa.
+
 ## 1.36.0 — 2026-11-17
 **Mis recibos de pago**
 - Nueva página **Mis recibos de pago** en el menú, para todo usuario vinculado a un empleado: lista sus recibos de las planillas **pagadas** (sueldos, beneficios y asignación) con el neto recibido, y los abre o descarga en PDF.

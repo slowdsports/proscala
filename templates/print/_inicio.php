@@ -35,7 +35,8 @@ body {
 }
 @media print {
   body { background: #fff !important; padding: 0; }
-  .page { box-shadow: none; margin: 0; width: 100%; }
+  /* 1 mm menos que la hoja: con la altura exacta, el redondeo pasaba el pie a una segunda hoja en blanco */
+  .page { box-shadow: none; margin: 0; width: 100%; min-height: <?= $isLandscape ? '209mm' : '296mm' ?>; }
   .no-print { display: none !important; }
   @page { margin: 0; size: A4 <?= $isLandscape ? 'landscape' : 'portrait' ?>; }
   /* Ancla el gradiente inferior al borde físico de cada hoja impresa */

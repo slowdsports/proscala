@@ -116,7 +116,7 @@ require __DIR__ . '/_inicio.php';
   <!-- Receipt / signature box -->
   <div style="margin:18px 28px 0;padding:18px 20px;border:1.5px dashed #cbd5e1;border-radius:8px;background:#fafafa">
     <p style="font-size:9pt;line-height:1.7;color:#374151;margin-bottom:16px">
-      Yo, <strong><?= htmlspecialchars(strtoupper($doc['emp_nombre'])) ?></strong><?php if ($doc['emp_identidad']): ?>,
+      Yo, <strong><?= htmlspecialchars(mb_strtoupper($doc['emp_nombre'])) ?></strong><?php if ($doc['emp_identidad']): ?>,
       <?= $doc['proveedor_id'] ? 'con RTN' : 'portador/a de la Tarjeta de Identidad número' ?> <strong><?= htmlspecialchars($doc['emp_identidad']) ?></strong><?php endif; ?>,
       declaro haber recibido la suma de <strong><?= lps($doc['monto_alimentacion']) ?></strong>
       en concepto de <em>viáticos de alimentación</em> correspondientes al viaje a

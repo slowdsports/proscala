@@ -14,7 +14,7 @@ $proyMap = proyectosMap($pdo);
 [$repartos, $resumenProy] = distribuirBeneficios($detalle,
     cargarDistribucion($pdo, 'planilla_beneficios_detalle_proyectos', array_column($detalle, 'id')));
 $pbTipos = ['decimo_tercero' => 'Décimo Tercer Mes', 'decimo_cuarto' => 'Décimo Cuarto Mes'];
-$title  = strtoupper($pbTipos[$doc['tipo']] ?? $doc['tipo']) . ' POR PROYECTO';
+$title  = mb_strtoupper($pbTipos[$doc['tipo']] ?? $doc['tipo']) . ' POR PROYECTO';
 $docNum = $doc['numero'];
 
 // Firmas

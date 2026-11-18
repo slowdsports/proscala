@@ -15,6 +15,7 @@
 - /.gitignore
 - /.gitattributes
 - /formatos/generar.php
+- /formatos/generar_pdf.php
 - /formatos/lib/
 
 # Datos del servidor: nunca se borran

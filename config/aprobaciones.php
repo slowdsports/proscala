@@ -9,7 +9,10 @@
 // los usuarios que se elijan (siempre dentro de ese rango: nunca alguien de su mismo nivel o de
 // otra rama, salvo los colegas de un puesto que se revisa entre sí). En un puesto alto marcado
 // "lo aprueban sus subordinados directos" (p. ej. Dirección Ejecutiva), quienes dependen
-// directamente de él también revisan y autorizan sus procesos (no los corrigen). El Administrador y el super
+// directamente de él también revisan y autorizan sus procesos (no los corrigen). Un puesto marcado
+// "revisa los procesos de todos" (p. ej. Administración, Finanzas o Contabilidad) da a todos sus miembros
+// la facultad de revisar (y rechazar mientras espera revisión) los procesos de cualquier puesto, sin
+// importar el organigrama; no autoriza ni corrige por eso. El Administrador y el super
 // administrador tienen todas sobre todos. La revisión es obligatoria antes de autorizar, quien
 // revisa no autoriza el mismo proceso y nadie revisa, autoriza ni rechaza lo que él mismo creó.
 // Los avisos (config/notificaciones.php) siguen las mismas facultades: a quien solo autoriza no le
@@ -70,6 +73,8 @@ function facultadesUsuario(int $uid, bool $refrescar = false): array {
             $f[$r['facultad']] = array_map('intval', $sel->fetchAll(PDO::FETCH_COLUMN));
         }
     } catch (PDOException $e) { /* base sin las tablas todavía (actualizar_bd.php) */ }
+    // Puesto que revisa los procesos de todos: revisar sobre todos, aunque no la tenga en Usuarios
+    if (revisaTodos($rol)) $f['revisar'] = true;
     return $cache[$uid] = $f;
 }
 
@@ -88,10 +93,12 @@ function rolDeUsuario(int $uid, bool $refrescar = false): ?string {
  * ¿El puesto $rol está en el rango para ejercer $facultad sobre lo que crea alguien del puesto $rolCreador?
  * Por encima de él en su rama del organigrama, o su colega si el puesto se revisa entre sí. Para revisar
  * y autorizar (no para corregir), también su subordinado directo si el puesto de quien lo creó tiene
- * "lo aprueban sus subordinados directos" (apruebanSubordinados). Sin $facultad, solo el rango común.
+ * "lo aprueban sus subordinados directos" (apruebanSubordinados). Para revisar, cualquier puesto si
+ * $rol "revisa los procesos de todos" (revisaTodos). Sin $facultad, solo el rango común.
  */
 function enRango(string $rol, string $rolCreador, ?string $facultad = null): bool {
-    return $rol === 'admin' || esSuperiorDe($rol, $rolCreador) || ($rol === $rolCreador && puedenAprobarseEntreColegas($rol))
+    return $rol === 'admin' || ($facultad === 'revisar' && revisaTodos($rol))
+        || esSuperiorDe($rol, $rolCreador) || ($rol === $rolCreador && puedenAprobarseEntreColegas($rol))
         || (in_array($facultad, ['revisar', 'autorizar'], true) && esSubordinadoQueAprueba($rol, $rolCreador));
 }
 
@@ -219,6 +226,16 @@ function puedenAprobarseEntreColegas(string $rol): bool {
  */
 function apruebanSubordinados(string $rol): bool {
     return $rol !== 'admin' && !empty(roles()[$rol]['aprueban_subordinados']);
+}
+
+/**
+ * ¿Los miembros del puesto $rol revisan los procesos de todos los puestos? (roles.revisa_todos, en Roles
+ * y Permisos; p. ej. Administración, Finanzas o Contabilidad). Solo revisar (y rechazar lo que espera
+ * revisión), sin importar el organigrama; no en un puesto con "solo sus solicitudes".
+ */
+function revisaTodos(?string $rol): bool {
+    $r = $rol !== null ? (roles()[$rol] ?? null) : null;
+    return $r && $rol !== 'admin' && !empty($r['revisa_todos']) && empty($r['solo_propios']);
 }
 
 /** ¿$rol depende directamente de $jefe y $jefe deja que sus subordinados directos aprueben sus procesos? */

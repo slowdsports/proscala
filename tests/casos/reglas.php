@@ -499,6 +499,54 @@ prueba('Jerarquía: los subordinados directos revisan y autorizan los procesos d
         iguales(true, enRango('zz_asistente', 'zz_jefe', 'autorizar'), 'autorizar alcanza al jefe');
     });
 });
+
+prueba('Puesto que revisa los procesos de todos: revisa lo de cualquier puesto (también de sus superiores), sin autorizar ni corregir', function () use ($pdo, $accion) {
+    conEscenario($pdo, function ($u, $per) use ($pdo, $accion) {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        // zz_revisor está en lo más bajo del organigrama (depende del asistente) y no tiene facultades en Usuarios
+        $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_revisor', 'ZZ Revisor', 'zz_asistente', 0, 0, 93)");
+        $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES ('ZZ Revisor', ?, 'x', 'zz_revisor', 1)")->execute(['zz.revisor.' . bin2hex(random_bytes(3)) . '@prueba.local']);
+        $revisor = (int)$pdo->lastInsertId();
+        $nuevoPermiso = function (string $num, int $creador) use ($pdo, $emp): int {
+            $pdo->prepare("INSERT INTO permisos (numero, empleado_id, fecha_solicitud, fecha_inicio, fecha_fin, dias, tipo, motivo, estado)
+                           VALUES (?, ?, CURDATE(), CURDATE(), CURDATE(), 1, 'personal', 'Prueba automática', 'pendiente')")->execute([$num, $emp]);
+            $id = (int)$pdo->lastInsertId();
+            $pdo->prepare("INSERT INTO registro_usuarios (tabla, registro_id, usuario_id, participacion) VALUES ('permisos', ?, ?, 'creador')")->execute([$id, $creador]);
+            return $id;
+        };
+        $deJefe = $nuevoPermiso('ZZPRUEBA-RT-JEFE', $u['jefe']);
+        $propio = $nuevoPermiso('ZZPRUEBA-RT-PROPIO', $revisor);
+        roles(true);
+
+        comoUsuario($pdo, $revisor);
+        afirmar($accion($pdo, $per, 'revisar') !== true, 'sin la opción no revisa');
+        afirmar(!in_array($revisor, nivelesAprobadores($pdo, 'permisos.php', $deJefe, [$u['jefe']])[0] ?? [], true), 'sin la opción no le llegan los avisos');
+
+        $pdo->exec("UPDATE roles SET revisa_todos = 1 WHERE clave = 'zz_revisor'");
+        roles(true);
+        comoUsuario($pdo, $revisor);
+        iguales(true, $accion($pdo, $per, 'revisar'), 'revisa lo de un puesto que está por encima del suyo');
+        iguales(true, $accion($pdo, $deJefe, 'revisar'), 'revisa lo del jefe, en otra rama');
+        iguales(true, $accion($pdo, $per, 'rechazar'), 'puede rechazar lo que espera revisión');
+        afirmar($accion($pdo, $propio, 'revisar') !== true, 'no revisa lo propio');
+        afirmar(puedeEditar($pdo, 'permisos.php', $per) !== true, 'no corrige lo de otros');
+        iguales(false, enRango('zz_revisor', 'zz_jefe', 'autorizar'), 'no autoriza fuera del organigrama');
+        afirmar(in_array($revisor, nivelesAprobadores($pdo, 'permisos.php', $deJefe, [$u['jefe']], 'revisar')[0] ?? [], true), 'le llegan los avisos de revisar en el primer nivel');
+        afirmar(!in_array($revisor, array_merge(...nivelesAprobadores($pdo, 'permisos.php', $deJefe, [$u['jefe']], 'autorizar')), true), 'no le llegan los de autorizar');
+
+        // Revisa; luego autoriza otro (el jefe del asistente), nunca quien revisó
+        registrarPasoFlujo($pdo, 'permisos.php', $per, 'revisado');
+        afirmar($accion($pdo, $per, 'autorizar') !== true, 'quien revisó no autoriza');
+        comoUsuario($pdo, $u['jefe']);
+        iguales(true, $accion($pdo, $per, 'autorizar'), 'lo autoriza el superior de quien lo creó');
+
+        // Con "solo sus solicitudes" no revisa nada
+        $pdo->exec("UPDATE roles SET solo_propios = 1 WHERE clave = 'zz_revisor'");
+        roles(true);
+        comoUsuario($pdo, $revisor);
+        afirmar($accion($pdo, $deJefe, 'revisar') !== true, 'un puesto con "solo sus solicitudes" no revisa aunque tenga la opción');
+    });
+});
 prueba('Caja chica: el responsable la edita (no la elimina) mientras está abierta; liquidada, solo un rango superior', function () use ($pdo) {
     conEscenario($pdo, function ($u) use ($pdo) {
         // Un empleado sin usuario: el asistente pasa a ser su único usuario (el responsable de la caja)

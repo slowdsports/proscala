@@ -34,6 +34,8 @@ function facultadesDelFormulario(PDO $pdo, int $uid, string $rol): array {
         }
         $f[$fac] = $ids;
     }
+    // Su puesto revisa los procesos de todos: revisar sobre todos (la casilla va fija en el formulario)
+    if (revisaTodos($rol)) $f['revisar'] = true;
     return $f;
 }
 
@@ -208,6 +210,7 @@ foreach (roles() as $k => $r) {
     elseif (!array_merge(...array_values($rangoPuestos[$k]))) $notaPuestos[$k] = 'Este puesto no tiene puestos por debajo en el organigrama: no hay a quién revisar, autorizar ni corregir.';
 }
 $datosFacultades = ['rango' => $rangoPuestos, 'nota' => $notaPuestos,
+    'revisaTodos' => array_values(array_filter(array_keys(roles()), 'revisaTodos')),
     'usuarios' => array_map(fn($u) => ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'rol' => $u['rol'], 'puesto' => rolLabel($u['rol']), 'activo' => (bool)$u['activo']], $usuarios)];
 include __DIR__ . '/includes/header.php';
 ?>
@@ -310,6 +313,9 @@ include __DIR__ . '/includes/header.php';
                 <input type="checkbox" class="form-check-input fac-on" id="fac-<?= $fac ?>" name="fac[<?= $fac ?>][on]" value="1">
                 <label class="form-check-label" for="fac-<?= $fac ?>"><strong><?= $etiqueta ?></strong> <span class="text-muted small">— <?= htmlspecialchars($desc) ?></span></label>
               </div>
+              <?php if ($fac === 'revisar'): ?>
+              <div class="fac-por-puesto ms-4 small text-success" hidden><i class="fas fa-circle-check"></i> Por su puesto revisa los procesos de todos los puestos (se cambia en Roles y Permisos).</div>
+              <?php endif; ?>
               <div class="fac-detalle ms-4 mt-1" hidden>
                 <select class="form-select form-select-sm fac-alcance no-search" name="fac[<?= $fac ?>][alcance]">
                   <option value="todos">Todos los puestos por debajo del suyo</option>
@@ -361,11 +367,18 @@ function mostrarFacultades(fac) {
     $(sel).empty();
     candidatos.forEach(u => sel.add(new Option(u.nombre + ' — ' + u.puesto + (u.activo ? '' : ' (inactivo)'), u.id, false, elegidos.includes(String(u.id)))));
     $(sel).trigger('change');
+    // Puesto que revisa los procesos de todos: revisar va marcada y fija, sin alcance que elegir
+    const porPuesto = f === 'revisar' && FAC.revisaTodos.includes(rol);
+    item.dataset.porPuesto = porPuesto ? '1' : '';
+    if (porPuesto) on.checked = true;
+    on.disabled = porPuesto;
+    const aviso = item.querySelector('.fac-por-puesto');
+    if (aviso) aviso.hidden = !porPuesto;
     detalleFacultad(item);
   });
 }
 function detalleFacultad(item) {
-  const on = item.querySelector('.fac-on').checked;
+  const on = item.querySelector('.fac-on').checked && !item.dataset.porPuesto;
   item.querySelector('.fac-detalle').hidden = !on;
   item.querySelector('.fac-sel').hidden = !on || item.querySelector('.fac-alcance').value !== 'seleccion';
 }

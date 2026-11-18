@@ -51,7 +51,8 @@ function aprobadoresProceso(PDO $pdo, string $modulo, int $id, array $excluir, s
  * incluye a quien lo creó (cubreFacultad), sin los de $excluir: a quien solo autoriza no le llegan
  * los avisos de revisar. Los colegas que eligieron expresamente a quien lo creó (puesto que se revisa
  * entre sí) y los subordinados directos de un puesto que ellos aprueban (apruebanSubordinados) van en
- * el primer nivel. El nivel 0 recibe los avisos; los siguientes, el escalamiento
+ * el primer nivel, igual que, para revisar, los miembros de los puestos que revisan los procesos de
+ * todos (revisaTodos). El nivel 0 recibe los avisos; los siguientes, el escalamiento
  * (cron/recordatorios.php).
  */
 function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir, string $paso = 'revisar'): array {
@@ -78,6 +79,25 @@ function nivelesAprobadores(PDO $pdo, string $modulo, int $id, array $excluir, s
         $subordinados = [];
         foreach ($roles as $k => $r) if (esSubordinadoQueAprueba($k, $rol)) $subordinados = array_merge($subordinados, $usuarios($k));
         if ($subordinados) $niveles[0] = array_values(array_unique(array_merge($niveles[0] ?? [], $subordinados)));
+    }
+    // Puestos que revisan los procesos de todos: sus miembros reciben los avisos de revisar en el primer
+    // nivel (tengan o no la facultad guardada en Usuarios)
+    if ($paso === 'revisar') {
+        $todos = [];
+        $m = $pdo->prepare("SELECT id FROM usuarios WHERE rol = ? AND activo = 1 ORDER BY id");
+        foreach ($roles as $k => $_) {
+            if (!revisaTodos($k)) continue;
+            $m->execute([$k]);
+            foreach (array_map('intval', $m->fetchAll(PDO::FETCH_COLUMN)) as $u) {
+                if (!in_array($u, $excluir, true) && cubreFacultad($u, 'revisar', $cid, $rol)) $todos[] = $u;
+            }
+        }
+        if ($todos) {
+            $niveles[0] = array_values(array_unique(array_merge($niveles[0] ?? [], $todos)));
+            // Ya avisados en el primer nivel: fuera de los siguientes (escalamiento)
+            foreach ($niveles as $i => $ids) if ($i > 0) $niveles[$i] = array_values(array_diff($ids, $todos));
+            $niveles = array_values(array_filter($niveles));
+        }
     }
     $s = $pdo->prepare("SELECT id FROM usuarios WHERE rol = 'admin' AND activo = 1 ORDER BY id");
     $s->execute();
