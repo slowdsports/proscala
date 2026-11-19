@@ -223,7 +223,7 @@ Ejemplo: *Asistente* depende de *Coordinación* y *Coordinación* de *Dirección
 - Los procesos que terminan en un pago comparten un **correlativo anual**. La orden de pago lleva el mismo número que su proceso: la liquidación `SG26-0215` se paga con la orden `OP26-0215`.
 - Los documentos derivados conservan el número de su origen: solicitud `SC26-0230` → orden de compra `OC26-0230` → orden de pago `OP26-0230`.
 - Ese **número** es el único número del proceso: es el que aparece en las listas, en la vista de cada documento y en los formatos impresos (print.php). No hay otro "número de proceso" aparte.
-- **La orden de pago se genera sola** al autorizar el proceso (anticipos, liquidaciones de gastos, órdenes de compra, planillas, liquidaciones laborales), o al crear préstamos y fondos de caja chica. Después sigue su propio flujo de revisión y autorización.
+- **La orden de pago se genera sola** al autorizar el proceso (anticipos, liquidaciones de gastos, órdenes de compra, planillas, liquidaciones laborales), o al crear préstamos y fondos de caja chica (y al liquidar una caja chica con gastos de más, la de su reembolso). Después sigue su propio flujo de revisión y autorización.
 - Al ver un proceso, un aviso en la parte superior enlaza con su orden de pago, y viceversa.
 
 ### 6.5 Firmas en los documentos
@@ -418,6 +418,8 @@ Desde la solicitud de compra puede imprimir el **proceso completo** en un solo d
 ### Caja Chica
 
 Abra un fondo de caja chica para un responsable, registre cada gasto con su cuenta contable y comprobante, y liquídelo. El documento impreso incluye el resumen por cuenta. Al crear el fondo se genera su orden de pago. *Abierta → Liquidada*. Para liquidarla debe haberse consumido al menos el 80 % del fondo.
+
+**Reembolso al liquidar.** Si se gastó más que el fondo, al liquidar se genera **otra orden de pago** a nombre del responsable por la diferencia, igual que la liquidación de un anticipo de viaje. Lleva el número de la caja con sufijo: el fondo de `CC26-0012` se paga con `OP26-0012` y su reembolso con `OP26-0012-B`. Si la caja no tenía fondo (puro reembolso), la orden del reembolso es `OP26-0012`. Si sobró dinero ("Saldo a devolver"), no se genera nada. Si un rango superior corrige una caja liquidada, el reembolso se ajusta, se anula si ya no hay gastos de más o se genera si ahora los hay, mientras no esté pagado. Una vez pagado el reembolso, la caja ya no se puede editar.
 
 **Quién la edita:**
 

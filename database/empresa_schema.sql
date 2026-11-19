@@ -605,6 +605,7 @@ CREATE TABLE `ordenes_pago` (
   `historico` tinyint(1) NOT NULL DEFAULT 0,
   `origen_tabla` varchar(40) DEFAULT NULL,
   `origen_id` int(11) DEFAULT NULL,
+  `reembolso` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = reembolso al responsable al liquidar la caja chica (la del fondo es 0)',
   PRIMARY KEY (`id`),
   KEY `idx_estado` (`estado`),
   KEY `idx_fecha` (`fecha`),

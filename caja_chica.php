@@ -14,7 +14,7 @@ $pagina = 'Caja Chica';
  * El propio responsable cambia el fondo y los gastos, pero no quién es el responsable (eso lo hace un superior).
  */
 function camposFijosCaja(PDO $pdo, int $ccId, int $empleadoCaja): array {
-    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = 'caja_chica' AND origen_id = ? AND estado = 'pagada'");
+    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = 'caja_chica' AND origen_id = ? AND reembolso = 0 AND estado = 'pagada'");
     $s->execute([$ccId]);
     if ($s->fetchColumn()) return ['responsable' => true, 'fondo' => true,
         'motivo' => 'El fondo ya fue entregado (su orden de pago está pagada): el responsable y el monto del fondo ya no cambian; solo los gastos.'];
@@ -100,10 +100,24 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pct = round($cc['total_gastos'] / $cc['anticipo'] * 100, 1);
             jsonErr("Solo se ha consumido el {$pct}% del anticipo. Se requiere al menos el 80% para liquidar.");
         }
-        $pdo->prepare("UPDATE caja_chica SET estado='liquidada',aprobador_id=?,fecha_cierre=CURDATE() WHERE id=?")
-            ->execute([currentUser()['id'],$ccId]);
-        registrarAuditoria($pdo,'UPDATE','caja_chica',$ccId,'Caja chica liquidada');
-        jsonOk([],'Caja chica liquidada correctamente.');
+        // Si se gastó más que el fondo, el reembolso al responsable sale con su propia orden de pago
+        // (OP26-0012-B; la del fondo es OP26-0012), como la liquidación de un anticipo de viaje.
+        // Liquidación y orden de pago quedan juntas o ninguna.
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("UPDATE caja_chica SET estado='liquidada',aprobador_id=?,fecha_cierre=CURDATE() WHERE id=?")
+                ->execute([currentUser()['id'],$ccId]);
+            registrarAuditoria($pdo,'UPDATE','caja_chica',$ccId,'Caja chica liquidada');
+            $opReembolso = generarOrdenPago($pdo, 'caja_chica', $ccId, true);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('Proscala: no se pudo liquidar la caja chica ' . $ccId . ': ' . $e->getMessage());
+            jsonErr('No se pudo generar la orden de pago del reembolso, así que la caja chica NO se liquidó. Intente de nuevo en unos momentos.');
+        }
+        jsonOk(['orden_pago' => $opReembolso], $opReembolso
+            ? "Caja chica liquidada. Se generó la orden de pago $opReembolso para reembolsar al responsable " . lps((float)$cc['total_gastos'] - (float)$cc['anticipo']) . '.'
+            : 'Caja chica liquidada correctamente.');
     }
 
     if ($_act === 'eliminar') {
@@ -306,7 +320,7 @@ include __DIR__ . '/includes/header.php';
       <?= botonEditar($pdo, 'caja_chica.php', (int)$id, '?action=editar&id=' . $id) ?>
       <?php if ($cc['estado'] === 'abierta'): ?>
       <?php if ($puedeL): ?>
-      <button class="btn btn-sm btn-success" onclick="liquidarCC(<?= $id ?>)">
+      <button class="btn btn-sm btn-success" onclick="liquidarCC(<?= $id ?>, <?= htmlspecialchars(json_encode($cc['saldo'] < 0 ? lps(-(float)$cc['saldo']) : '')) ?>)">
         <i class="fas fa-check-double"></i> Liquidar
       </button>
       <?php else: ?>
@@ -664,8 +678,10 @@ document.getElementById('form-cc')?.addEventListener('submit', function(e) {
   }).catch(() => Toast.show('Error de comunicación.', 'error'));
 });
 
-async function liquidarCC(id) {
-  if (!await confirmar('¿Confirma la liquidación de esta caja chica?', { titulo: 'Liquidar caja chica', aceptar: 'Liquidar' })) return;
+async function liquidarCC(id, reembolso) {
+  const texto = '¿Confirma la liquidación de esta caja chica?'
+    + (reembolso ? ' Se gastó más que el fondo: se generará una orden de pago para reembolsar ' + reembolso + ' al responsable.' : '');
+  if (!await confirmar(texto, { titulo: 'Liquidar caja chica', aceptar: 'Liquidar' })) return;
   const fd = new FormData();
   fd.append('csrf_token', document.querySelector('[name=csrf_token]')?.value || '');
   fd.append('_action', 'liquidar');

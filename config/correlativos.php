@@ -87,8 +87,9 @@ function numeroDe(PDO $pdo, string $tabla, $id): ?string {
 /**
  * Datos de la Orden de Pago de un proceso, o null si no corresponde pagar
  * (histórico, sin monto o, en una liquidación de anticipo, sin reembolso al empleado).
+ * $reembolso (caja chica): la segunda orden de pago, al liquidarla, por lo gastado de más sobre el fondo.
  */
-function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
+function datosOrdenPago(PDO $pdo, string $tabla, int $id, bool $reembolso = false): ?array {
     $empleado = function (int $empId) use ($pdo): array {
         $s = $pdo->prepare("SELECT id, CONCAT(nombre,' ',apellidos) AS nombre, banco, cuenta_banco FROM empleados WHERE id = ?");
         $s->execute([$empId]);
@@ -161,30 +162,39 @@ function datosOrdenPago(PDO $pdo, string $tabla, int $id): ?array {
             break;
         case 'caja_chica':
             $r = $fila("SELECT * FROM caja_chica WHERE id = ?");
-            if ($r) $d = $empleado((int)$r['empleado_id']) + ['monto' => $r['anticipo'], 'concepto' => "Fondo de caja chica {$r['numero']}"];
+            if ($r && !$reembolso) $d = $empleado((int)$r['empleado_id']) + ['monto' => $r['anticipo'], 'concepto' => "Fondo de caja chica {$r['numero']}"];
+            // Reembolso: solo ya liquidada y si se gastó más que el fondo (como la liquidación de un anticipo)
+            if ($r && $reembolso && $r['estado'] === 'liquidada') $d = $empleado((int)$r['empleado_id']) + [
+                'monto' => round((float)$r['total_gastos'] - (float)$r['anticipo'], 2),
+                'concepto' => "Reembolso de caja chica {$r['numero']}: gastos " . lps((float)$r['total_gastos']) . ' sobre un fondo de ' . lps((float)$r['anticipo'])];
             break;
     }
+    if ($reembolso && $tabla !== 'caja_chica') return null;
     if (!$d || !empty($r['historico']) || round((float)$d['monto'], 2) <= 0) return null;
     return $d + ['numero_origen' => $r['numero']];
 }
 
-/** Crea la Orden de Pago de un proceso (una sola por proceso). Devuelve su número o null. */
-function generarOrdenPago(PDO $pdo, string $tabla, int $id): ?string {
-    $s = $pdo->prepare("SELECT numero FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ?");
-    $s->execute([$tabla, $id]);
+/**
+ * Crea la Orden de Pago de un proceso (una sola por proceso). Devuelve su número o null.
+ * $reembolso (caja chica): la del reembolso al liquidarla, aparte de la del fondo. Toma el número
+ * del proceso; si ya lo tiene la del fondo, con sufijo: OP26-0012 → OP26-0012-B (como en viajes).
+ */
+function generarOrdenPago(PDO $pdo, string $tabla, int $id, bool $reembolso = false): ?string {
+    $s = $pdo->prepare("SELECT numero FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND reembolso = ?");
+    $s->execute([$tabla, $id, (int)$reembolso]);
     if ($ya = $s->fetchColumn()) return $ya;
-    $d = datosOrdenPago($pdo, $tabla, $id);
+    $d = datosOrdenPago($pdo, $tabla, $id, $reembolso);
     if (!$d) return null;
 
     $num = numeroProceso($pdo, 'ordenes_pago', getConfig($pdo, 'prefijo_op', 'OP'), $d['numero_origen']);
     $pdo->prepare("INSERT INTO ordenes_pago (numero, proceso_id, fecha, beneficiario, beneficiario_tipo, proveedor_id, empleado_id,
             concepto, monto, forma_pago, banco, cuenta_bancaria, banco_tipo, orden_compra_id, solicitud_gastos_id, proyecto_id,
-            estado, aprobador1_id, origen_tabla, origen_id)
-        VALUES (?,?,CURDATE(),?,?,?,?,?,?,'transferencia',?,?,?,?,?,?,'pendiente',?,?,?)")
+            estado, aprobador1_id, origen_tabla, origen_id, reembolso)
+        VALUES (?,?,CURDATE(),?,?,?,?,?,?,'transferencia',?,?,?,?,?,?,'pendiente',?,?,?,?)")
         ->execute([$num, $d['proceso_id'] ?? null, $d['beneficiario'], $d['beneficiario_tipo'], $d['proveedor_id'] ?? null,
                    $d['empleado_id'] ?? null, $d['concepto'], round((float)$d['monto'], 2), $d['banco'] ?? null,
                    $d['cuenta_bancaria'] ?? null, $d['banco_tipo'] ?? null, $d['orden_compra_id'] ?? null,
-                   $d['solicitud_gastos_id'] ?? null, $d['proyecto_id'] ?? null, $_SESSION['usuario_id'] ?? null, $tabla, $id]);
+                   $d['solicitud_gastos_id'] ?? null, $d['proyecto_id'] ?? null, $_SESSION['usuario_id'] ?? null, $tabla, $id, (int)$reembolso]);
     $opId = (int)$pdo->lastInsertId();
     registrarParticipacion($pdo, 'compras_pago.php', $opId);   // "Elaborado por": quien autorizó el proceso
     registrarEvento($pdo, 'INSERT', ['modulo' => 'compras_pago.php', 'tabla' => 'ordenes_pago', 'registro_id' => $opId,
@@ -281,9 +291,9 @@ function enlacesOrdenPago(PDO $pdo, string $modulo, int $id): array {
     }
     $def = ORDEN_PAGO_AUTOMATICA[$modulo] ?? null;
     if (!$def) return [];
-    $s = $pdo->prepare("SELECT id, numero, estado FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? ORDER BY id");
+    $s = $pdo->prepare("SELECT id, numero, estado, reembolso FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? ORDER BY id");
     $s->execute([$def['tabla'], $id]);
-    return array_map(fn($op) => ['titulo' => 'Orden de pago', 'numero' => $op['numero'],
+    return array_map(fn($op) => ['titulo' => $op['reembolso'] ? 'Orden de pago del reembolso' : 'Orden de pago', 'numero' => $op['numero'],
         'url' => 'compras_pago.php?action=ver&id=' . $op['id'], 'estado' => $op['estado']], $s->fetchAll());
 }
 

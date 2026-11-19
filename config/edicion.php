@@ -139,11 +139,12 @@ function motivoCierre(PDO $pdo, string $modulo, int $id): ?string {
         $b->execute([$id]);
         if ($b->fetchColumn()) return $def['bloqueo'][1] . ' Ya no se puede editar.';
     }
-    if (empty($def['op_fondo'])) {
-        $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND estado = 'pagada'");
-        $s->execute([$def['tabla'], $id]);
-        if ($s->fetchColumn()) return 'Su orden de pago ya fue pagada; ya no se puede editar.';
-    }
+    // Con fondo (caja chica), pagar el fondo no la cierra; pagar el reembolso de su liquidación sí
+    $s = $pdo->prepare("SELECT 1 FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND estado = 'pagada'"
+                       . (empty($def['op_fondo']) ? '' : ' AND reembolso = 1'));
+    $s->execute([$def['tabla'], $id]);
+    if ($s->fetchColumn()) return empty($def['op_fondo']) ? 'Su orden de pago ya fue pagada; ya no se puede editar.'
+                                                          : 'El reembolso de su liquidación ya fue pagado; ya no se puede editar.';
     return null;
 }
 
@@ -231,14 +232,22 @@ function aplicarEdicion(PDO $pdo, string $modulo, int $id): void {
     if ($modulo !== 'compras_pago.php') actualizarOrdenPago($pdo, $def['tabla'], $id);
 }
 
-/** Lleva a la orden de pago de un proceso los datos actuales del proceso (si aún no se pagó). */
-function actualizarOrdenPago(PDO $pdo, string $tabla, int $id): void {
-    $s = $pdo->prepare("SELECT id, numero, estado FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ?");
-    $s->execute([$tabla, $id]);
+/**
+ * Lleva a la orden de pago de un proceso los datos actuales del proceso (si aún no se pagó).
+ * Caja chica: también la del reembolso de su liquidación, que se crea, ajusta o anula según
+ * lo gastado de más sobre el fondo.
+ */
+function actualizarOrdenPago(PDO $pdo, string $tabla, int $id, bool $reembolso = false): void {
+    if (!$reembolso && $tabla === 'caja_chica') actualizarOrdenPago($pdo, $tabla, $id, true);
+    $s = $pdo->prepare("SELECT id, numero, estado FROM ordenes_pago WHERE origen_tabla = ? AND origen_id = ? AND reembolso = ?");
+    $s->execute([$tabla, $id, (int)$reembolso]);
     $op = $s->fetch();
-    if (!$op || in_array($op['estado'], ['pagada', 'anulada'], true)) return;
-    $d = datosOrdenPago($pdo, $tabla, $id);
+    if ($reembolso && !$op) { generarOrdenPago($pdo, $tabla, $id, true); return; }
+    // Un reembolso anulado vuelve a pendiente si tras la corrección otra vez hay que reembolsar
+    if (!$op || $op['estado'] === 'pagada' || ($op['estado'] === 'anulada' && !$reembolso)) return;
+    $d = datosOrdenPago($pdo, $tabla, $id, $reembolso);
     if (!$d) {
+        if ($op['estado'] === 'anulada') return;
         // Ya no hay nada que pagar (p. ej. la liquidación quedó por debajo del anticipo)
         $pdo->prepare("UPDATE ordenes_pago SET estado = 'anulada' WHERE id = ?")->execute([$op['id']]);
         registrarEvento($pdo, 'UPDATE', ['modulo' => 'compras_pago.php', 'tabla' => 'ordenes_pago', 'registro_id' => $op['id'],

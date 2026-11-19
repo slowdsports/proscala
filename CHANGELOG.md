@@ -11,6 +11,14 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.39.0 — 2026-11-19
+**Caja chica: orden de pago del reembolso al liquidar**
+- Al liquidar una caja chica en la que se gastó más que el fondo, se genera una **nueva orden de pago** a nombre del responsable por la diferencia, como en la liquidación de un anticipo de viaje. Lleva el número del proceso con sufijo: fondo `OP26-0012`, reembolso `OP26-0012-B`. Sin fondo, el reembolso es `OP26-0012`. Con saldo a devolver no se genera nada.
+- El aviso al liquidar dice cuánto se reembolsará, y el resultado dice qué orden se generó. La liquidación y su orden de pago quedan juntas o ninguna. La caja muestra arriba sus dos órdenes ("Orden de pago" y "Orden de pago del reembolso").
+- Si un rango superior corrige una caja liquidada, el reembolso se ajusta, se anula si ya no hay gastos de más o se genera (o reactiva) si ahora los hay, mientras no esté pagado. Con el reembolso pagado, la caja ya no se edita. Que el fondo esté pagado sigue sin cerrarla.
+- Base de datos (`actualizar_bd.php`): columna `ordenes_pago.reembolso` (0 en todas las órdenes existentes).
+- Pruebas: fondo y reembolso con su número (`-B`), sin duplicar; ajuste, anulación y reactivación al corregir; el reembolso pagado cierra la caja y el fondo pagado no; caja sin fondo y caja con saldo a devolver.
+
 ## 1.38.0 — 2026-11-19
 **Un solo número por proceso**
 - El **Número** de cada documento (p. ej. `GV26-0012` → `SG26-0012` → `OP26-0012`) es el único número del proceso, el mismo en las listas, en la vista del documento y en print.php.

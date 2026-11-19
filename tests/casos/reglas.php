@@ -675,6 +675,51 @@ prueba('Cadena del proceso: la misma desde cualquier documento, con todas las ó
     } finally { $pdo->rollBack(); }
 });
 
+prueba('Caja chica: al liquidarla con gastos de más, el reembolso sale con su propia orden de pago (-B)', function () use ($pdo) {
+    $pdo->beginTransaction();
+    try {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $cc  = insertarMinimo($pdo, 'caja_chica', ['numero' => 'CC26-9871', 'empleado_id' => $emp, 'anticipo' => 1000, 'total_gastos' => 1250,
+                                                   'saldo' => -250, 'estado' => 'abierta', 'historico' => 0]);
+        $op = fn(int $re) => $pdo->query("SELECT numero, monto, estado FROM ordenes_pago WHERE origen_tabla = 'caja_chica' AND origen_id = $cc AND reembolso = $re")->fetch();
+        // Al abrirla: la orden de pago del fondo
+        iguales('OP26-9871', generarOrdenPago($pdo, 'caja_chica', $cc), 'orden de pago del fondo');
+        afirmar(generarOrdenPago($pdo, 'caja_chica', $cc, true) === null, 'abierta no debe generar el reembolso');
+        // Al liquidarla: el reembolso de lo gastado de más, con sufijo
+        $pdo->exec("UPDATE caja_chica SET estado = 'liquidada' WHERE id = $cc");
+        iguales('OP26-9871-B', generarOrdenPago($pdo, 'caja_chica', $cc, true), 'orden de pago del reembolso');
+        iguales('OP26-9871-B', generarOrdenPago($pdo, 'caja_chica', $cc, true), 'no debe duplicar el reembolso');
+        iguales(250.0, (float)$op(1)['monto'], 'monto del reembolso');
+        iguales(1000.0, (float)$op(0)['monto'], 'la del fondo no cambia');
+        // Un superior corrige los gastos: el reembolso se ajusta; sin gastos de más se anula; si vuelven, se reactiva
+        $pdo->exec("UPDATE caja_chica SET total_gastos = 1400, saldo = -400 WHERE id = $cc");
+        actualizarOrdenPago($pdo, 'caja_chica', $cc);
+        iguales(400.0, (float)$op(1)['monto'], 'reembolso tras la corrección');
+        $pdo->exec("UPDATE caja_chica SET total_gastos = 900, saldo = 100 WHERE id = $cc");
+        actualizarOrdenPago($pdo, 'caja_chica', $cc);
+        iguales('anulada', $op(1)['estado'], 'sin gastos de más el reembolso se anula');
+        $pdo->exec("UPDATE caja_chica SET total_gastos = 1100, saldo = -100 WHERE id = $cc");
+        actualizarOrdenPago($pdo, 'caja_chica', $cc);
+        iguales(['OP26-9871-B', 100.0, 'pendiente'], [$op(1)['numero'], (float)$op(1)['monto'], $op(1)['estado']], 'el reembolso se reactiva');
+        // El fondo pagado no cierra la caja; el reembolso pagado sí
+        $pdo->exec("UPDATE ordenes_pago SET estado = 'pagada' WHERE origen_tabla = 'caja_chica' AND origen_id = $cc AND reembolso = 0");
+        afirmar(motivoCierre($pdo, 'caja_chica.php', $cc) === null, 'el fondo pagado no debe cerrar la caja');
+        $pdo->exec("UPDATE ordenes_pago SET estado = 'pagada' WHERE origen_tabla = 'caja_chica' AND origen_id = $cc AND reembolso = 1");
+        afirmar(motivoCierre($pdo, 'caja_chica.php', $cc) !== null, 'el reembolso pagado debe cerrar la caja');
+        // Sin fondo (caja de puro reembolso): la única orden de pago, al liquidar, toma el número sin sufijo
+        $cc2 = insertarMinimo($pdo, 'caja_chica', ['numero' => 'CC26-9872', 'empleado_id' => $emp, 'anticipo' => 0, 'total_gastos' => 300,
+                                                    'saldo' => -300, 'estado' => 'liquidada', 'historico' => 0]);
+        afirmar(generarOrdenPago($pdo, 'caja_chica', $cc2) === null, 'sin fondo no hay orden de pago del fondo');
+        iguales('OP26-9872', generarOrdenPago($pdo, 'caja_chica', $cc2, true), 'reembolso de una caja sin fondo');
+        // Con saldo a devolver no hay reembolso
+        $cc3 = insertarMinimo($pdo, 'caja_chica', ['numero' => 'CC26-9873', 'empleado_id' => $emp, 'anticipo' => 1000, 'total_gastos' => 850,
+                                                    'saldo' => 150, 'estado' => 'liquidada', 'historico' => 0]);
+        afirmar(generarOrdenPago($pdo, 'caja_chica', $cc3, true) === null, 'con saldo a devolver no debe haber reembolso');
+    } finally { $pdo->rollBack(); $GLOBALS['_correos_notificacion'] = []; }
+    afirmar(str_contains((string)file_get_contents(RAIZ . '/caja_chica.php'), "generarOrdenPago(\$pdo, 'caja_chica', \$ccId, true)"),
+        'caja_chica.php no genera el reembolso al liquidar');
+});
+
 prueba('Compras: la nota de recepción solo se registra sobre una orden de compra con orden de pago vigente', function () use ($pdo) {
     $pdo->beginTransaction();
     try {
