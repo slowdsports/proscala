@@ -118,11 +118,10 @@ include __DIR__ . '/includes/header.php';
 <div class="card">
   <div class="card-body p-0">
     <table id="tbl-gv" class="table-proscala w-100">
-      <thead><tr><th>Proceso</th><th>Número</th><th>Tipo</th><th>Beneficiario</th><th>Destino / Concepto</th><th>Salida</th><th>Regreso</th><th>Monto Anticipo</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Número</th><th>Tipo</th><th>Beneficiario</th><th>Destino / Concepto</th><th>Salida</th><th>Regreso</th><th>Monto Anticipo</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($listaViajes as $r): ?>
         <tr>
-          <td class="font-mono text-primary fw-bold"><?= $r['proceso_id'] ? formatProceso($r['proceso_id']) : '—' ?></td>
           <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?></td>
           <td><?= tipoAnticipoBadge($r['tipo']) ?></td>
           <td><?= htmlspecialchars($r['emp_nombre'] ?? '') ?><?= $r['proveedor_id'] ? ' <span class="badge bg-secondary-subtle text-secondary-emphasis" title="Proveedor / consultor">Proveedor</span>' : '' ?></td>
@@ -138,7 +137,7 @@ include __DIR__ . '/includes/header.php';
         </tr>
         <?php endforeach; ?>
         <?php if (!$listaViajes): ?>
-        <tr><td colspan="10" class="text-center text-muted py-4">No hay anticipos registrados</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">No hay anticipos registrados</td></tr>
         <?php endif; ?>
       </tbody>
     </table>
@@ -153,9 +152,6 @@ include __DIR__ . '/includes/header.php';
   <div class="card-header">
     <i class="fas <?= tipoAnticipoIcon($gv['tipo']) ?>"></i> <?= $gv['numero'] ?> — <?= estadoBadge($gv['estado']) ?>
     <?= tipoAnticipoBadge($gv['tipo']) ?>
-    <?php if ($gv['proceso_id']): ?>
-    <span class="badge bg-primary ms-2 font-mono" title="Número de proceso compartido">Proceso <?= formatProceso($gv['proceso_id']) ?></span>
-    <?php endif; ?>
     <div class="ms-auto d-flex gap-2 no-print">
       <?php if (!soloRegistrosPropios() && $gv['estado']==='aprobada'): ?>
       <button class="btn btn-sm btn-info text-white" onclick="cambiarEstado('gastos_viajes.php',<?=$gv['id']?>,'liquidada','gastos_viaje',()=>Nav.recargar())"><i class="fas fa-check-double"></i> Liquidar</button>

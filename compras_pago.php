@@ -175,11 +175,10 @@ include __DIR__ . '/includes/header.php';
 <div class="d-flex justify-content-end mb-2"><?= selectorHistorico() ?></div>
 <div class="card"><div class="card-body p-0">
   <table id="tbl-op" class="table-proscala w-100">
-    <thead><tr><th>Proceso</th><th>Número</th><th>Fecha</th><th>Beneficiario</th><th>Concepto</th><th>Monto</th><th>Forma Pago</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Número</th><th>Fecha</th><th>Beneficiario</th><th>Concepto</th><th>Monto</th><th>Forma Pago</th><th>Estado</th><th></th></tr></thead>
     <tbody>
       <?php foreach($lista as $r): ?>
       <tr>
-        <td class="font-mono text-primary fw-bold"><?= ($r['proceso_id'] ?? null) ? formatProceso($r['proceso_id']) : '—' ?></td>
         <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?></td>
         <td><?= fmtFecha($r['fecha']) ?></td>
         <td><?= htmlspecialchars($r['beneficiario']) ?></td>
@@ -196,7 +195,7 @@ include __DIR__ . '/includes/header.php';
         </td>
       </tr>
       <?php endforeach; ?>
-      <?php if(!$lista): ?><tr><td colspan="9" class="text-center text-muted py-4">Sin órdenes de pago</td></tr><?php endif; ?>
+      <?php if(!$lista): ?><tr><td colspan="8" class="text-center text-muted py-4">Sin órdenes de pago</td></tr><?php endif; ?>
     </tbody>
   </table>
 </div></div>
@@ -211,9 +210,6 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
 <div class="card">
   <div class="card-header">
     <i class="fas fa-money-bill-transfer"></i> ORDEN DE PAGO <?= $op['numero'] ?> — <?= estadoBadge($op['estado']) ?>
-    <?php if ($op['proceso_id'] ?? null): ?>
-    <span class="badge bg-primary ms-2 font-mono" title="Número de proceso compartido">Proceso <?= formatProceso($op['proceso_id']) ?></span>
-    <?php endif; ?>
     <div class="ms-auto d-flex gap-2 no-print">
       <?php if($op['estado']==='aprobada'): ?>
       <button class="btn btn-sm btn-info text-white" onclick="cambiarEstado('compras_pago.php',<?=$op['id']?>,'pagada','ordenes_pago',()=>Nav.recargar())"><i class="fas fa-money-bill"></i> Pagar</button>
@@ -253,7 +249,6 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
       <div class="col-md-6"><strong>Cuenta contable:</strong> <?= $op['cuenta_nombre'] ? htmlspecialchars($op['cuenta_codigo'] . ' — ' . $op['cuenta_nombre']) : '—' ?></div>
       <div class="col-md-3"><strong>Orden de compra:</strong> <?= $traza['oc'] ? '<a href="' . BASE_URL . 'compras_orden.php?action=ver&id=' . $traza['oc']['id'] . '" class="font-mono">' . htmlspecialchars($traza['oc']['numero']) . '</a>' : '—' ?></div>
       <div class="col-md-3"><strong>Liquidación de gastos:</strong> <?= $traza['sg'] ? '<a href="' . BASE_URL . 'gastos_solicitud.php?action=ver&id=' . $traza['sg']['id'] . '" class="font-mono">' . htmlspecialchars($traza['sg']['numero']) . '</a>' : '—' ?></div>
-      <div class="col-md-3"><strong>Proceso:</strong> <?= $op['proceso_id'] ? '<span class="font-mono">' . formatProceso((int)$op['proceso_id']) . '</span>' : '—' ?></div>
       <div class="col-12"><strong>Concepto:</strong> <?= nl2br(htmlspecialchars($op['concepto'])) ?></div>
       <div class="col-12"><strong>Notas:</strong> <?= $op['notas'] ? nl2br(htmlspecialchars($op['notas'])) : '—' ?></div>
     </div>
@@ -356,7 +351,7 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
         </select>
       </div>
       <div class="col-md-8">
-        <label class="form-label">Liquidación de Viáticos (Solicitud de Gastos) <small class="text-muted">— hereda el número de proceso</small></label>
+        <label class="form-label">Liquidación de Viáticos (Solicitud de Gastos) <small class="text-muted">— la OP toma su número</small></label>
         <select name="solicitud_gastos_id" class="form-select" id="sel-sg-op" onchange="setSgData(this)">
           <option value="">— Ninguna —</option>
           <?php
@@ -367,9 +362,9 @@ $cadModulo = 'compras_pago.php'; $cadId = $op['id']; include __DIR__ . '/include
             data-emp="<?= htmlspecialchars($sg['emp_nombre'] ?? '') ?>"
             data-tipo="<?= $sg['proveedor_id'] ? 'proveedor' : 'empleado' ?>"
             data-benef="<?= (int)($sg['proveedor_id'] ?: $sg['empleado_id']) ?>"
-            data-proceso="<?= ($sg['proceso_id'] ?? null) ? formatProceso($sg['proceso_id']) : '' ?>"
+            data-numero="<?= htmlspecialchars($sg['numero']) ?>"
             <?= $selSgId==$sg['id']?'selected':'' ?>>
-            <?= $sg['numero'] ?><?= ($sg['proceso_id'] ?? null) ? ' [Proceso '.formatProceso($sg['proceso_id']).']' : '' ?>
+            <?= $sg['numero'] ?>
             — <?= htmlspecialchars($sg['emp_nombre'] ?? '') ?>
             — <?= lps($sg['monto_total']) ?>
           </option>
@@ -439,7 +434,7 @@ function setSgData(sel) {
   }
   const monto   = opt.dataset.monto;
   const emp     = opt.dataset.emp;
-  const proceso = opt.dataset.proceso;
+  const numero  = opt.dataset.numero;
   const inpMonto  = document.getElementById('inp-monto');
   const inpBenef  = document.getElementById('inp-benef');
   const tipoBen   = document.getElementById('tipo-ben');
@@ -450,10 +445,9 @@ function setSgData(sel) {
   if (tipoBen) $(tipoBen).val(tipo).trigger('change.select2');
   updateBenType();
   if (opt.dataset.benef) $(tipo === 'proveedor' ? '#sel-prov-op' : '#form-op [name=empleado_id]').val(opt.dataset.benef).trigger('change');
-  if (proceso) {
-    document.getElementById('sg-proceso-badge').innerHTML =
-      '<span class="badge bg-primary font-mono">Proceso ' + proceso + ' será asignado a esta OP</span>';
-  }
+  // La OP toma el número de la liquidación (SG26-0012 → OP26-0012)
+  document.getElementById('sg-proceso-badge').innerHTML = numero
+    ? '<span class="badge bg-primary font-mono">Esta OP tendrá el número ' + numero.replace(/^[A-Z]+/, 'OP') + '</span>' : '';
 }
 function setBenef(sel){
   const name=sel.options[sel.selectedIndex]?.text||'';

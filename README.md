@@ -222,6 +222,7 @@ Ejemplo: *Asistente* depende de *Coordinación* y *Coordinación* de *Dirección
 
 - Los procesos que terminan en un pago comparten un **correlativo anual**. La orden de pago lleva el mismo número que su proceso: la liquidación `SG26-0215` se paga con la orden `OP26-0215`.
 - Los documentos derivados conservan el número de su origen: solicitud `SC26-0230` → orden de compra `OC26-0230` → orden de pago `OP26-0230`.
+- Ese **número** es el único número del proceso: es el que aparece en las listas, en la vista de cada documento y en los formatos impresos (print.php). No hay otro "número de proceso" aparte.
 - **La orden de pago se genera sola** al autorizar el proceso (anticipos, liquidaciones de gastos, órdenes de compra, planillas, liquidaciones laborales), o al crear préstamos y fondos de caja chica. Después sigue su propio flujo de revisión y autorización.
 - Al ver un proceso, un aviso en la parte superior enlaza con su orden de pago, y viceversa.
 

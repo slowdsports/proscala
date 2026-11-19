@@ -48,14 +48,12 @@ function generarNumero(PDO $pdo, string $tabla, string $campo, string $prefijo, 
     return $prefijo . substr((string)$anio, -2) . '-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
 }
 
-// ── Número de proceso compartido (anticipo ↔ liquidación ↔ orden de pago) ───
+// ── Vínculo interno entre anticipo ↔ liquidación ↔ orden de pago ───
+// Solo enlaza los documentos; no se muestra. El número que se ve en el sistema y en print.php
+// es el "número" de cada documento, que el proceso comparte (GV26-0012 → SG26-0012 → OP26-0012).
 function generarProceso(PDO $pdo): int {
     $pdo->exec("INSERT INTO procesos_viaticos () VALUES ()");
     return (int)$pdo->lastInsertId();
-}
-
-function formatProceso(int $procesoId): string {
-    return 'P' . substr((string)date('Y'), -2) . '-' . str_pad($procesoId, 4, '0', STR_PAD_LEFT);
 }
 
 // ── Formateo de moneda ────────────────────────────────────────────

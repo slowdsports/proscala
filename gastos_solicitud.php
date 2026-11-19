@@ -146,11 +146,10 @@ include __DIR__ . '/includes/header.php';
 <div class="card">
   <div class="card-body p-0">
     <table id="tbl-sg" class="table-proscala w-100">
-      <thead><tr><th>Proceso</th><th>Número</th><th>Fecha</th><th>Beneficiario</th><th>Descripción</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Número</th><th>Fecha</th><th>Beneficiario</th><th>Descripción</th><th>Total</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($listaSolicitudes as $r): ?>
         <tr>
-          <td class="font-mono text-primary fw-bold"><?= $r['proceso_id'] ? formatProceso($r['proceso_id']) : '—' ?></td>
           <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?>
             <div class="text-muted" style="font-size:.72rem;font-family:inherit"><?= $r['viaje_id'] ? '<i class="fas fa-hand-holding-dollar"></i> Liquidación' : '<i class="fas fa-receipt"></i> Solicitud' ?></div></td>
           <td><?= fmtFecha($r['fecha']) ?></td>
@@ -165,7 +164,7 @@ include __DIR__ . '/includes/header.php';
         </tr>
         <?php endforeach; ?>
         <?php if (!$listaSolicitudes): ?>
-        <tr><td colspan="8" class="text-center text-muted py-4">No hay solicitudes registradas</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">No hay solicitudes registradas</td></tr>
         <?php endif; ?>
       </tbody>
     </table>
@@ -183,9 +182,6 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
 <div class="card mb-3">
   <div class="card-header">
     <i class="fas fa-file-invoice-dollar"></i> <?= tipoSolicitudGastos($sg) ?> <?= $sg['numero'] ?> — <?= estadoBadge($sg['estado']) ?>
-    <?php if ($sg['proceso_id']): ?>
-    <span class="badge bg-primary ms-2 font-mono" title="Número de proceso compartido">Proceso <?= formatProceso($sg['proceso_id']) ?></span>
-    <?php endif; ?>
     <div class="ms-auto d-flex gap-2 no-print">
       <?= botonEditar($pdo, 'gastos_solicitud.php', (int)$sg['id'], '?action=editar&id=' . $sg['id']) ?>
       <?php if (!soloRegistrosPropios() && $sg['estado']==='aprobada'): ?>

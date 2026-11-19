@@ -11,6 +11,13 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.38.0 — 2026-11-19
+**Un solo número por proceso**
+- El **Número** de cada documento (p. ej. `GV26-0012` → `SG26-0012` → `OP26-0012`) es el único número del proceso, el mismo en las listas, en la vista del documento y en print.php.
+- Se quitó el número de proceso aparte (`P26-…`): la columna "Proceso" de las listas de órdenes de pago, solicitudes de gasto y anticipos; el distintivo "Proceso" junto al título de esos documentos; la línea "Proceso" de la orden de pago, y la casilla "Proceso" de la orden de pago impresa y de su formato en Excel y PDF.
+- Al crear una orden de pago desde una liquidación, el aviso indica el número que tendrá la orden (`SG26-0012` → `OP26-0012`).
+- Sin cambios en la base de datos: el vínculo interno entre anticipo, liquidación y orden de pago se mantiene, solo deja de mostrarse.
+
 ## 1.37.0 — 2026-11-18
 **Puestos que revisan los procesos de todos, y formatos en PDF**
 - Nueva opción al editar un puesto en Roles y Permisos: **"Revisa los procesos de todos"** (p. ej. Administración, Finanzas o Contabilidad). Todas las personas del puesto pueden revisar, y rechazar mientras espera revisión, los procesos de cualquier puesto, sin importar el organigrama (también los de sus superiores y de otras ramas), aunque no tengan la facultad en Usuarios. No da permiso de autorizar ni de corregir. Se mantienen las reglas: nadie revisa lo suyo y quien revisa no autoriza el mismo proceso.

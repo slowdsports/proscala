@@ -76,12 +76,6 @@ require __DIR__ . '/_pagina_inicio.php';
         <div class="meta-label">Fecha de Pago</div>
         <div class="meta-value"><?= fmtFecha($doc['fecha_pago'] ?? '') ?></div>
       </div>
-      <?php if ($doc['proceso_id']): ?>
-      <div class="meta-item">
-        <div class="meta-label">Proceso</div>
-        <div class="meta-value mono"><?= formatProceso((int)$doc['proceso_id']) ?></div>
-      </div>
-      <?php endif; ?>
       <div class="meta-item" style="grid-column:1/3">
         <div class="meta-label">Beneficiario (<?= ['proveedor' => 'Proveedor', 'empleado' => 'Empleado', 'otro' => 'Otro'][$doc['beneficiario_tipo']] ?? 'Otro' ?>)</div>
         <div class="meta-value" style="font-size:11pt;font-weight:700;color:#0D3F6A"><?= htmlspecialchars($doc['beneficiario']) ?></div>

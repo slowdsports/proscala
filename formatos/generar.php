@@ -120,7 +120,6 @@ function hojaOP(Formato $d, ?Formato $sc = null, ?Formato $oc = null): void {
         ['l' => $sc ? 'N° Cheque' : 'Número de Cheque', 'k' => 'mono'], ['l' => 'N° Factura Proveedor', 'k' => 'mono'],
         ['l' => 'Fecha de Pago', 'k' => 'fecha'],
     ];
-    if (!$sc) $meta[] = ['l' => 'Proceso', 'k' => 'mono'];
     array_push($meta,
         ['l' => $sc ? 'Beneficiario' : 'Beneficiario (Proveedor / Empleado / Otro)', 's' => 2, 'nueva' => true, 'alto' => 20, 'e' => fu(11, ['b' => true, 'c' => MARINO])],
         ['l' => 'Banco'], ['l' => $sc ? 'Cuenta Bancaria' : 'Cuenta Bancaria (Ahorros / Cheques)', 'k' => 'mono']);
