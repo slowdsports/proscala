@@ -36,6 +36,16 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'viaje_id'     => $_POST['viaje_id'] ?: null,
             'notas'        => trim($_POST['notas'] ?? ''),
         ];
+        // Reporte de viaje: solo en la liquidación de un anticipo de viaje (Formulario de reporte de viaje)
+        $esViaje = false;
+        if ($d['viaje_id']) {
+            $s = $pdo->prepare("SELECT tipo FROM gastos_viaje WHERE id = ?");
+            $s->execute([(int)$d['viaje_id']]);
+            $esViaje = $s->fetchColumn() === 'viaje';
+        }
+        $rep = fn(string $c) => $esViaje && trim((string)($_POST[$c] ?? '')) !== '' ? mb_substr(trim((string)$_POST[$c]), 0, 10000) : null;
+        $d += ['reporte_actividades' => $rep('reporte_actividades'), 'reporte_resultados' => $rep('reporte_resultados'),
+               'reporte_observaciones' => $rep('reporte_observaciones')];
 
         $items = json_decode($_POST['items'] ?? '[]', true);
         $total = array_sum(array_column($items, 'monto'));
@@ -43,8 +53,10 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             if ($sgId) {
-                $pdo->prepare("UPDATE solicitud_gastos SET fecha=?,empleado_id=?,proveedor_id=?,descripcion=?,proyecto_id=?,viaje_id=?,monto_total=?,notas=? WHERE id=?")
-                    ->execute([$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas'],$sgId]);
+                $pdo->prepare("UPDATE solicitud_gastos SET fecha=?,empleado_id=?,proveedor_id=?,descripcion=?,proyecto_id=?,viaje_id=?,monto_total=?,notas=?,
+                    reporte_actividades=?,reporte_resultados=?,reporte_observaciones=? WHERE id=?")
+                    ->execute([$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas'],
+                               $d['reporte_actividades'],$d['reporte_resultados'],$d['reporte_observaciones'],$sgId]);
                 $pdo->prepare("DELETE FROM solicitud_gastos_detalle WHERE solicitud_id=?")->execute([$sgId]);
             } else {
                 // Si viene vinculada a un anticipo, heredar su proceso_id
@@ -55,9 +67,11 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $procesoId = $ps->fetchColumn() ?: null;
                 }
                 $num = numeroProceso($pdo,'solicitud_gastos',getConfig($pdo,'prefijo_sg','SG'), numeroDe($pdo,'gastos_viaje',$d['viaje_id']));
-                $pdo->prepare("INSERT INTO solicitud_gastos (numero,proceso_id,fecha,empleado_id,proveedor_id,firmante1_id,descripcion,proyecto_id,viaje_id,monto_total,notas,estado)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,'pendiente')")
-                    ->execute([$num,$procesoId,$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['firmante1_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas']]);
+                $pdo->prepare("INSERT INTO solicitud_gastos (numero,proceso_id,fecha,empleado_id,proveedor_id,firmante1_id,descripcion,proyecto_id,viaje_id,monto_total,notas,estado,
+                    reporte_actividades,reporte_resultados,reporte_observaciones)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,'pendiente',?,?,?)")
+                    ->execute([$num,$procesoId,$d['fecha'],$d['empleado_id'],$d['proveedor_id'],$d['firmante1_id'],$d['descripcion'],$d['proyecto_id'],$d['viaje_id'],$total,$d['notas'],
+                               $d['reporte_actividades'],$d['reporte_resultados'],$d['reporte_observaciones']]);
                 $sgId = $pdo->lastInsertId();
             }
             foreach ($items as $item) {
@@ -96,6 +110,8 @@ if (in_array($action,['ver','editar']) && $id) {
         $sv->execute([$sg['viaje_id']]); $viaje_link = $sv->fetch();
     }
 }
+// Liquidación de un anticipo de viaje: lleva el reporte de la gira y sus fotos (print.php?tipo=rv)
+$esReporteViaje = $sg && $viaje_link && $viaje_link['tipo'] === 'viaje';
 
 // ── Auxiliares ────────────────────────────────────────────────────
 $empleados = $pdo->query("SELECT id, CONCAT(nombre,' ',apellidos) as nombre FROM empleados WHERE activo=1 ORDER BY apellidos")->fetchAll();
@@ -193,6 +209,9 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
       </a>
       <?php endif; ?>
       <a href="<?= BASE_URL ?>print.php?tipo=sg&id=<?= $sg['id'] ?>" target="_blank" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+      <?php if ($esReporteViaje): ?>
+      <a href="<?= BASE_URL ?>print.php?tipo=rv&id=<?= $sg['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-route"></i> Reporte de viaje</a>
+      <?php endif; ?>
     </div>
   </div>
   <div class="card-body">
@@ -224,8 +243,21 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
     </table>
   </div>
 </div>
+<?php if ($esReporteViaje): ?>
+<div class="card mt-3">
+  <div class="card-header"><i class="fas fa-route"></i> Reporte de viaje</div>
+  <div class="card-body" style="font-size:.85rem;">
+    <?php foreach (['reporte_actividades' => 'Actividades realizadas', 'reporte_resultados' => 'Resultados obtenidos',
+                    'reporte_observaciones' => 'Observaciones y recomendaciones'] as $campo => $etiqueta): ?>
+    <div class="mb-2"><strong><?= $etiqueta ?>:</strong>
+      <?= ($sg[$campo] ?? '') !== '' && $sg[$campo] !== null ? '<div>' . nl2br(htmlspecialchars($sg[$campo])) . '</div>' : '<span class="text-muted">— sin completar —</span>' ?></div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 </div><!-- /print-area -->
 
+<?php if ($esReporteViaje) { $adjModulo = 'gastos_solicitud.php'; $adjId = $sg['id']; $adjSeccion = FOTOS_VIAJE; include __DIR__ . '/includes/adjuntos.php'; } ?>
 <?php $adjModulo = 'gastos_solicitud.php'; $adjId = $sg['id']; include __DIR__ . '/includes/adjuntos.php'; ?>
 <?php else: ?>
 <!-- ── FORM ── -->
@@ -268,7 +300,7 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
             $sgViajeId = $sg['viaje_id'] ?? $prefill_viaje_id;
             foreach ($viajes as $v):
             ?>
-            <option value="<?= $v['id'] ?>" <?= $sgViajeId==$v['id']?'selected':'' ?>>
+            <option value="<?= $v['id'] ?>" data-tipo="<?= htmlspecialchars($v['tipo']) ?>" <?= $sgViajeId==$v['id']?'selected':'' ?>>
               [<?= $v['tipo']==='compra' ? 'Compra' : 'Viaje' ?>] <?= $v['numero'] ?> — <?= htmlspecialchars($v['destino']) ?> (<?= fmtFecha($v['fecha_salida']) ?>) — Anticipo: <?= lps($v['viaticos_anticipados']) ?>
             </option>
             <?php endforeach; ?>
@@ -318,6 +350,28 @@ $cadModulo = 'gastos_solicitud.php'; $cadId = $sg['id']; include __DIR__ . '/inc
       <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="addGastoRow()">
         <i class="fas fa-plus"></i> Agregar Línea
       </button>
+
+      <!-- Reporte de viaje: solo en la liquidación de un anticipo de viaje (se imprime en el Formulario de reporte de viaje) -->
+      <div id="grp-reporte" style="display:none">
+        <div class="form-section-title mt-4"><i class="fas fa-route"></i> Reporte de viaje
+          <span class="text-muted fw-normal small ms-2" style="text-transform:none;letter-spacing:0">Explique los resultados de la gira. Se imprime en el Formulario de reporte de viaje.</span></div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Actividades realizadas</label>
+            <textarea name="reporte_actividades" class="form-control" rows="3" maxlength="10000" placeholder="Qué se hizo durante la gira: visitas, reuniones, talleres, supervisiones…"><?= htmlspecialchars($sg['reporte_actividades'] ?? '') ?></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Resultados obtenidos</label>
+            <textarea name="reporte_resultados" class="form-control" rows="3" maxlength="10000" placeholder="Logros, acuerdos, avances, personas atendidas…"><?= htmlspecialchars($sg['reporte_resultados'] ?? '') ?></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Observaciones y recomendaciones</label>
+            <textarea name="reporte_observaciones" class="form-control" rows="2" maxlength="10000" placeholder="Dificultades, pendientes, siguientes pasos…"><?= htmlspecialchars($sg['reporte_observaciones'] ?? '') ?></textarea>
+          </div>
+        </div>
+        <?php $adjModulo = 'gastos_solicitud.php'; $adjSeccion = FOTOS_VIAJE; include __DIR__ . '/includes/adjuntos_form.php'; ?>
+        <?php if ($sg): ?><div class="form-text">Las fotos que ya subió están en la vista de la liquidación (panel "<?= FOTOS_VIAJE ?>").</div><?php endif; ?>
+      </div>
 
       <?php $adjModulo = 'gastos_solicitud.php'; include __DIR__ . '/includes/adjuntos_form.php'; ?>
       <div class="mt-4 d-flex gap-2">
@@ -390,9 +444,13 @@ JS, [
     $extraJs .= <<<'ENDJS'
 // Ligada a un anticipo es una liquidación de gastos; si no, una solicitud de gastos
 function actualizarTipoSG() {
-  const liq = !!document.getElementById('sel-viaje').value;
+  const sel = document.getElementById('sel-viaje');
+  const liq = !!sel.value;
   document.getElementById('titulo-sg').textContent = (SG_NUEVA ? 'Nueva ' : 'Editar ') + (liq ? 'liquidación de gastos' : 'solicitud de gastos');
   document.getElementById('boton-sg').textContent = liq ? 'liquidación' : 'solicitud';
+  // Reporte de viaje: solo al liquidar un anticipo de viaje
+  const deViaje = liq && sel.options[sel.selectedIndex]?.dataset.tipo === 'viaje';
+  document.getElementById('grp-reporte').style.display = deViaje ? '' : 'none';
 }
 
 // Al elegir al empleado o proveedor: si tiene anticipos autorizados sin liquidar, se liga solo.

@@ -317,6 +317,113 @@ function hojaGV(Formato $d, bool $compra): void {
     $d->pie();
 }
 
+/** Casillas para marcar a mano (☐ E ☐ ¼ …) */
+function casillas(array $opciones): string { return implode('    ', array_map(fn($o) => "☐ $o", $opciones)); }
+
+/** Solicitud de vehículo: segunda hoja del anticipo cuando requiere vehículo (gv.php) */
+function hojaVehiculo(Formato $d, bool $compra): void {
+    $d->encabezado();
+    $d->cadena([($compra ? '📦 ' : '✈ ') . num('gv'), '🚗 Solicitud de vehículo']);
+    $d->meta([
+        ['l' => 'Solicitante', 's' => 2, 'e' => fu(9, ['b' => true])], ['l' => 'Proyecto'], ['l' => 'Fecha de la solicitud', 'k' => 'fecha'],
+        ['l' => $compra ? 'Concepto del anticipo' : 'Destino', 's' => 2],
+        ['l' => $compra ? 'Fecha del anticipo' : 'Fecha de salida', 'k' => 'fecha'], ['l' => $compra ? 'Fecha límite' : 'Fecha de regreso', 'k' => 'fecha'],
+    ]);
+    $d->seccion('Uso del vehículo');
+    $m = $d->meta([
+        ['l' => 'Desde', 'k' => 'fecha', 'id' => 'desde', 'e' => fu(11, ['b' => true, 'c' => MARINO])],
+        ['l' => 'Hasta', 'k' => 'fecha', 'id' => 'hasta', 'e' => fu(11, ['b' => true, 'c' => MARINO])],
+        ['l' => 'Días', 'k' => 'ent', 'id' => 'dias', 'e' => fu(11, ['b' => true, 'c' => MARINO])],
+        ['l' => 'Descripción (para qué se necesita el vehículo)', 's' => 'full', 'alto' => 40],
+        ['l' => $compra ? 'Justificación del anticipo' : 'Propósito del viaje', 's' => 'full', 'alto' => 28],
+    ], 3, BLANCO);
+    $d->ponerRef($m['dias'], ['f' => "IF(OR({$m['desde']}=\"\",{$m['hasta']}=\"\"),\"\",{$m['hasta']}-{$m['desde']}+1)"]);
+    $d->parrafo('El vehículo se entrega con el Acta de recepción de vehículo una vez revisada y autorizada esta solicitud. El solicitante se compromete a usarlo solo para la comisión indicada y a devolverlo en las mismas condiciones en que lo recibió.',
+        8, fu(8, ['c' => GRIS]), 0, 4);
+    $d->firmas(['Solicitado por', 'Revisado por', 'Autorizado por']);
+    $d->pie();
+}
+
+/** Acta de recepción de vehículo (arv.php): datos del vehículo, entrega y devolución, para llenar a mano */
+function hojaARV(Formato $d): void {
+    global $ORG;
+    $d->encabezado();
+    $d->cadena(['✈ ' . num('gv'), '🚗 Solicitud', '📝 Acta de recepción']);
+    $d->meta([
+        ['l' => 'Recibe el vehículo', 's' => 2, 'e' => fu(9, ['b' => true])], ['l' => 'N° Identidad / RTN', 'k' => 'mono'], ['l' => 'Cargo'],
+        ['l' => 'Destino / Concepto', 's' => 2], ['l' => 'Uso desde', 'k' => 'fecha'], ['l' => 'Uso hasta', 'k' => 'fecha'],
+        ['l' => 'Uso del vehículo', 's' => 'full', 'alto' => 28],
+    ]);
+    $b = ['b' => true];
+    $d->espacio(4);
+    $d->parrafo([['En la ciudad de ' . LINEA_CORTA . ', a las ______ horas del día ____ de ____________ de ______, ', []], [$ORG['nombre'], $b],
+        [' hace entrega a ', []], [LINEA_LARGA, $b], [' del vehículo descrito a continuación, para la comisión amparada por el anticipo ', []], [num('gv'), $b],
+        ['. Quien lo recibe declara recibirlo en las condiciones aquí anotadas y se compromete a usarlo solo para esa comisión, conducirlo con licencia vigente, cumplir las leyes de tránsito y devolverlo en las mismas condiciones.', []]],
+        8.5, fu(8.5, ['c' => TEXTO2]), 0, 4);
+    $etq = fu(7, ['b' => true, 'c' => GRIS]) + ['bg' => CLARO];
+    $d->seccion('Datos del vehículo');
+    $d->tabla([['t' => 'Dato', 'w' => 5, 'k' => 'a', 'e' => $etq], ['t' => '', 'w' => 7, 'k' => 'b'], ['t' => 'Dato', 'w' => 5, 'k' => 'c', 'e' => $etq], ['t' => '', 'w' => 7, 'k' => 'd']],
+        [['a' => 'MARCA', 'c' => 'MODELO'], ['a' => 'AÑO', 'c' => 'COLOR'], ['a' => 'PLACA', 'c' => 'N° CHASIS / VIN'], ['a' => 'CÓDIGO DE ACTIVO', 'c' => 'TARJETA COMBUSTIBLE']], [], ['alto' => 19]);
+    $d->seccion('Entrega y devolución');
+    $comb = casillas(['E', '¼', '½', '¾', 'F']);
+    $d->tabla([['t' => '', 'w' => 6, 'k' => 'a', 'e' => $etq], ['t' => 'Al entregar', 'w' => 9, 'k' => 'b'], ['t' => 'Al devolver', 'w' => 9, 'k' => 'c']],
+        [['a' => 'FECHA Y HORA'], ['a' => 'KILOMETRAJE'], ['a' => 'COMBUSTIBLE', 'b' => $comb, 'c' => $comb]], [], ['alto' => 19]);
+    $d->seccion('Accesorios y documentos que se entregan');
+    $d->espacio(4);
+    $d->parrafo(casillas(['Llanta de repuesto', 'Gato y llave de ruedas', 'Triángulos de seguridad', 'Extintor', 'Botiquín', 'Herramientas',
+        'Tarjeta de circulación', 'Póliza de seguro', 'Llaves (juegos: ___)']), 8.5, fu(8.5), 0, 4);
+    $d->seccion('Estado del vehículo (golpes, rayones, fallas)');
+    $d->tabla([['t' => '', 'w' => 6, 'k' => 'a', 'e' => $etq + ['v' => 'top']], ['t' => 'Observaciones', 'w' => 18, 'k' => 'b']],
+        [['a' => 'AL ENTREGAR'], ['a' => 'AL DEVOLVER']], [], ['alto' => 34]);
+    $d->firmas(['Entregado por', 'Recibido por (solicitante)', 'Vo. Bo. (autorizó el anticipo)'], 16);
+    $d->pie();
+}
+
+/** Formulario de reporte de viaje (rv.php): el reporte de la liquidación de un anticipo de viaje */
+function hojaRV(Formato $d): void {
+    $d->encabezado();
+    $d->cadena(['✈ ' . num('gv'), '📄 ' . num('sg'), '🧭 Reporte de viaje']);
+    $d->meta([
+        ['l' => 'Empleado / Consultor', 's' => 2, 'e' => fu(9, ['b' => true])], ['l' => 'Cargo'], ['l' => 'Proyecto'],
+        ['l' => 'Destino', 's' => 2], ['l' => 'Fecha de salida', 'k' => 'fecha'], ['l' => 'Fecha de regreso', 'k' => 'fecha'],
+        ['l' => 'Propósito del viaje', 's' => 'full', 'alto' => 28],
+    ]);
+    foreach (['Actividades realizadas' => 62, 'Resultados obtenidos' => 62, 'Observaciones y recomendaciones' => 42] as $sec => $alto) {
+        $d->seccion($sec);
+        $d->espacio(5);
+        $d->area($alto, fu(8.5) + ['b' => array_fill_keys(['t', 'b', 'l', 'r'], ['thin', LINEA])], 0);
+        $d->espacio(5);
+    }
+    $d->seccion('Resumen de la liquidación');
+    $t = $d->tabla([['t' => 'Concepto', 'w' => 18, 'k' => 'c'], ['t' => 'Monto', 'w' => 6, 'k' => 'monto', 'tipo' => 'monto']],
+        [['c' => 'Anticipo recibido (' . num('gv') . ')'], ['c' => 'Gastos liquidados (' . num('sg') . ')']],
+        [['l' => null, 'desde' => 'monto', 'v' => ['monto' => null], 'final' => true, 'le' => fu(9.5, ['b' => true, 'c' => MARINO])]]);
+    [$ant, $gas] = [$t['celda']('monto', $t['f1']), $t['celda']('monto', $t['f2'])];
+    $dif = $t['celda']('monto', $t['pie'][0]);
+    $d->ponerRef($d->ref($t['pie'][0], $d->ini), ['f' => "IF(COUNT({$ant},{$gas})=0,\"Diferencia\",IF(N({$gas})>N({$ant}),\"Diferencia a pagar al empleado\",\"Saldo a reintegrar\"))"]);
+    $d->ponerRef($dif, ['f' => "IF(COUNT({$ant},{$gas})=0,\"\",ABS(N({$gas})-N({$ant})))"]);
+    $d->firmas(['Elaborado por', 'Revisado por', 'Autorizado por'], 12);
+    $d->pie();
+}
+
+/** Registro fotográfico del reporte de viaje: seis recuadros para pegar las fotos con su descripción */
+function hojaFotosViaje(Formato $d): void {
+    $d->encabezado();
+    $d->seccion('Fotos de la gira · Destino: ' . LINEA_LARGA);
+    $mitad = $d->ini + intdiv($d->ancho, 2);
+    $marco = ['bg' => CLARO, 'b' => array_fill_keys(['t', 'b', 'l', 'r'], ['thin', LINEA])];
+    for ($i = 0; $i < 3; $i++) {
+        $d->espacio(10);
+        $f = $d->espacio(165);
+        $d->h->rango($f, $d->ini, $f, $mitad - 2, 'Foto ' . ($i * 2 + 1), fu(8, ['c' => GRIS_CLARO]) + $marco + ['h' => 'center', 'v' => 'center']);
+        $d->h->rango($f, $mitad + 1, $f, $d->fin, 'Foto ' . ($i * 2 + 2), fu(8, ['c' => GRIS_CLARO]) + $marco + ['h' => 'center', 'v' => 'center']);
+        $fc = $d->espacio(16);
+        $d->h->rango($fc, $d->ini, $fc, $mitad - 2, ($i * 2 + 1) . '. ', fu(7.5, ['c' => GRIS]) + ['v' => 'center', 'b' => ['b' => ['thin', FIRMA]]]);
+        $d->h->rango($fc, $mitad + 1, $fc, $d->fin, ($i * 2 + 2) . '. ', fu(7.5, ['c' => GRIS]) + ['v' => 'center', 'b' => ['b' => ['thin', FIRMA]]]);
+    }
+    $d->pie();
+}
+
 /** Voucher de alimentación: del anticipo (gva) o segunda página de la liquidación (sg) */
 function hojaAlimentacion(Formato $d, bool $deLiquidacion): void {
     $d->encabezado([$deLiquidacion ? 'Viáticos de Viaje' : '__/__/____ – __/__/____'], false, 13);
@@ -908,8 +1015,15 @@ $FORMATOS = [
         $oc = hoja($l, 'Orden de compra', 'ORDEN DE COMPRA', num('oc')); hojaOC($oc, $sc);
         hojaOP(hoja($l, 'Orden de pago', 'ORDEN DE PAGO', num('op')), $sc, $oc);
     }],
-    ['06 Gastos - Anticipo de viáticos', 'SOLICITUD DE ANTICIPO DE VIÁTICOS', fn($l) => hojaGV(hoja($l, 'Anticipo de viáticos', 'SOLICITUD DE ANTICIPO DE VIÁTICOS', num('gv')), false)],
-    ['07 Gastos - Anticipo para compra', 'SOLICITUD DE ANTICIPO PARA COMPRA', fn($l) => hojaGV(hoja($l, 'Anticipo para compra', 'SOLICITUD DE ANTICIPO PARA COMPRA', num('gv')), true)],
+    // Con la hoja "Solicitud de vehículo" (se imprime si el anticipo requiere vehículo)
+    ['06 Gastos - Anticipo de viáticos', 'SOLICITUD DE ANTICIPO DE VIÁTICOS', function ($l) {
+        hojaGV(hoja($l, 'Anticipo de viáticos', 'SOLICITUD DE ANTICIPO DE VIÁTICOS', num('gv')), false);
+        hojaVehiculo(hoja($l, 'Solicitud de vehículo', 'SOLICITUD DE VEHÍCULO', num('gv')), false);
+    }],
+    ['07 Gastos - Anticipo para compra', 'SOLICITUD DE ANTICIPO PARA COMPRA', function ($l) {
+        hojaGV(hoja($l, 'Anticipo para compra', 'SOLICITUD DE ANTICIPO PARA COMPRA', num('gv')), true);
+        hojaVehiculo(hoja($l, 'Solicitud de vehículo', 'SOLICITUD DE VEHÍCULO', num('gv')), true);
+    }],
     ['08 Gastos - Voucher de alimentación', 'VOUCHER DE ALIMENTACIÓN', fn($l) => hojaAlimentacion(hoja($l, 'Voucher de alimentación', 'VOUCHER DE ALIMENTACIÓN', num('gv')), false)],
     ['09 Gastos - Solicitud de gastos', 'SOLICITUD DE GASTOS', fn($l) => hojaSG(hoja($l, 'Solicitud de gastos', 'SOLICITUD DE GASTOS', num('sg')), false)],
     ['10 Gastos - Liquidación de gastos', 'LIQUIDACIÓN DE GASTOS', function ($l) {
@@ -935,6 +1049,11 @@ $FORMATOS = [
     ['27 RRHH - Constancia de tiempo de servicio', 'CONSTANCIA DE TIEMPO DE SERVICIO', fn($l) => hojaConstancia(hoja($l, 'Tiempo de servicio', 'CONSTANCIA DE TIEMPO DE SERVICIO', '20__-____'), 'tiempo', 'CONSTANCIA DE TIEMPO DE SERVICIO')],
     ['28 Administración - Memorándum', 'MEMORÁNDUM', fn($l) => hojaMEMO(hoja($l, 'Memorándum', ['lista' => ['MEMORÁNDUM', 'CIRCULAR', 'COMUNICADO']], num('memo')))],
     ['29 Administración - Acta de reunión', 'ACTA DE REUNIÓN', fn($l) => hojaACTA(hoja($l, 'Acta de reunión', 'ACTA DE REUNIÓN', num('acta')))],
+    ['30 Gastos - Acta de recepción de vehículo', 'ACTA DE RECEPCIÓN DE VEHÍCULO', fn($l) => hojaARV(hoja($l, 'Acta de recepción de vehículo', 'ACTA DE RECEPCIÓN DE VEHÍCULO', num('gv')))],
+    ['31 Gastos - Formulario de reporte de viaje', 'FORMULARIO DE REPORTE DE VIAJE', function ($l) {
+        hojaRV(hoja($l, 'Reporte de viaje', 'FORMULARIO DE REPORTE DE VIAJE', num('sg')));
+        hojaFotosViaje(hoja($l, 'Registro fotográfico', 'REGISTRO FOTOGRÁFICO DEL VIAJE', num('sg')));
+    }],
 ];
 
 $hechos = 0;

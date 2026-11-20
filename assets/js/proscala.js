@@ -1374,7 +1374,7 @@ const Adjuntos = {
 // devolver la respuesta, así el módulo navega cuando ya están arriba.
 const AdjuntosForm = {
   archivos: new WeakMap(),          // bloque .adjuntos-form → [{file, camara}]
-  envio: null,                      // formulario que se está enviando: {form, bloque, accion, t}
+  envio: null,                      // formulario que se está enviando: {form, bloques, accion, t}
   lista(bloque) { if (!this.archivos.has(bloque)) this.archivos.set(bloque, []); return this.archivos.get(bloque); },
   agregar(input) {
     this.sumar(input.closest('.adjuntos-form'), [...input.files], input.hasAttribute('capture'));
@@ -1414,27 +1414,30 @@ const AdjuntosForm = {
     if (!e || !(data instanceof FormData) || Date.now() - e.t > 5000) return;
     if (e.accion !== null && data.get('_action') !== e.accion) return;
     this.envio = null;
-    const pendientes = this.lista(e.bloque);
     const id = parseInt(res.id || e.form.querySelector('[name=id]')?.value || 0, 10);
-    if (!pendientes.length || !id) return;
-    Toast.show(`Guardado. Subiendo ${pendientes.length === 1 ? 'el documento adjunto' : pendientes.length + ' documentos adjuntos'}…`, 'info', 3000);
-    // Un envío por categoría (expediente); en los procesos hay una sola, vacía
-    const porCategoria = {};
-    pendientes.splice(0).forEach(p => { (porCategoria[p.categoria || ''] ??= []).push(p); });
+    // Un formulario puede tener varios bloques (documentos y, p. ej., fotos del reporte de viaje)
+    const total = e.bloques.reduce((n, b) => n + this.lista(b).length, 0);
+    if (!total || !id) return;
+    Toast.show(`Guardado. Subiendo ${total === 1 ? 'el documento adjunto' : total + ' documentos adjuntos'}…`, 'info', 3000);
     const r = { subidos: [], errores: [] };
-    for (const [categoria, archivos] of Object.entries(porCategoria)) {
-      const parcial = await Adjuntos.subirA(e.bloque.dataset.adjuntosForm, id, archivos, parseFloat(e.bloque.dataset.maxMb) || 10, null, categoria);
-      r.subidos.push(...parcial.subidos); r.errores.push(...parcial.errores);
+    for (const bloque of e.bloques) {
+      // Un envío por categoría (expediente o sección); en los demás procesos hay una sola, vacía
+      const porCategoria = {};
+      this.lista(bloque).splice(0).forEach(p => { (porCategoria[p.categoria || ''] ??= []).push(p); });
+      for (const [categoria, archivos] of Object.entries(porCategoria)) {
+        const parcial = await Adjuntos.subirA(bloque.dataset.adjuntosForm, id, archivos, parseFloat(bloque.dataset.maxMb) || 10, null, categoria);
+        r.subidos.push(...parcial.subidos); r.errores.push(...parcial.errores);
+      }
+      this.pintar(bloque);
     }
-    this.pintar(e.bloque);
     Adjuntos.avisar(r);
   },
 };
 // Anota el formulario que se va a enviar. Los formularios con evento submit se anotan solos (antes
 // que el código del módulo); los de un modal que se guardan con un botón llaman a anotar(form).
 AdjuntosForm.anotar = function (form) {
-  const bloque = form?.querySelector?.('.adjuntos-form');
-  if (bloque) this.envio = { form, bloque, accion: form.querySelector('[name=_action]')?.value ?? null, t: Date.now() };
+  const bloques = [...(form?.querySelectorAll?.('.adjuntos-form') ?? [])];
+  if (bloques.length) this.envio = { form, bloques, accion: form.querySelector('[name=_action]')?.value ?? null, t: Date.now() };
 };
 document.addEventListener('submit', e => AdjuntosForm.anotar(e.target), true);
 // Al cerrar un modal (cancelar, o abrirlo luego para otro registro) se descartan sus pendientes

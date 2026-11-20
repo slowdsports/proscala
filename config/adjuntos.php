@@ -34,6 +34,33 @@ const EXPEDIENTES = [
     ]],
 ];
 
+// Secciones de un proceso con su propio panel, aparte de "Documentos adjuntos": se guardan en la
+// misma tabla con la sección como categoría, solo admiten imágenes y se imprimen en su documento.
+// (gastos_solicitud.php: las fotos del Formulario de reporte de viaje, print.php?tipo=rv)
+const FOTOS_VIAJE = 'Registro fotográfico del viaje';
+const ADJUNTOS_SECCIONES = [
+    'gastos_solicitud.php' => [FOTOS_VIAJE => 'Fotos de la gira: actividades, lugares visitados, participantes… Se imprimen en el Formulario de reporte de viaje.'],
+];
+const ADJUNTOS_IMAGENES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+/** Sección válida del proceso (ADJUNTOS_SECCIONES), o null. */
+function seccionAdjunto(string $modulo, ?string $categoria): ?string {
+    return $categoria !== null && isset(ADJUNTOS_SECCIONES[$modulo][$categoria]) ? $categoria : null;
+}
+
+/**
+ * Adjuntos de un panel: los de la sección $seccion o, sin ella, los "Documentos adjuntos" (sin las
+ * fotos de las secciones del proceso). Los expedientes no tienen secciones.
+ */
+function adjuntosPanel(PDO $pdo, string $modulo, int $id, ?string $seccion = null): array {
+    $lista = adjuntosDe($pdo, tablaAdjuntos($modulo), $id);
+    $secciones = array_keys(ADJUNTOS_SECCIONES[$modulo] ?? []);
+    if (!$secciones) return $lista;
+    return array_values(array_filter($lista, fn($a) => $seccion !== null
+        ? $a['categoria'] === $seccion
+        : !in_array($a['categoria'], $secciones, true)));
+}
+
 /** Tabla donde se guardan los registros del módulo (proceso o expediente), o null si no admite adjuntos. */
 function tablaAdjuntos(string $modulo): ?string {
     return EDICION_PROCESOS[$modulo]['tabla'] ?? EXPEDIENTES[$modulo]['tabla'] ?? null;
@@ -150,14 +177,45 @@ function eliminarAdjuntosDe(PDO $pdo, string $tabla, int $id): void {
     $pdo->prepare("DELETE FROM rechazos WHERE tabla = ? AND registro_id = ?")->execute([$tabla, $id]);
 }
 
+/**
+ * Fotos de una sección listas para imprimir: [['src' => data URI, 'nombre' => …]]. Van incrustadas
+ * porque el PDF se genera desde un archivo local (pdf_download.php) sin la sesión del usuario.
+ * Con GD, las grandes se reducen a $lado px para que el documento no pese de más.
+ */
+function fotosParaImprimir(PDO $pdo, string $modulo, int $id, string $seccion, int $lado = 1400): array {
+    $fotos = [];
+    foreach (adjuntosPanel($pdo, $modulo, $id, $seccion) as $a) {
+        $ruta = rutaAdjunto($a);
+        if (!in_array($a['mime'], ADJUNTOS_IMAGENES, true) || !is_file($ruta)) continue;
+        $datos = null; $mime = $a['mime'];
+        $info = @getimagesize($ruta);
+        if ($info && max($info[0], $info[1]) > $lado && function_exists('imagecreatetruecolor') && $mime !== 'image/gif') {
+            $img = @imagecreatefromstring((string)file_get_contents($ruta));
+            if ($img) {
+                $k = $lado / max($info[0], $info[1]);
+                $red = imagecreatetruecolor((int)round($info[0] * $k), (int)round($info[1] * $k));
+                imagefill($red, 0, 0, imagecolorallocate($red, 255, 255, 255));
+                imagecopyresampled($red, $img, 0, 0, 0, 0, imagesx($red), imagesy($red), $info[0], $info[1]);
+                ob_start(); imagejpeg($red, null, 82); $datos = ob_get_clean(); $mime = 'image/jpeg';
+                imagedestroy($img); imagedestroy($red);
+            }
+        }
+        $datos ??= (string)file_get_contents($ruta);
+        $fotos[] = ['src' => "data:$mime;base64," . base64_encode($datos), 'nombre' => $a['nombre']];
+    }
+    return $fotos;
+}
+
 function tamanoLegible(int $bytes): string {
     return $bytes >= 1048576 ? number_format($bytes / 1048576, 1) . ' MB' : max(1, round($bytes / 1024)) . ' KB';
 }
 
-/** Lista de adjuntos de un proceso o expediente (includes/adjuntos.php y adjuntos.php?action=lista). */
-function htmlAdjuntos(PDO $pdo, string $modulo, int $id): string {
-    $lista = adjuntosDe($pdo, tablaAdjuntos($modulo), $id);
-    if (!$lista) return '<div class="text-muted small py-2"><i class="fas fa-paperclip"></i> Aún no hay documentos adjuntos.</div>';
+/** Lista de adjuntos de un proceso o expediente (includes/adjuntos.php y adjuntos.php?action=lista); $seccion: la de ADJUNTOS_SECCIONES. */
+function htmlAdjuntos(PDO $pdo, string $modulo, int $id, ?string $seccion = null): string {
+    $lista = adjuntosPanel($pdo, $modulo, $id, $seccion);
+    if (!$lista) return $seccion
+        ? '<div class="text-muted small py-2"><i class="fas fa-images"></i> Aún no hay fotos.</div>'
+        : '<div class="text-muted small py-2"><i class="fas fa-paperclip"></i> Aún no hay documentos adjuntos.</div>';
     $categorias = EXPEDIENTES[$modulo]['categorias'] ?? null;
     if (!$categorias) {
         $html = '<div class="adjuntos-lista">';

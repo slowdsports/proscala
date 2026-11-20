@@ -675,6 +675,47 @@ prueba('Cadena del proceso: la misma desde cualquier documento, con todas las ó
     } finally { $pdo->rollBack(); }
 });
 
+prueba('Anticipo con vehículo: fechas y descripción obligatorias; el acta solo ya autorizado', function () {
+    iguales(['requiere_vehiculo' => 0, 'vehiculo_desde' => null, 'vehiculo_hasta' => null, 'vehiculo_descripcion' => null],
+        datosVehiculoDelFormulario(['requiere_vehiculo' => '0', 'vehiculo_desde' => '2026-05-01']), 'sin vehículo no guarda sus datos');
+    afirmar(is_string(datosVehiculoDelFormulario(['requiere_vehiculo' => '1', 'vehiculo_descripcion' => 'Pick-up'])), 'sin fechas debe rechazarse');
+    afirmar(is_string(datosVehiculoDelFormulario(['requiere_vehiculo' => '1', 'vehiculo_desde' => '2026-05-03', 'vehiculo_hasta' => '2026-05-01', 'vehiculo_descripcion' => 'x'])), 'hasta antes de desde');
+    afirmar(is_string(datosVehiculoDelFormulario(['requiere_vehiculo' => '1', 'vehiculo_desde' => '2026-05-01', 'vehiculo_hasta' => '2026-05-03', 'vehiculo_descripcion' => '  '])), 'sin descripción');
+    iguales(['requiere_vehiculo' => 1, 'vehiculo_desde' => '2026-05-01', 'vehiculo_hasta' => '2026-05-03', 'vehiculo_descripcion' => 'Pick-up para materiales'],
+        datosVehiculoDelFormulario(['requiere_vehiculo' => '1', 'vehiculo_desde' => '2026-05-01', 'vehiculo_hasta' => '2026-05-03', 'vehiculo_descripcion' => ' Pick-up para materiales ']), 'con vehículo');
+    iguales(3, diasIncluidos('2026-05-01', '2026-05-03'), 'días de uso (ambos incluidos)');
+    foreach (['pendiente' => false, 'rechazada' => false, 'aprobada' => true, 'liquidada' => true] as $estado => $esperado) {
+        iguales($esperado, actaVehiculoDisponible(['requiere_vehiculo' => 1, 'estado' => $estado]), "acta con el anticipo $estado");
+    }
+    afirmar(!actaVehiculoDisponible(['requiere_vehiculo' => 0, 'estado' => 'aprobada']), 'sin vehículo no hay acta');
+    // Documentos nuevos: con su módulo (permisos) y como documentos del registro (solo sus solicitudes)
+    iguales(['gastos_viajes.php'], DOCUMENTOS_MODULO['arv'], 'módulo del acta');
+    iguales(['gastos_solicitud.php'], DOCUMENTOS_MODULO['rv'], 'módulo del reporte de viaje');
+    afirmar(in_array('arv', SOLICITUDES['gastos_viajes.php']['docs'], true) && in_array('rv', SOLICITUDES['gastos_solicitud.php']['docs'], true), 'docs de SOLICITUDES');
+    $gv = (string)file_get_contents(RAIZ . '/templates/print/gv.php');
+    afirmar(str_contains($gv, "requiere_vehiculo") && str_contains($gv, 'SOLICITUD DE VEHÍCULO'), 'gv.php no imprime la solicitud de vehículo');
+    afirmar(str_contains((string)file_get_contents(RAIZ . '/templates/print/arv.php'), 'actaVehiculoDisponible'), 'arv.php no valida que el anticipo esté autorizado');
+});
+
+prueba('Reporte de viaje: sus fotos van en su propia sección, aparte de los documentos adjuntos', function () use ($pdo) {
+    iguales(FOTOS_VIAJE, seccionAdjunto('gastos_solicitud.php', FOTOS_VIAJE), 'sección de la liquidación');
+    afirmar(seccionAdjunto('gastos_viajes.php', FOTOS_VIAJE) === null && seccionAdjunto('gastos_solicitud.php', 'Otra') === null, 'solo la sección definida');
+    $pdo->beginTransaction();
+    try {
+        $emp = (int)$pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 1")->fetchColumn();
+        $usr = (int)$pdo->query("SELECT id FROM usuarios ORDER BY id LIMIT 1")->fetchColumn();
+        $sg = insertarMinimo($pdo, 'solicitud_gastos', ['numero' => 'ZZSG-RV', 'empleado_id' => $emp]);
+        foreach ([['factura.pdf', null, 'application/pdf'], ['foto1.jpg', FOTOS_VIAJE, 'image/jpeg'], ['foto2.png', FOTOS_VIAJE, 'image/png']] as [$nom, $cat, $mime]) {
+            $pdo->prepare("INSERT INTO adjuntos (tabla, registro_id, categoria, nombre, archivo, mime, tamano, usuario_id) VALUES ('solicitud_gastos', ?, ?, ?, ?, ?, 1, ?)")
+                ->execute([$sg, $cat, $nom, "solicitud_gastos/$sg/$nom", $mime, $usr]);
+        }
+        iguales(['factura.pdf'], array_column(adjuntosPanel($pdo, 'gastos_solicitud.php', $sg), 'nombre'), 'documentos adjuntos sin las fotos');
+        iguales(['foto1.jpg', 'foto2.png'], array_column(adjuntosPanel($pdo, 'gastos_solicitud.php', $sg, FOTOS_VIAJE), 'nombre'), 'fotos del reporte');
+    } finally { $pdo->rollBack(); }
+    $tpl = (string)file_get_contents(RAIZ . '/templates/print/rv.php');
+    afirmar(str_contains($tpl, 'fotosParaImprimir') && str_contains($tpl, 'FORMULARIO DE REPORTE DE VIAJE'), 'rv.php no imprime el reporte con sus fotos');
+});
+
 prueba('Caja chica: al liquidarla con gastos de más, el reembolso sale con su propia orden de pago (-B)', function () use ($pdo) {
     $pdo->beginTransaction();
     try {

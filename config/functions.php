@@ -410,6 +410,37 @@ function tipoAnticipoBadge(string $tipo): string {
     return "<span class=\"badge bg-{$cls}\"><i class=\"fas " . tipoAnticipoIcon($tipo) . "\"></i> " . tipoAnticipoLabel($tipo) . "</span>";
 }
 
+// ── Vehículo de un anticipo (gastos_viaje) ─────────────────────────
+// Quien pide el anticipo indica si necesita vehículo: del… al… y una breve descripción. El PDF del
+// anticipo lleva entonces la hoja "Solicitud de vehículo" y, ya revisado y autorizado, se imprime el
+// "Acta de recepción de vehículo" (print.php?tipo=arv).
+
+/** Datos del vehículo del formulario del anticipo (columnas de gastos_viaje), o el motivo si están incompletos. */
+function datosVehiculoDelFormulario(array $post) {
+    if (empty($post['requiere_vehiculo'])) {
+        return ['requiere_vehiculo' => 0, 'vehiculo_desde' => null, 'vehiculo_hasta' => null, 'vehiculo_descripcion' => null];
+    }
+    $fecha = fn($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$v) && strtotime((string)$v) ? (string)$v : null;
+    $desde = $fecha($post['vehiculo_desde'] ?? '');
+    $hasta = $fecha($post['vehiculo_hasta'] ?? '');
+    $desc  = trim((string)($post['vehiculo_descripcion'] ?? ''));
+    if (!$desde || !$hasta) return 'Indique desde y hasta qué fecha necesita el vehículo.';
+    if ($hasta < $desde) return 'La fecha final del uso del vehículo no puede ser anterior a la inicial.';
+    if ($desc === '') return 'Describa brevemente para qué necesita el vehículo.';
+    return ['requiere_vehiculo' => 1, 'vehiculo_desde' => $desde, 'vehiculo_hasta' => $hasta, 'vehiculo_descripcion' => mb_substr($desc, 0, 2000)];
+}
+
+/** ¿Ya se puede imprimir el Acta de recepción de vehículo? (lo pidió y el anticipo está revisado y autorizado) */
+function actaVehiculoDisponible(array $gv): bool {
+    return !empty($gv['requiere_vehiculo']) && in_array($gv['estado'] ?? '', ['aprobada', 'liquidada'], true);
+}
+
+/** Días calendario entre dos fechas, ambas incluidas. */
+function diasIncluidos(?string $desde, ?string $hasta): int {
+    if (!$desde || !$hasta) return 0;
+    return max(0, (int)round((strtotime($hasta) - strtotime($desde)) / 86400) + 1);
+}
+
 // ── Paginación ────────────────────────────────────────────────────
 function paginate(int $total, int $page, int $perPage = 20, string $url = ''): array {
     $pages   = (int) ceil($total / $perPage);

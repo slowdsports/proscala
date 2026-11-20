@@ -25,7 +25,11 @@ if (!empty($doc['firmante1_id'])) $fGV = firmante1Documento($pdo, $fGV, $doc['fi
 elseif ($doc['proveedor_id']) $fGV[0] = ['posicion' => 1, 'etiqueta' => $fGV[0]['etiqueta'] ?? 'Solicitado por', 'emp_nombre' => $doc['emp_nombre']];   // lo pidió el consultor
 $fGV = firmasFlujo($pdo, $fGV, 'gastos_viajes.php', $id);
 
+// Si requiere vehículo, segunda hoja con su solicitud (mismas firmas del flujo del anticipo)
+$gvVehiculo = !empty($doc['requiere_vehiculo']);
+
 require __DIR__ . '/_inicio.php';
+if ($gvVehiculo) echo '<div id="all-pages">';
 require __DIR__ . '/_pagina_inicio.php';
 ?>
 
@@ -110,4 +114,78 @@ require __DIR__ . '/_pagina_inicio.php';
   <?= sigBlock($fGV) ?>
 
 <?php require __DIR__ . '/_pagina_fin.php'; ?>
+
+<?php if ($gvVehiculo):
+  // ══ SOLICITUD DE VEHÍCULO ══
+  $title = 'SOLICITUD DE VEHÍCULO';
+  require __DIR__ . '/_pagina_inicio.php'; ?>
+
+  <div class="ref-chain">
+    <span class="ref-pill"><?= $doc['tipo'] === 'compra' ? '📦' : '✈' ?> Anticipo <?= htmlspecialchars($doc['numero']) ?></span>
+    <span class="ref-arrow">→</span>
+    <span class="ref-pill ref-current">🚗 Solicitud de vehículo</span>
+  </div>
+
+  <div class="meta-section">
+    <div class="meta-grid cols-4">
+      <div class="meta-item" style="grid-column:1/3">
+        <div class="meta-label">Solicitante</div>
+        <div class="meta-value" style="font-weight:700"><?= htmlspecialchars($doc['emp_nombre']) ?></div>
+      </div>
+      <?php if ($doc['proy_nombre']): ?>
+      <div class="meta-item">
+        <div class="meta-label">Proyecto</div>
+        <div class="meta-value"><?= htmlspecialchars($doc['proy_nombre']) ?></div>
+      </div>
+      <?php endif; ?>
+      <div class="meta-item">
+        <div class="meta-label">Fecha de la solicitud</div>
+        <div class="meta-value"><?= fmtFecha(substr((string)$doc['created_at'], 0, 10)) ?></div>
+      </div>
+      <div class="meta-item" style="grid-column:1/3">
+        <div class="meta-label"><?= $doc['tipo'] === 'compra' ? 'Concepto del anticipo' : 'Destino' ?></div>
+        <div class="meta-value"><?= htmlspecialchars($doc['destino']) ?></div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label"><?= $doc['tipo'] === 'compra' ? 'Fecha del anticipo' : 'Salida / regreso' ?></div>
+        <div class="meta-value"><?= fmtFecha($doc['fecha_salida']) ?><?= $doc['fecha_regreso'] !== $doc['fecha_salida'] ? ' — ' . fmtFecha($doc['fecha_regreso']) : '' ?></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head">Uso del vehículo</div>
+  <div class="amount-block" style="justify-content:space-between">
+    <div>
+      <div class="amount-label">Desde</div>
+      <div class="amount-value" style="font-size:15pt"><?= fmtFecha($doc['vehiculo_desde'] ?? '') ?></div>
+    </div>
+    <div>
+      <div class="amount-label">Hasta</div>
+      <div class="amount-value" style="font-size:15pt"><?= fmtFecha($doc['vehiculo_hasta'] ?? '') ?></div>
+    </div>
+    <div>
+      <div class="amount-label">Días</div>
+      <div class="amount-value" style="font-size:15pt"><?= diasIncluidos($doc['vehiculo_desde'], $doc['vehiculo_hasta']) ?></div>
+    </div>
+  </div>
+
+  <div class="meta-section" style="background:#fff;border-bottom:none">
+    <div class="meta-label">Descripción (para qué se necesita el vehículo)</div>
+    <div class="meta-value" style="line-height:1.6;margin-top:4px"><?= nl2br(htmlspecialchars($doc['vehiculo_descripcion'] ?? '')) ?></div>
+    <?php if ($doc['proposito']): ?>
+    <div class="meta-label" style="margin-top:12px"><?= $doc['tipo'] === 'compra' ? 'Justificación del anticipo' : 'Propósito del viaje' ?></div>
+    <div class="meta-value" style="line-height:1.6;margin-top:4px"><?= nl2br(htmlspecialchars($doc['proposito'])) ?></div>
+    <?php endif; ?>
+  </div>
+
+  <div style="margin:6px 28px 0;font-size:8pt;color:#64748b;line-height:1.6">
+    El vehículo se entrega con el Acta de recepción de vehículo una vez revisada y autorizada esta solicitud. El solicitante
+    se compromete a usarlo solo para la comisión indicada y a devolverlo en las mismas condiciones en que lo recibió.
+  </div>
+
+  <?= sigBlock($fGV) ?>
+
+<?php require __DIR__ . '/_pagina_fin.php'; ?>
+</div><!-- #all-pages gv + vehículo -->
+<?php endif; ?>
 <?php require __DIR__ . '/_fin.php';

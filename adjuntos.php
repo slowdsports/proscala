@@ -43,7 +43,8 @@ if ($action === 'lista') {
     $modulo = (string)($_GET['modulo'] ?? '');
     $id = (int)($_GET['id'] ?? 0);
     if (!puedeVerProceso($pdo, $modulo, $id)) jsonErr('Proceso no encontrado.', 404);
-    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id), 'total' => count(adjuntosDe($pdo, tablaAdjuntos($modulo), $id))]);
+    $seccion = seccionAdjunto($modulo, $_GET['categoria'] ?? null);
+    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id, $seccion), 'total' => count(adjuntosPanel($pdo, $modulo, $id, $seccion))]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { header('Location: ' . BASE_URL . paginaInicio()); exit; }
@@ -60,8 +61,10 @@ if ($action === 'subir') {
     $id = (int)($_POST['registro_id'] ?? 0);
     if (!puedeVerProceso($pdo, $modulo, $id)) jsonErr('Proceso no encontrado.', 404);
     $tabla = tablaAdjuntos($modulo);
-    // Expediente: categoría elegida en el panel (las que no son de la lista quedan en "Otros")
-    $categoria = isset(EXPEDIENTES[$modulo]) ? (categoriaAdjunto($modulo, $_POST['categoria'] ?? null) ?? 'Otros') : null;
+    // Expediente: categoría elegida en el panel (las que no son de la lista quedan en "Otros").
+    // Proceso: la sección del panel (fotos del reporte de viaje) o ninguna.
+    $seccion = seccionAdjunto($modulo, $_POST['categoria'] ?? null);
+    $categoria = isset(EXPEDIENTES[$modulo]) ? (categoriaAdjunto($modulo, $_POST['categoria'] ?? null) ?? 'Otros') : $seccion;
 
     $archivos = archivosSubidos('archivos');
     if (!$archivos) {
@@ -69,6 +72,12 @@ if ($action === 'subir') {
     }
     $subidos = []; $errores = [];
     foreach ($archivos as $a) {
+        // Una sección se imprime: solo fotos que el navegador muestra (JPG, PNG, WEBP o GIF)
+        if ($seccion && $a['error'] === UPLOAD_ERR_OK && is_uploaded_file($a['tmp'])
+            && !in_array(tipoAdjunto($a['tmp'], $a['nombre'])[0] ?? '', ADJUNTOS_IMAGENES, true)) {
+            $errores[] = "{$a['nombre']}: solo se admiten fotos (JPG, PNG, WEBP o GIF)";
+            continue;
+        }
         $r = guardarAdjunto($pdo, $tabla, $id, $a, null, $categoria);
         if ($r === true) $subidos[] = $a['nombre']; else $errores[] = "{$a['nombre']}: $r";
     }
@@ -83,7 +92,7 @@ if ($action === 'subir') {
     }
     $msg = count($subidos) === 1 ? 'Documento adjuntado.' : count($subidos) . ' documentos adjuntados.';
     if ($errores) $msg .= ' No se adjuntaron: ' . implode('; ', $errores) . '.';
-    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id), 'total' => count(adjuntosDe($pdo, $tabla, $id)), 'parcial' => (bool)$errores], $msg);
+    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, $id, $seccion), 'total' => count(adjuntosPanel($pdo, $modulo, $id, $seccion)), 'parcial' => (bool)$errores], $msg);
 }
 
 // ── Quitar ────────────────────────────────────────────────────────
@@ -98,7 +107,8 @@ if ($action === 'quitar') {
     @unlink(rutaAdjunto($a));
     registrarEvento($pdo, 'QUITAR_ADJUNTO', ['modulo' => $modulo, 'tabla' => $a['tabla'], 'registro_id' => $a['registro_id'],
         'detalle' => "Quitó el adjunto: {$a['nombre']}"]);
-    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, (int)$a['registro_id']), 'total' => count(adjuntosDe($pdo, $a['tabla'], (int)$a['registro_id']))], 'Documento quitado.');
+    $seccion = seccionAdjunto($modulo, $a['categoria']);
+    jsonOk(['html' => htmlAdjuntos($pdo, $modulo, (int)$a['registro_id'], $seccion), 'total' => count(adjuntosPanel($pdo, $modulo, (int)$a['registro_id'], $seccion))], 'Documento quitado.');
 }
 
 jsonErr('Acción no válida.');

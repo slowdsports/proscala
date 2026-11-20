@@ -292,11 +292,11 @@ Desde el detalle de un proceso, pulse el botón **PDF** (o su ícono en la lista
 - **Descargar PDF** guarda el documento como archivo.
 - También puede usar **Ctrl + P** para imprimir o guardar como PDF desde el navegador.
 
-Documentos disponibles: solicitud de compra, resumen de cotizaciones, orden de compra, orden de pago, proceso de compra completo, planillas (general, por proyecto, Credimpulsa y recibos individuales), planillas de asignación y de beneficios con sus recibos, anticipos y voucher de alimentación, liquidaciones de gastos, vacaciones, permisos, constancias (de trabajo, de salario, de tiempo de servicio y referencia laboral), caja chica, liquidación laboral, memorandos, circulares, comunicados y actas.
+Documentos disponibles: solicitud de compra, resumen de cotizaciones, orden de compra, orden de pago, proceso de compra completo, planillas (general, por proyecto, Credimpulsa y recibos individuales), planillas de asignación y de beneficios con sus recibos, anticipos con su solicitud de vehículo, acta de recepción de vehículo, voucher de alimentación, liquidaciones de gastos, formulario de reporte de viaje, vacaciones, permisos, constancias (de trabajo, de salario, de tiempo de servicio y referencia laboral), caja chica, liquidación laboral, memorandos, circulares, comunicados y actas.
 
 ### Formatos en Excel
 
-La carpeta **formatos/** contiene cada uno de estos documentos como formato en blanco de Excel (29 libros, numerados por módulo: Compras, Gastos, Planillas, RRHH y Administración). Conservan el diseño del documento impreso: barra de color, encabezado con la organización, número y tipo de documento, datos generales, tablas de detalle, montos destacados, firmas y pie.
+La carpeta **formatos/** contiene cada uno de estos documentos como formato en blanco de Excel (31 libros, numerados por módulo: Compras, Gastos, Planillas, RRHH y Administración). Conservan el diseño del documento impreso: barra de color, encabezado con la organización, número y tipo de documento, datos generales, tablas de detalle, montos destacados, firmas y pie.
 
 - Los campos quedan en blanco para llenarse; las tablas calculan sus totales con fórmulas (cantidad × precio, deducciones, neto, saldo a reintegrar o a pagar, resumen por proyecto o por cuenta).
 - Las opciones fijas (urgencia, forma de pago, quincena, tipo de permiso o de beneficio, estado, motivo de salida…) son listas desplegables. En algunos formatos el título cambia con la lista (planilla quincenal o mensual; memorándum, circular o comunicado).
@@ -313,10 +313,10 @@ php formatos/generar.php --salida=<carpeta>   # en otra carpeta
 
 ### Formatos en PDF (ejemplos)
 
-En la misma carpeta están los 29 documentos en **PDF**, idénticos a los que imprime el sistema (mismas plantillas y mismo motor de PDF), llenos con **datos de prueba inventados**: una organización, empleados, proveedores y proyectos ficticios. Sirven de muestra de cada documento. Para volver a generarlos (en el equipo de desarrollo, con MySQL encendido y Edge o Chrome instalado):
+En la misma carpeta están los 31 documentos en **PDF**, idénticos a los que imprime el sistema (mismas plantillas y mismo motor de PDF), llenos con **datos de prueba inventados**: una organización, empleados, proveedores y proyectos ficticios. Sirven de muestra de cada documento. Para volver a generarlos (en el equipo de desarrollo, con MySQL encendido y Edge o Chrome instalado):
 
 ```
-php formatos/generar_pdf.php                      # los 29 PDF en formatos/
+php formatos/generar_pdf.php                      # los 31 PDF en formatos/
 php formatos/generar_pdf.php --salida=<carpeta>   # en otra carpeta
 ```
 
@@ -356,7 +356,13 @@ Una planilla se puede **anular** escribiendo el motivo. Se conserva como constan
 
 **Anticipos.** Solicitudes de anticipo para **viáticos** de viaje o para **compras**: beneficiario, proyecto, destino, fechas, propósito, detalle por cuenta contable y monto de alimentación. El beneficiario es un **empleado** o un **proveedor / consultor** (para consultores que no son empleados); la orden de pago se emite a su nombre, con sus datos bancarios. Siguen el flujo de aprobación; al autorizarse se genera su orden de pago. Si incluye alimentación, se imprime su **voucher de alimentación**.
 
+- **Vehículo.** En el formulario, indique si **requiere vehículo** de la organización. Si responde "Sí", se habilitan las fechas en que lo usará (desde y hasta) y una breve descripción de para qué lo necesita. El PDF del anticipo incluye entonces una segunda hoja, **Solicitud de vehículo**, con las mismas firmas.
+- **Acta de recepción de vehículo.** Cuando el anticipo ya está revisado y autorizado, aparece el botón **Acta de recepción de vehículo** para entregarlo. El acta lleva los datos del solicitante y del uso autorizado. Los datos del vehículo (marca, placa, kilometraje, combustible, accesorios y estado) se anotan a mano al entregarlo y al devolverlo. La firman quien entrega, quien recibe y, con el visto bueno, quien autorizó el anticipo.
+
 **Liquidaciones / Reembolsos.** Rinda cuentas de un anticipo con sus facturas, o pida el reembolso de un gasto propio. Si está ligada a un anticipo, su beneficiario es el mismo del anticipo, y el sistema calcula la diferencia: solo genera orden de pago por lo gastado de más (reembolso). Adjunte las facturas en la sección de documentos.
+
+- **Reporte de viaje.** Al liquidar un anticipo de **viaje**, el formulario tiene la sección **Reporte de viaje**: actividades realizadas, resultados obtenidos, y observaciones y recomendaciones. También tiene la sección **Registro fotográfico del viaje**, solo para fotos (JPG, PNG, WEBP o GIF), aparte de las facturas. Más fotos se suben después desde la vista de la liquidación.
+- El botón **Reporte de viaje** imprime el **Formulario de reporte de viaje**. Incluye los datos del viaje, el reporte, el resumen de la liquidación (anticipo, gastos y diferencia) y las firmas. Las fotos van en las hojas siguientes, seis por hoja. Si el reporte está vacío, el formulario sale con líneas para completarlo a mano.
 
 **Auxiliar de Anticipos.** Vista contable de los anticipos de viáticos y de compras: monto anticipado, monto liquidado y el balance de cada uno.
 

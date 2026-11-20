@@ -11,6 +11,16 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.40.0 — 2026-11-20
+**Vehículo en los anticipos y reporte de viaje en las liquidaciones**
+- **Anticipos:** nueva pregunta "¿Requiere vehículo de la organización?". Con "Sí" se habilitan, en el mismo formulario, las fechas de uso (desde y hasta, obligatorias) y una breve descripción. El PDF del anticipo lleva entonces la hoja **Solicitud de vehículo**, y la vista y la lista lo indican.
+- **Acta de recepción de vehículo** (nuevo PDF): se imprime desde el anticipo una vez revisado y autorizado. Incluye los datos del solicitante y del uso autorizado, la tabla del vehículo y de entrega/devolución (kilometraje y combustible), los accesorios y el estado del vehículo, todo para llenar a mano, y las firmas de quien entrega, quien recibe y el visto bueno de quien autorizó.
+- **Liquidaciones de un anticipo de viaje:** nuevos campos del **Reporte de viaje** (actividades realizadas, resultados obtenidos, observaciones y recomendaciones) y la sección **Registro fotográfico del viaje** para subir fotos al llenar el formulario o después, desde la vista. Las fotos van aparte de los documentos adjuntos.
+- **Formulario de reporte de viaje** (nuevo PDF), desde la liquidación: incluye los datos del viaje, el reporte, el resumen de la liquidación y las firmas. Las fotos van en las hojas siguientes (seis por hoja), incrustadas y reducidas para que el PDF no pese de más.
+- Carpeta **formatos/**: hay dos documentos nuevos, en Excel y en PDF: 30 (acta de recepción de vehículo) y 31 (formulario de reporte de viaje). El Excel del 31 incluye la hoja "Registro fotográfico" con seis recuadros, y su PDF lleva fotos dibujadas de prueba. Los Excel 06 y 07 (anticipos) traen la hoja "Solicitud de vehículo", que cuenta los días sola, y el PDF 06 también la incluye.
+- Base de datos (`actualizar_bd.php`): columnas `gastos_viaje.requiere_vehiculo`, `vehiculo_desde`, `vehiculo_hasta` y `vehiculo_descripcion`, y `solicitud_gastos.reporte_actividades`, `reporte_resultados` y `reporte_observaciones`.
+- Pruebas: validación del vehículo (fechas, orden y descripción), el acta solo con el anticipo autorizado, permisos de los documentos nuevos, fotos del reporte separadas de los documentos, y los dos documentos impresos con datos reales.
+
 ## 1.39.0 — 2026-11-19
 **Caja chica: orden de pago del reembolso al liquidar**
 - Al liquidar una caja chica en la que se gastó más que el fondo, se genera una **nueva orden de pago** a nombre del responsable por la diferencia, como en la liquidación de un anticipo de viaje. Lleva el número del proceso con sufijo: fondo `OP26-0012`, reembolso `OP26-0012-B`. Sin fondo, el reembolso es `OP26-0012`. Con saldo a devolver no se genera nada.

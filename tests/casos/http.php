@@ -68,6 +68,9 @@ try {
             $probados[$tipo] = $id;
         }
         if ($gva = $uno("SELECT id FROM gastos_viaje WHERE monto_alimentacion > 0 ORDER BY id DESC LIMIT 1")) $probados['gva'] = $gva; else $sinDatos[] = 'gva';
+        // Acta de recepción de vehículo (anticipo autorizado que pidió vehículo) y reporte de viaje (liquidación de un viaje)
+        if ($arv = $uno("SELECT id FROM gastos_viaje WHERE requiere_vehiculo = 1 AND estado IN ('aprobada','liquidada') ORDER BY id DESC LIMIT 1")) $probados['arv'] = $arv; else $sinDatos[] = 'arv';
+        if ($rv = $uno("SELECT sg.id FROM solicitud_gastos sg JOIN gastos_viaje gv ON gv.id = sg.viaje_id AND gv.tipo = 'viaje' ORDER BY sg.id DESC LIMIT 1")) $probados['rv'] = $rv; else $sinDatos[] = 'rv';
         foreach (['trabajo', 'salario', 'referencia', 'tiempo'] as $c) $probados[$c] = $emp;
         foreach ($probados as $tipo => $id) {
             [$cod, $html] = pedir("$baseUrl/print.php?tipo=$tipo&id=$id", $sesAdmin);

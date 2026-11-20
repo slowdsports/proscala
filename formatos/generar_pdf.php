@@ -18,6 +18,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 define('RAIZ', dirname(__DIR__));
 const BD_DEMO = 'proscala_formatos_demo';
+const DEMO_ADJUNTOS = 'assets/uploads/adjuntos/0';   // adjuntos de la demostración (sesión con empresa_id 0); se borra al terminar
 $_SERVER['DOCUMENT_ROOT'] = RAIZ;
 $_SERVER['SCRIPT_NAME']   = '/print.php';
 chdir(RAIZ);
@@ -116,6 +117,8 @@ try {
         ['27 RRHH - Constancia de tiempo de servicio',  'tiempo',     $ids['emp_constancia'], 'destinatario=A quien interese'],
         ['28 Administración - Memorándum',              'memo',    $ids['memo']],
         ['29 Administración - Acta de reunión',         'acta',    $ids['acta']],
+        ['30 Gastos - Acta de recepción de vehículo',   'arv',     $ids['gv_viaje']],
+        ['31 Gastos - Formulario de reporte de viaje',  'rv',      $ids['sg_liq']],
     ];
 
     $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'proscala_formatos_' . uniqid();
@@ -141,8 +144,10 @@ try {
     borrarCarpeta($tmp);
     echo $fallas ? "\n$fallas formato(s) con error.\n" : "\n" . count($docs) . " formatos en PDF en $SALIDA\n";
 } finally {
-    if (!isset($opc['conservar'])) $pdoMaster->exec("DROP DATABASE IF EXISTS `" . BD_DEMO . "`");
-    else echo "Base de prueba conservada: " . BD_DEMO . "\n";
+    if (!isset($opc['conservar'])) {
+        $pdoMaster->exec("DROP DATABASE IF EXISTS `" . BD_DEMO . "`");
+        borrarCarpeta(RAIZ . '/' . DEMO_ADJUNTOS);
+    } else echo "Base de prueba conservada: " . BD_DEMO . " (y sus fotos en " . DEMO_ADJUNTOS . ")\n";
 }
 exit(!empty($fallas) ? 1 : 0);
 
@@ -180,6 +185,27 @@ function borrarCarpeta(string $dir): void {
     $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
     foreach ($it as $f) $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
     @rmdir($dir);
+}
+
+/** "Foto" de prueba dibujada con GD (cielo, cerros y un rótulo): no es una foto real. */
+function fotoDePrueba(string $ruta, string $texto, int $n): void {
+    [$w, $h] = [1200, 800];
+    $img = imagecreatetruecolor($w, $h);
+    $cielos = [[125, 178, 222], [160, 196, 228], [110, 160, 205], [140, 186, 214]];
+    [$r, $g, $b] = $cielos[$n % 4];
+    for ($y = 0; $y < $h; $y++) {   // cielo degradado
+        $k = $y / $h;
+        imageline($img, 0, $y, $w, $y, imagecolorallocate($img, (int)($r + (235 - $r) * $k), (int)($g + (240 - $g) * $k), (int)($b + (240 - $b) * $k)));
+    }
+    $pts = fn(int $base, int $alto, int $fase) => array_merge(array_merge(...array_map(fn($x) => [$x, (int)($base - $alto * (0.5 + 0.5 * sin(($x + $fase) / 170)))], range(0, $w, 40))), [$w, $h, 0, $h]);
+    imagefilledpolygon($img, $pts(520, 160, $n * 90), imagecolorallocate($img, 92, 140, 96));
+    imagefilledpolygon($img, $pts(640, 110, $n * 140 + 60), imagecolorallocate($img, 64, 112, 70));
+    imagefilledrectangle($img, 0, $h - 90, $w, $h, imagecolorallocate($img, 13, 63, 106));
+    $blanco = imagecolorallocate($img, 255, 255, 255);
+    imagestring($img, 5, 30, $h - 62, iconv('UTF-8', 'ISO-8859-1//TRANSLIT', "Foto de prueba " . ($n + 1) . ": $texto"), $blanco);
+    imagestring($img, 3, 30, $h - 36, 'Imagen dibujada para el formato de ejemplo (no es una foto real)', $blanco);
+    imagejpeg($img, $ruta, 85);
+    imagedestroy($img);
 }
 
 // ═════════════════════════════ DATOS DE PRUEBA ═════════════════════════════
@@ -315,7 +341,9 @@ function cargarDatosDePrueba(PDO $db): array {
     // ── Anticipos y liquidaciones ──
     $gvViaje = $ins('gastos_viaje', ['numero' => "GV$yy-0001", 'empleado_id' => $emp['tec'], 'firmante1_id' => $emp['tec'], 'proyecto_id' => $proy['agua'],
         'destino' => 'Comunidad Ejemplo, Departamento Demo', 'proposito' => 'Supervisión de la instalación de sistemas de agua y reunión con la junta de agua (datos de prueba).',
-        'fecha_salida' => $f(4, 7), 'fecha_regreso' => $f(4, 9), 'viaticos_anticipados' => 4600, 'monto_alimentacion' => 1800, 'estado' => 'liquidada', 'aprobador_id' => $emp['coor']]);
+        'fecha_salida' => $f(4, 7), 'fecha_regreso' => $f(4, 9), 'viaticos_anticipados' => 4600, 'monto_alimentacion' => 1800, 'estado' => 'liquidada', 'aprobador_id' => $emp['coor'],
+        'requiere_vehiculo' => 1, 'vehiculo_desde' => $f(4, 7), 'vehiculo_hasta' => $f(4, 9), 'created_at' => $f(4, 1) . ' 09:00:00',
+        'vehiculo_descripcion' => 'Pick-up doble cabina para el traslado del técnico y de los materiales de prueba de calidad del agua a la comunidad (camino de tierra). Datos de prueba.']);
     foreach ([[$f(4, 7), 'Hospedaje (2 noches)', '5102', 2000], [$f(4, 7), 'Alimentación (3 días)', '5104', 1800], [$f(4, 7), 'Transporte ida y regreso', '5103', 800]] as [$fe, $d, $c, $m]) {
         $ins('gastos_viaje_detalle', ['viaje_id' => $gvViaje, 'fecha' => $fe, 'descripcion' => $d, 'cuenta_id' => $cta[$c], 'monto' => $m]);
     }
@@ -339,11 +367,24 @@ function cargarDatosDePrueba(PDO $db): array {
 
     $sgLiq = $ins('solicitud_gastos', ['numero' => "SG$yy-0002", 'fecha' => $f(4, 11), 'empleado_id' => $emp['tec'], 'firmante1_id' => $emp['tec'],
         'descripcion' => "Liquidación del anticipo GV$yy-0001: viaje a Comunidad Ejemplo", 'proyecto_id' => $proy['agua'], 'viaje_id' => $gvViaje, 'monto_total' => 4380,
-        'estado' => 'aprobada', 'aprobador_id' => $emp['coor'], 'fecha_aprobacion' => $f(4, 12)]);
+        'estado' => 'aprobada', 'aprobador_id' => $emp['coor'], 'fecha_aprobacion' => $f(4, 12),
+        'reporte_actividades' => "Visita a la Comunidad Ejemplo del 7 al 9 de abril. Se supervisó la instalación de los 25 sistemas de agua domiciliar, se tomaron muestras de agua en 6 puntos de la red y se sostuvo una reunión con la junta de agua (12 participantes).\n(Datos de prueba: el contenido es inventado.)",
+        'reporte_resultados' => "23 de los 25 sistemas quedaron funcionando; 2 requieren cambio de válvula. Las 6 muestras cumplen los parámetros de cloro residual. La junta de agua aprobó el reglamento de uso y la tarifa de mantenimiento.",
+        'reporte_observaciones' => "Programar la sustitución de las 2 válvulas en la próxima gira y capacitar al fontanero comunitario en el mantenimiento preventivo."]);
     foreach ([[$f(4, 7), 'Hotel de ejemplo (2 noches)', '5102', 1900, 'Factura 001-0101'], [$f(4, 7), 'Bus interurbano ida y regreso', '5103', 680, 'Boletos 3345-3346'], [$f(4, 9), 'Alimentación del viaje', '5104', 1800, 'Voucher de alimentación']] as [$fe, $d, $c, $m, $cb]) {
         $ins('solicitud_gastos_detalle', ['solicitud_id' => $sgLiq, 'fecha' => $fe, 'descripcion' => $d, 'cuenta_id' => $cta[$c], 'monto' => $m, 'comprobante' => $cb]);
     }
     $flujo('solicitud_gastos', $sgLiq);
+    // Fotos de prueba del reporte de viaje (imágenes dibujadas, no fotos reales), en la carpeta de la
+    // "empresa 0" de la demostración, que se borra al terminar
+    $carpeta = RAIZ . "/" . DEMO_ADJUNTOS . "/solicitud_gastos/$sgLiq";
+    if (!is_dir($carpeta)) mkdir($carpeta, 0775, true);
+    foreach (['Supervisión de sistemas de agua', 'Toma de muestras de agua', 'Reunión con la junta de agua', 'Tanque de almacenamiento'] as $i => $texto) {
+        $archivo = 'foto' . ($i + 1) . '.jpg';
+        fotoDePrueba("$carpeta/$archivo", $texto, $i);
+        $ins('adjuntos', ['tabla' => 'solicitud_gastos', 'registro_id' => $sgLiq, 'categoria' => 'Registro fotográfico del viaje', 'nombre' => "$texto.jpg",
+            'archivo' => "solicitud_gastos/$sgLiq/$archivo", 'mime' => 'image/jpeg', 'tamano' => filesize("$carpeta/$archivo"), 'usuario_id' => $usr['asis']]);
+    }
 
     // ── Caja chica ──
     $ccGastos = [[$f(6, 2), '5105', 'Sobres y clips', 3, 45], [$f(6, 4), '5106', 'Combustible para motocicleta', 1, 600], [$f(6, 9), '5104', 'Agua purificada para oficina', 4, 60], [$f(6, 12), '5103', 'Taxi para entrega de documentos', 1, 150]];

@@ -36,23 +36,30 @@ if (isAjax() && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'notas'              => trim($_POST['notas'] ?? ''),
             'monto_alimentacion' => $tipo === 'compra' ? 0 : $alimentacion,
         ];
+        // Solicitud de vehículo: si lo requiere, del… al… y para qué (hoja "Solicitud de vehículo" en el PDF)
+        $veh = datosVehiculoDelFormulario($_POST);
+        if (is_string($veh)) jsonErr($veh);
         $pdo->beginTransaction();
         try {
             if ($gvId) {
                 $pdo->prepare("UPDATE gastos_viaje SET tipo=?,empleado_id=?,proveedor_id=?,proyecto_id=?,destino=?,proposito=?,
-                    fecha_salida=?,fecha_regreso=?,viaticos_anticipados=?,monto_alimentacion=?,notas=? WHERE id=?")->execute([
+                    fecha_salida=?,fecha_regreso=?,viaticos_anticipados=?,monto_alimentacion=?,notas=?,
+                    requiere_vehiculo=?,vehiculo_desde=?,vehiculo_hasta=?,vehiculo_descripcion=? WHERE id=?")->execute([
                     $d['tipo'],$d['empleado_id'],$d['proveedor_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
-                    $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas'],$gvId
+                    $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas'],
+                    $veh['requiere_vehiculo'],$veh['vehiculo_desde'],$veh['vehiculo_hasta'],$veh['vehiculo_descripcion'],$gvId
                 ]);
                 $pdo->prepare("DELETE FROM gastos_viaje_detalle WHERE viaje_id=?")->execute([$gvId]);
             } else {
                 $procesoId = generarProceso($pdo);
                 $num = numeroProceso($pdo,'gastos_viaje',getConfig($pdo,'prefijo_gv','GV'));
                 $pdo->prepare("INSERT INTO gastos_viaje (numero,proceso_id,tipo,empleado_id,proveedor_id,firmante1_id,proyecto_id,destino,proposito,
-                    fecha_salida,fecha_regreso,viaticos_anticipados,monto_alimentacion,total_gastos,saldo,notas,estado)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,'pendiente')")
+                    fecha_salida,fecha_regreso,viaticos_anticipados,monto_alimentacion,total_gastos,saldo,notas,estado,
+                    requiere_vehiculo,vehiculo_desde,vehiculo_hasta,vehiculo_descripcion)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,'pendiente',?,?,?,?)")
                     ->execute([$num,$procesoId,$d['tipo'],$d['empleado_id'],$d['proveedor_id'],$d['firmante1_id'],$d['proyecto_id'],$d['destino'],$d['proposito'],
-                    $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas']]);
+                    $d['fecha_salida'],$d['fecha_regreso'],$total,$d['monto_alimentacion'],$d['notas'],
+                    $veh['requiere_vehiculo'],$veh['vehiculo_desde'],$veh['vehiculo_hasta'],$veh['vehiculo_descripcion']]);
                 $gvId = $pdo->lastInsertId();
             }
             foreach ($items as $item) {
@@ -123,7 +130,7 @@ include __DIR__ . '/includes/header.php';
         <?php foreach ($listaViajes as $r): ?>
         <tr>
           <td class="font-mono"><?= $r['numero'] ?><?= badgeHistorico($r) ?></td>
-          <td><?= tipoAnticipoBadge($r['tipo']) ?></td>
+          <td><?= tipoAnticipoBadge($r['tipo']) ?><?= !empty($r['requiere_vehiculo']) ? ' <i class="fas fa-car text-muted" title="Requiere vehículo"></i>' : '' ?></td>
           <td><?= htmlspecialchars($r['emp_nombre'] ?? '') ?><?= $r['proveedor_id'] ? ' <span class="badge bg-secondary-subtle text-secondary-emphasis" title="Proveedor / consultor">Proveedor</span>' : '' ?></td>
           <td><?= htmlspecialchars($r['destino']) ?></td>
           <td><?= fmtFecha($r['fecha_salida']) ?></td>
@@ -158,6 +165,9 @@ include __DIR__ . '/includes/header.php';
       <?php endif; ?>
       <?= botonEditar($pdo, 'gastos_viajes.php', (int)$gv['id'], '?action=editar&id=' . $gv['id']) ?>
       <a href="<?= BASE_URL ?>print.php?tipo=gv&id=<?= $gv['id'] ?>" target="_blank" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+      <?php if (actaVehiculoDisponible($gv)): ?>
+      <a href="<?= BASE_URL ?>print.php?tipo=arv&id=<?= $gv['id'] ?>" target="_blank" class="btn btn-sm btn-outline-dark" title="Entrega del vehículo solicitado (el anticipo ya está revisado y autorizado)"><i class="fas fa-car"></i> Acta de recepción de vehículo</a>
+      <?php endif; ?>
       <?php if ($gv['tipo']==='viaje' && $gv['estado']==='liquidada' && ($gv['monto_alimentacion'] ?? 0) > 0): ?>
       <a href="<?= BASE_URL ?>print.php?tipo=gva&id=<?= $gv['id'] ?>" target="_blank" class="btn btn-sm btn-outline-warning"><i class="fas fa-utensils"></i> Voucher Alimentación</a>
       <?php endif; ?>
@@ -176,6 +186,18 @@ include __DIR__ . '/includes/header.php';
       <div class="col-12"><strong><?= $gv['tipo']==='compra' ? 'Justificación:' : 'Propósito:' ?></strong> <?= htmlspecialchars($gv['proposito']) ?></div>
       <?php endif; ?>
     </div>
+    <?php if (!empty($gv['requiere_vehiculo'])): ?>
+    <div class="form-section-title"><i class="fas fa-car"></i> Solicitud de vehículo</div>
+    <div class="row g-2" style="font-size:.85rem;">
+      <div class="col-md-3"><strong>Desde:</strong> <?= fmtFecha($gv['vehiculo_desde'] ?? '') ?></div>
+      <div class="col-md-3"><strong>Hasta:</strong> <?= fmtFecha($gv['vehiculo_hasta'] ?? '') ?></div>
+      <div class="col-md-3"><strong>Días:</strong> <?= diasIncluidos($gv['vehiculo_desde'], $gv['vehiculo_hasta']) ?></div>
+      <div class="col-12"><strong>Descripción:</strong> <?= nl2br(htmlspecialchars($gv['vehiculo_descripcion'] ?? '')) ?></div>
+      <?php if (!actaVehiculoDisponible($gv)): ?>
+      <div class="col-12 text-muted"><i class="fas fa-circle-info"></i> El Acta de recepción de vehículo se podrá imprimir cuando el anticipo esté revisado y autorizado.</div>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -289,6 +311,30 @@ include __DIR__ . '/includes/header.php';
         </div>
       </div>
 
+      <div class="form-section-title mt-3"><i class="fas fa-car"></i> Vehículo</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">¿Requiere vehículo de la organización? *</label>
+          <select name="requiere_vehiculo" id="sel-requiere-vehiculo" class="form-select no-search" onchange="toggleVehiculo()">
+            <option value="0" <?= empty($gv['requiere_vehiculo']) ? 'selected' : '' ?>>No</option>
+            <option value="1" <?= !empty($gv['requiere_vehiculo']) ? 'selected' : '' ?>>Sí</option>
+          </select>
+          <div class="form-text">Si lo requiere, el PDF incluye la hoja "Solicitud de vehículo".</div>
+        </div>
+        <div class="col-md-4 grp-vehiculo">
+          <label class="form-label">Usar el vehículo desde *</label>
+          <input type="text" name="vehiculo_desde" class="form-control date-input" value="<?= htmlspecialchars($gv['vehiculo_desde'] ?? '') ?>">
+        </div>
+        <div class="col-md-4 grp-vehiculo">
+          <label class="form-label">Hasta *</label>
+          <input type="text" name="vehiculo_hasta" class="form-control date-input" value="<?= htmlspecialchars($gv['vehiculo_hasta'] ?? '') ?>">
+        </div>
+        <div class="col-md-12 grp-vehiculo">
+          <label class="form-label">Breve descripción *</label>
+          <textarea name="vehiculo_descripcion" class="form-control" rows="2" maxlength="2000" placeholder="Para qué lo necesita: ruta, carga, número de personas…"><?= htmlspecialchars($gv['vehiculo_descripcion'] ?? '') ?></textarea>
+        </div>
+      </div>
+
       <div class="form-section-title mt-3">Desglose del Anticipo Solicitado</div>
       <div class="table-responsive">
         <table class="table-proscala w-100">
@@ -338,6 +384,28 @@ $extraJs = strtr(<<<'JS'
 initDataTable('#tbl-gv');
 calcGvTotal();
 toggleTipoAnticipo();
+toggleVehiculo();
+
+// Solicitud de vehículo: los campos se habilitan solo si lo requiere. Al pedirlo, las fechas
+// sugeridas son las del anticipo (salida y regreso).
+function toggleVehiculo() {
+  const sel = document.getElementById('sel-requiere-vehiculo');
+  if (!sel) return;
+  const si = sel.value === '1';
+  document.querySelectorAll('.grp-vehiculo').forEach(g => {
+    g.style.display = si ? '' : 'none';
+    g.querySelectorAll('input, textarea').forEach(i => { i.disabled = !si; i.required = si; });
+  });
+  if (!si) return;
+  const form = sel.form;
+  [['vehiculo_desde', 'fecha_salida'], ['vehiculo_hasta', 'fecha_regreso']].forEach(([campo, origen]) => {
+    const inp = form.querySelector(`[name=${campo}]`);
+    if (inp && !inp.value) {
+      const v = form.querySelector(`[name=${origen}]`)?.value || '';
+      if (inp._flatpickr) inp._flatpickr.setDate(v, false); else inp.value = v;
+    }
+  });
+}
 
 function toggleTipoAnticipo() {
   const sel = document.getElementById('sel-tipo');

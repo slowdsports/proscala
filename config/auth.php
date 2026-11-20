@@ -147,7 +147,8 @@ const DOCUMENTOS_MODULO = [
     'pa'  => ['planillas_asignacion.php'], 'pav' => ['planillas_asignacion.php'],
     'pb'  => ['planillas_beneficios.php'], 'pbp' => ['planillas_beneficios.php'], 'pbv' => ['planillas_beneficios.php'],
     'gv'  => ['gastos_viajes.php'], 'gva' => ['gastos_viajes.php', 'gastos_viaje_auxiliar.php'],
-    'sg'  => ['gastos_solicitud.php'],
+    'arv' => ['gastos_viajes.php'],                         // acta de recepción del vehículo del anticipo
+    'sg'  => ['gastos_solicitud.php'], 'rv' => ['gastos_solicitud.php'],   // rv: formulario de reporte de viaje
     'vac' => ['vacaciones.php'], 'per' => ['permisos.php'], 'liq' => ['liquidaciones.php'],
     'trabajo' => ['constancias.php'], 'salario' => ['constancias.php'], 'referencia' => ['constancias.php'], 'tiempo' => ['constancias.php'],
     'cc'  => ['caja_chica.php'], 'memo' => ['memorandos.php'], 'acta' => ['actas.php'],
@@ -203,8 +204,8 @@ const ACCIONES_BITACORA = [
 //   refs     → parámetros que apuntan a otra solicitud (también deben ser propias)
 const SOLICITUDES = [
     'compras_solicitud.php' => ['tabla' => 'solicitud_compra', 'empleado' => 'solicitante_id', 'docs' => ['sc', 'proceso'], 'refs' => []],
-    'gastos_viajes.php'     => ['tabla' => 'gastos_viaje',     'empleado' => 'empleado_id',    'docs' => ['gv', 'gva'],      'refs' => [], 'proveedor' => 'proveedor_id'],
-    'gastos_solicitud.php'  => ['tabla' => 'solicitud_gastos', 'empleado' => 'empleado_id',    'docs' => ['sg'],             'refs' => ['viaje_id' => 'gastos_viajes.php'], 'proveedor' => 'proveedor_id'],
+    'gastos_viajes.php'     => ['tabla' => 'gastos_viaje',     'empleado' => 'empleado_id',    'docs' => ['gv', 'gva', 'arv'], 'refs' => [], 'proveedor' => 'proveedor_id'],
+    'gastos_solicitud.php'  => ['tabla' => 'solicitud_gastos', 'empleado' => 'empleado_id',    'docs' => ['sg', 'rv'],       'refs' => ['viaje_id' => 'gastos_viajes.php'], 'proveedor' => 'proveedor_id'],
     'vacaciones.php'        => ['tabla' => 'vacaciones',       'empleado' => 'empleado_id',    'docs' => ['vac'],            'refs' => []],
     'permisos.php'          => ['tabla' => 'permisos',         'empleado' => 'empleado_id',    'docs' => ['per'],            'refs' => []],
 ];
