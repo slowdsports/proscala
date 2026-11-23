@@ -11,6 +11,11 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.40.1 — 2026-11-23
+**Formulario de reporte de viaje más simple**
+- Solo lleva la firma "Elaborado por". Ya no incluye las de revisado y autorizado ni el resumen de la liquidación (anticipo, gastos y diferencia), que ya están en la liquidación. El mismo cambio está en sus formatos de Excel y PDF (31).
+- Sin cambios en la base de datos.
+
 ## 1.40.0 — 2026-11-20
 **Vehículo en los anticipos y reporte de viaje en las liquidaciones**
 - **Anticipos:** nueva pregunta "¿Requiere vehículo de la organización?". Con "Sí" se habilitan, en el mismo formulario, las fechas de uso (desde y hasta, obligatorias) y una breve descripción. El PDF del anticipo lleva entonces la hoja **Solicitud de vehículo**, y la vista y la lista lo indican.

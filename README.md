@@ -362,7 +362,7 @@ Una planilla se puede **anular** escribiendo el motivo. Se conserva como constan
 **Liquidaciones / Reembolsos.** Rinda cuentas de un anticipo con sus facturas, o pida el reembolso de un gasto propio. Si está ligada a un anticipo, su beneficiario es el mismo del anticipo, y el sistema calcula la diferencia: solo genera orden de pago por lo gastado de más (reembolso). Adjunte las facturas en la sección de documentos.
 
 - **Reporte de viaje.** Al liquidar un anticipo de **viaje**, el formulario tiene la sección **Reporte de viaje**: actividades realizadas, resultados obtenidos, y observaciones y recomendaciones. También tiene la sección **Registro fotográfico del viaje**, solo para fotos (JPG, PNG, WEBP o GIF), aparte de las facturas. Más fotos se suben después desde la vista de la liquidación.
-- El botón **Reporte de viaje** imprime el **Formulario de reporte de viaje**. Incluye los datos del viaje, el reporte, el resumen de la liquidación (anticipo, gastos y diferencia) y las firmas. Las fotos van en las hojas siguientes, seis por hoja. Si el reporte está vacío, el formulario sale con líneas para completarlo a mano.
+- El botón **Reporte de viaje** imprime el **Formulario de reporte de viaje**. Incluye los datos del viaje, el reporte y la firma de quien lo elaboró. La revisión, la autorización y los montos están en la liquidación. Las fotos van en las hojas siguientes, seis por hoja. Si el reporte está vacío, el formulario sale con líneas para completarlo a mano.
 
 **Auxiliar de Anticipos.** Vista contable de los anticipos de viáticos y de compras: monto anticipado, monto liquidado y el balance de cada uno.
 

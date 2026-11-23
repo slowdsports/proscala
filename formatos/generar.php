@@ -388,21 +388,14 @@ function hojaRV(Formato $d): void {
         ['l' => 'Destino', 's' => 2], ['l' => 'Fecha de salida', 'k' => 'fecha'], ['l' => 'Fecha de regreso', 'k' => 'fecha'],
         ['l' => 'Propósito del viaje', 's' => 'full', 'alto' => 28],
     ]);
-    foreach (['Actividades realizadas' => 62, 'Resultados obtenidos' => 62, 'Observaciones y recomendaciones' => 42] as $sec => $alto) {
+    foreach (['Actividades realizadas' => 90, 'Resultados obtenidos' => 90, 'Observaciones y recomendaciones' => 55] as $sec => $alto) {
         $d->seccion($sec);
         $d->espacio(5);
         $d->area($alto, fu(8.5) + ['b' => array_fill_keys(['t', 'b', 'l', 'r'], ['thin', LINEA])], 0);
         $d->espacio(5);
     }
-    $d->seccion('Resumen de la liquidación');
-    $t = $d->tabla([['t' => 'Concepto', 'w' => 18, 'k' => 'c'], ['t' => 'Monto', 'w' => 6, 'k' => 'monto', 'tipo' => 'monto']],
-        [['c' => 'Anticipo recibido (' . num('gv') . ')'], ['c' => 'Gastos liquidados (' . num('sg') . ')']],
-        [['l' => null, 'desde' => 'monto', 'v' => ['monto' => null], 'final' => true, 'le' => fu(9.5, ['b' => true, 'c' => MARINO])]]);
-    [$ant, $gas] = [$t['celda']('monto', $t['f1']), $t['celda']('monto', $t['f2'])];
-    $dif = $t['celda']('monto', $t['pie'][0]);
-    $d->ponerRef($d->ref($t['pie'][0], $d->ini), ['f' => "IF(COUNT({$ant},{$gas})=0,\"Diferencia\",IF(N({$gas})>N({$ant}),\"Diferencia a pagar al empleado\",\"Saldo a reintegrar\"))"]);
-    $d->ponerRef($dif, ['f' => "IF(COUNT({$ant},{$gas})=0,\"\",ABS(N({$gas})-N({$ant})))"]);
-    $d->firmas(['Elaborado por', 'Revisado por', 'Autorizado por'], 12);
+    $d->parrafo('Registro fotográfico: en la hoja siguiente.', 8, fu(8, ['c' => GRIS]), 0, 0);
+    $d->firmas(['Elaborado por'], 12);
     $d->pie();
 }
 
