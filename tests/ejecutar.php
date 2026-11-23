@@ -3,8 +3,9 @@
 //  Proscala — Pruebas automáticas (en el equipo de desarrollo, antes de cada versión)
 //    php tests/ejecutar.php            todas
 //    php tests/ejecutar.php reglas     solo un grupo (estructura | reglas | http)
+//    php tests/ejecutar.php --empresa=proscala_demo   con otra empresa (su base o su RTN)
 //  Usan la configuración local (config/credenciales.local.php) y la primera base de empresa que
-//  exista. Las que modifican datos corren dentro de una transacción que se revierte; las de HTTP
+//  exista (o la elegida). Las que modifican datos corren dentro de una transacción que se revierte; las de HTTP
 //  necesitan Apache encendido (si no responde, se omiten). Esta carpeta no se despliega.
 // ════════════════════════════════════════════════════════════════════════════
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
@@ -55,9 +56,13 @@ function comoUsuario(PDO $pdo, int $usuarioId): void {
     cargarPermisos($pdo, $u['rol']);
 }
 
-// ── Empresa de prueba: la primera cuya base exista ───────────────────
+// ── Empresa de prueba: la primera cuya base exista, o la de --empresa=<base o RTN> ──
+$args = array_values(array_filter(array_slice($argv, 1), fn($a) => !str_starts_with($a, '--empresa=')));
+$elegida = null;
+foreach (array_slice($argv, 1) as $a) if (str_starts_with($a, '--empresa=')) $elegida = substr($a, 10);
 $empresa = null;
 foreach ($pdoMaster->query("SELECT id, nombre, rtn, db_nombre FROM empresas ORDER BY id") as $e) {
+    if ($elegida !== null && $elegida !== $e['db_nombre'] && $elegida !== $e['rtn']) continue;
     try { $GLOBALS['pdo'] = $pdo = conectarBD($e['db_nombre']); $empresa = $e; break; } catch (PDOException $x) {}
 }
 if (!$empresa) exit("No hay ninguna base de empresa disponible para las pruebas.\n");
@@ -65,7 +70,7 @@ $_SESSION = ['empresa_id' => (int)$empresa['id'], 'empresa_db' => $empresa['db_n
 echo "Proscala " . APP_VERSION . " · pruebas con {$empresa['nombre']} ({$empresa['db_nombre']})\n";
 
 $grupos = ['estructura', 'reglas', 'http'];
-$solo = $argv[1] ?? null;
+$solo = $args[0] ?? null;
 foreach ($grupos as $g) {
     if ($solo && $solo !== $g) continue;
     echo "\n■ " . ucfirst($g) . "\n";

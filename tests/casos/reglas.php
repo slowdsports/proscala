@@ -355,9 +355,10 @@ prueba('Planillas quincenales y mensuales: días trabajados, deducciones y nombr
 prueba('Recibos propios: cada empleado ve solo su recibo de las planillas pagadas, no la planilla ni el de otros', function () use ($pdo) {
     $pdo->beginTransaction();
     try {
-        $emps = array_map('intval', $pdo->query("SELECT id FROM empleados ORDER BY id LIMIT 2")->fetchAll(PDO::FETCH_COLUMN));
-        if (count($emps) < 2) throw new Omitir('se necesitan dos empleados');
-        [$yo, $otro] = $emps;
+        // "Yo": un empleado sin usuario (un empleado solo puede tener uno)
+        $yo = (int)$pdo->query("SELECT id FROM empleados e WHERE NOT EXISTS (SELECT 1 FROM usuarios u WHERE u.empleado_id = e.id) ORDER BY id LIMIT 1")->fetchColumn();
+        $otro = (int)$pdo->query("SELECT id FROM empleados WHERE id <> $yo ORDER BY id LIMIT 1")->fetchColumn();
+        if (!$yo || !$otro) throw new Omitir('se necesitan dos empleados, uno sin usuario');
         $pdo->exec("INSERT INTO roles (clave, nombre, depende_de, aprueba, solo_propios, orden) VALUES ('zz_emp', 'ZZ Empleado', 'admin', 0, 1, 93)");
         $pdo->prepare("INSERT INTO usuarios (nombre, email, password, rol, empleado_id, activo) VALUES ('ZZ Emp', ?, 'x', 'zz_emp', ?, 1)")
             ->execute(['zz.emp.' . bin2hex(random_bytes(3)) . '@prueba.local', $yo]);

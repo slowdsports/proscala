@@ -521,6 +521,46 @@ El super administrador administra todas las empresas que usan Proscala. En el me
 
 El super administrador también puede descargar el **respaldo** del sistema; cada semana se le recuerda hacerlo al entrar.
 
+### 12.7 Empresa de demostración
+
+Para presentar el sistema a posibles compradores hay una empresa de demostración, **Fundación Horizonte (DEMO)**, con unos 10 meses de operación de una ONG. **Todos los datos son ficticios**: personas, identidades, RTN, cuentas, montos y correos (de un dominio que no existe, y sin envío de correos).
+
+- **Contenido:**
+  - 16 empleados, uno de ellos retirado con su liquidación laboral, y uno de nuevo ingreso este mes.
+  - 3 proyectos con su presupuesto y la distribución de los salarios entre proyectos.
+  - Proveedores, un consultor con acceso al sistema y activos, entre ellos los vehículos.
+  - Procesos de compra completos (solicitud, cotizaciones, orden de compra, recepción y orden de pago).
+  - Anticipos con solicitud de vehículo, liquidaciones con reporte de viaje y fotos, y reembolsos `-B`.
+  - Cajas chicas, planillas quincenales pagadas, de asignación y de beneficios.
+  - Vacaciones, permisos, préstamos, asistencia del mes, memorandos, actas y la bitácora.
+- **Procesos pendientes:** quedan procesos esperando revisión o autorización, con sus notificaciones, para mostrar el flujo en vivo.
+- **Para entrar:** RTN `08019099000018` y la contraseña `Demo2026!`, con uno de estos usuarios:
+
+  | Usuario | Puesto |
+  |---|---|
+  | `admin@horizonte.demo` | Administrador |
+  | `direccion@horizonte.demo` | Dirección Ejecutiva (autoriza) |
+  | `administracion@horizonte.demo` | Administración (revisa y autoriza) |
+  | `finanzas@horizonte.demo` | Finanzas |
+  | `contabilidad@horizonte.demo` | Contabilidad |
+  | `rrhh@horizonte.demo` | Recursos Humanos |
+  | `compras@horizonte.demo` | Compras |
+  | `asistente@horizonte.demo` | Asistente administrativa |
+  | `coordinador@horizonte.demo` | Empleado: solo ve lo suyo |
+  | `tecnico@horizonte.demo` | Empleado: solo ve lo suyo |
+  | `junta@horizonte.demo` | Junta Directiva |
+  | `consultor@horizonte.demo` | Consultor externo |
+
+Se crea, o se vuelve a crear con datos frescos y fechas al día, desde la terminal:
+
+```
+php database/crear_empresa_demo.php              # la crea (base proscala_demo)
+php database/crear_empresa_demo.php --recrear    # la borra y la vuelve a crear
+php database/crear_empresa_demo.php --db=<base> --rtn=<14 dígitos> --clave=<contraseña> --nombre="…"
+```
+
+En el hosting (cPanel), primero cree en **Bases de datos MySQL** una base vacía y asígnele el usuario de MySQL del sistema. Después ejecute el script con `--db=` y el nombre completo de esa base, con el prefijo de la cuenta. `--recrear` solo borra una empresa de demostración que haya creado este script, y nunca la de otro RTN.
+
 ---
 
 ## 13. Preguntas frecuentes

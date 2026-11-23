@@ -11,6 +11,18 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.41.0 — 2026-11-23
+**Empresa de demostración para presentar el sistema**
+- Nuevo `database/crear_empresa_demo.php` (solo en la terminal). Crea la empresa **Fundación Horizonte (DEMO)** igual que Empresas → Nueva (base propia, registro en la base central y accesos) y la llena con unos 10 meses de operación ficticia de una ONG:
+  - empleados, usuarios de cada puesto y un consultor;
+  - proyectos con presupuesto, proveedores y activos;
+  - compras completas, anticipos con vehículo, liquidaciones con reporte de viaje y fotos, reembolsos `-B` y cajas chicas;
+  - planillas de sueldos, de asignación y de beneficios;
+  - vacaciones, permisos, préstamos, una liquidación laboral, asistencia, memorandos y actas.
+- Usa las funciones del sistema para la numeración común y las órdenes de pago automáticas. Cada proceso pasa por el flujo (elaboró, revisó, autorizó) y queda en la bitácora. Algunos quedan pendientes, con sus notificaciones, para mostrar las aprobaciones.
+- Todos los datos son inventados y los usuarios no reciben correos. Con `--recrear` se vuelve a crear con fechas al día. Instrucciones en el README (12.7).
+- Pruebas: `php tests/ejecutar.php --empresa=<base o RTN>` corre las pruebas con otra empresa. La de recibos propios ya no falla cuando el primer empleado tiene usuario.
+
 ## 1.40.1 — 2026-11-23
 **Formulario de reporte de viaje más simple**
 - Solo lleva la firma "Elaborado por". Ya no incluye las de revisado y autorizado ni el resumen de la liquidación (anticipo, gastos y diferencia), que ya están en la liquidación. El mismo cambio está en sus formatos de Excel y PDF (31).
