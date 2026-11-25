@@ -11,6 +11,15 @@ Cada versión queda registrada en Git con una etiqueta `vX.Y.Z`.
 
 ---
 
+## 1.42.0 — 2026-11-25
+**Auxiliar de Anticipos: saldos al día con las órdenes de pago y los reintegros**
+- El saldo de cada anticipo es ahora: anticipo − liquidado − reintegrado + reembolsado.
+  - **Reembolsado:** las órdenes de pago de reembolso de sus liquidaciones, cuando se marcan como **pagadas**, rebajan lo que la empresa le debe al empleado. Las que aún no se pagan se indican como "por pagar".
+  - **Reintegrado:** nuevo botón para registrar que el empleado (o consultor) ya devolvió lo que le correspondía: monto, fecha y referencia (recibo o depósito). Si devolvió menos, el resto sigue pendiente. Se puede modificar o quitar, y queda en la bitácora. Quien solo ve sus propias solicitudes no puede registrarlo.
+- Nueva columna "Pagado / Reintegrado" y, bajo el anticipo, el número y estado de su orden de pago.
+- Las tarjetas muestran solo lo pendiente y cuánto ya se reintegró o pagó. Botón "Solo con saldo pendiente" para ocultar los anticipos saldados.
+- Base de datos (`actualizar_bd.php`): columnas `gastos_viaje.reintegro_monto`, `reintegro_fecha`, `reintegro_referencia` y `reintegro_usuario_id`.
+
 ## 1.41.0 — 2026-11-23
 **Empresa de demostración para presentar el sistema**
 - Nuevo `database/crear_empresa_demo.php` (solo en la terminal). Crea la empresa **Fundación Horizonte (DEMO)** igual que Empresas → Nueva (base propia, registro en la base central y accesos) y la llena con unos 10 meses de operación ficticia de una ONG:
